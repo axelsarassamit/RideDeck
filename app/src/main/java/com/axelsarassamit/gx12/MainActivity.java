@@ -68,6 +68,11 @@ public final class MainActivity extends android.app.Activity {
     private Button playPauseButton;
     private Button previousButton;
     private Button nextButton;
+    private android.widget.ImageView albumArt;
+    private android.speech.tts.TextToSpeech speech;
+    private boolean speechReady;
+    private boolean setupVisible;
+    private boolean cockpitVisible;
     private Chronometer rideClock;
     private Button rideButton;
     private File downloadedApk;
@@ -124,6 +129,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onDestroy() {
+        if (speech != null) { speech.stop(); speech.shutdown(); }
         worker.shutdownNow();
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter != null) {
@@ -133,17 +139,24 @@ public final class MainActivity extends android.app.Activity {
         super.onDestroy();
     }
 
-    private void buildScreen() {
-        if (getPreferences(0).getBoolean("dock_mode", false)) {
-            messagePreview = null;
-            buildAppDock();
-            return;
-        }
+    private void buildSetupScreen() {
+        setupVisible = true; cockpitVisible = false; albumArt = null;
         int ink = 0xfff4f6fa, muted = 0xffaab4c0, blue = 0xff83b5ff;
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(16), dp(20), dp(16), dp(22));
         page.setBackgroundColor(0xff101419);
+        Button backToRide = button("BACK TO RIDE SCREEN");
+        backToRide.setOnClickListener(v -> buildScreen()); page.addView(backToRide, buttonParams());
+        TextView displaySetup = text(DedicatedDisplay.status, 15, ink, false);
+        addCockpitCard(page, "MAP ON BIKE • PHONE CONTROLS", displaySetup);
+        Button setupDisplay = button("SET UP BIKE-ONLY MAP"); setupDisplay.setOnClickListener(v -> showDisplaySetup());
+        page.addView(setupDisplay, buttonParams());
+        Button castNotifications = button("ENABLE CASTING NOTIFICATIONS");
+        castNotifications.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 24);
+            else android.widget.Toast.makeText(this, "Casting notification is available when sharing starts", android.widget.Toast.LENGTH_SHORT).show();
+        }); page.addView(castNotifications, buttonParams());
         page.addView(text("XMAX 2024 TECH MAX", 13, blue, true));
         TextView title = text("RideBridge", 30, ink, true);
         LinearLayout.LayoutParams titleParams = params(); titleParams.topMargin = dp(4); page.addView(title, titleParams);
@@ -257,6 +270,11 @@ public final class MainActivity extends android.app.Activity {
         new android.app.AlertDialog.Builder(this).setTitle("Choose your Yamaha dash")
             .setItems(names, (dialog, which) -> {
                 castDeviceAddress = devices.get(which).getAddress();
+                if (DedicatedDisplay.ready) {
+                    Intent dedicated = new Intent(this, YamahaCastService.class)
+                        .putExtra("device", castDeviceAddress).putExtra("dedicated", true);
+                    startForegroundService(dedicated); castDeviceAddress = null; buildScreen(); return;
+                }
                 new android.app.AlertDialog.Builder(this).setTitle("Share Google Maps with your XMAX")
                     .setMessage("Test while parked. Close StreetCross or other dash casting apps. On the next Android screen, choose Google Maps if single-app sharing is offered. Whole-screen sharing also shows messages and other visible content. Rotate the phone landscape for a larger map. Open the dash navigation view using its normal controls.")
                     .setPositiveButton("Choose screen", (d, w) -> {
@@ -296,32 +314,245 @@ public final class MainActivity extends android.app.Activity {
             .setPositiveButton("Close", null).show();
     }
 
-    private void buildAppDock() {
-        int ink = 0xfff4f6fa, muted = 0xffaab4c0;
-        LinearLayout dock = new LinearLayout(this); dock.setOrientation(LinearLayout.VERTICAL);
-        dock.setPadding(dp(10), dp(14), dp(10), dp(14)); dock.setBackgroundColor(0xff101419);
-        dock.addView(text("RideBridge\nRIDE DOCK", 20, 0xff83b5ff, true));
-        addCastControls(dock);
-        TextView explanation = text("Keep Maps in the other Android split-screen pane. App launching depends on phone support.", 12, muted, false);
-        LinearLayout.LayoutParams ep = params(); ep.topMargin = dp(5); dock.addView(explanation, ep);
-        Button map = dockButton("GOOGLE MAPS"); map.setOnClickListener(v -> openMapsAdjacent()); dock.addView(map, dockButtonParams());
-        Button street = dockButton("STREETCROSS"); street.setOnClickListener(v -> openStreetCross(true)); dock.addView(street, dockButtonParams());
-        Button music = dockButton("SPOTIFY"); music.setOnClickListener(v -> openSpotifyAdjacent()); dock.addView(music, dockButtonParams());
-        Button yamaha = dockButton("Y-CONNECT"); yamaha.setOnClickListener(v -> openYamahaAppAdjacent()); dock.addView(yamaha, dockButtonParams());
-        Button whatsApp = dockButton("WHATSAPP"); whatsApp.setOnClickListener(v -> openWhatsAppAdjacent()); dock.addView(whatsApp, dockButtonParams());
-        Button voice = dockButton("TALK TO GOOGLE"); voice.setOnClickListener(v -> startGoogleVoice()); dock.addView(voice, dockButtonParams());
-        TextView media = text("Music controls\n" + (trackStatus == null ? "" : trackStatus.getText()), 13, ink, false);
-        trackStatus = media;
-        LinearLayout.LayoutParams mp = params(); mp.topMargin = dp(12); dock.addView(media, mp);
-        Button previous = dockButton("PREVIOUS TRACK"); previousButton = previous; previous.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS)); dock.addView(previous, dockButtonParams());
-        Button toggle = dockButton("PLAY / PAUSE"); playPauseButton = toggle; toggle.setOnClickListener(v -> sendMedia(MediaAction.TOGGLE)); dock.addView(toggle, dockButtonParams());
-        Button next = dockButton("NEXT TRACK"); nextButton = next; next.setOnClickListener(v -> sendMedia(MediaAction.NEXT)); dock.addView(next, dockButtonParams());
-        TextView messages = text("", 13, ink, false); dockMessage = messages;
-        LinearLayout.LayoutParams wp = params(); wp.topMargin = dp(10); dock.addView(messages, wp);
-        Button returnButton = button("FULL RIDE SCREEN"); returnButton.setOnClickListener(v -> { getPreferences(0).edit().putBoolean("dock_mode", false).apply(); buildScreen(); });
-        returnButton.setMinHeight(dp(72));
-        LinearLayout.LayoutParams rp = params(); rp.topMargin = dp(12); dock.addView(returnButton, rp);
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(dock); setContentView(scroll);
+    private void showDisplaySetup() {
+        if (Build.VERSION.SDK_INT < 30) {
+            new android.app.AlertDialog.Builder(this).setMessage("Bike-only Maps requires Android 11 or newer. Ordinary screen sharing is available.")
+                .setPositiveButton("Close", null).show(); return;
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Bike-only Google Maps • experimental")
+            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideBridge debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideBridge using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Cast and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideBridge in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
+            .setNeutralButton("Developer options", (dialog, which) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)))
+            .setNegativeButton("Pair", (dialog, which) -> displayPairDialog())
+            .setPositiveButton("Connect", (dialog, which) -> displayConnectDialog()).show();
+    }
+
+    private EditText numericField(String hint) {
+        EditText field = new EditText(this); field.setHint(hint);
+        field.setInputType(InputType.TYPE_CLASS_NUMBER); return field;
+    }
+
+    private void displayPairDialog() {
+        LinearLayout inputs = new LinearLayout(this); inputs.setOrientation(LinearLayout.VERTICAL);
+        inputs.setPadding(dp(24), dp(12), dp(24), 0);
+        EditText port = numericField("Pairing port"); EditText code = numericField("6-digit pairing code");
+        code.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        inputs.addView(port); inputs.addView(code);
+        new android.app.AlertDialog.Builder(this).setTitle("Pair with this phone")
+            .setMessage("Use the values in Wireless debugging > Pair device with pairing code. Keep its code dialog open in split-screen if your phone closes pairing when switching apps. We connect locally to this phone only.")
+            .setView(inputs).setNegativeButton("Cancel", null).setPositiveButton("Pair", (dialog, which) -> {
+                String pairingPort = port.getText().toString().trim(), pairingCode = code.getText().toString().trim();
+                worker.execute(() -> {
+                    try {
+                        DedicatedDisplay.pair(this, Integer.parseInt(pairingPort), pairingCode);
+                        runOnUiThread(() -> new android.app.AlertDialog.Builder(this).setMessage(DedicatedDisplay.status)
+                            .setPositiveButton("Connect", (d, w) -> displayConnectDialog()).show());
+                    } catch (Exception e) { runOnUiThread(() -> displayError("Pairing failed. " + safeMessage(e))); }
+                });
+            }).show();
+    }
+
+    private void displayConnectDialog() {
+        EditText port = numericField("Connection port");
+        new android.app.AlertDialog.Builder(this).setTitle("Prepare bike display")
+            .setMessage("Enter the port after the colon in IP address & port on the main Wireless debugging screen. This is different from the pairing port. Keep Wi-Fi and Wireless debugging on for this step.")
+            .setView(port).setNegativeButton("Cancel", null).setPositiveButton("Connect", (dialog, which) -> {
+                String connectionPort = port.getText().toString().trim();
+                worker.execute(() -> {
+                    try {
+                        DedicatedDisplay.prepare(this, Integer.parseInt(connectionPort));
+                        runOnUiThread(() -> { buildScreen(); chooseDash(); });
+                    } catch (Exception e) { runOnUiThread(() -> displayError("Display setup failed. " + safeMessage(e))); }
+                });
+            }).show();
+    }
+
+    private void displayError(String message) {
+        new android.app.AlertDialog.Builder(this).setTitle("Bike display setup")
+            .setMessage(message).setPositiveButton("Close", null).show();
+    }
+
+    private void rideMapAction() {
+        if (YamahaCastService.active && DedicatedDisplay.ready) {
+            EditText destination = new EditText(this); destination.setHint("Address or place name");
+            new android.app.AlertDialog.Builder(this).setTitle("Destination on bike display").setView(destination)
+                .setNegativeButton("Cancel", null).setPositiveButton("Navigate", (dialog, which) -> {
+                    String query = destination.getText().toString().trim();
+                    if (query.isEmpty()) return;
+                    worker.execute(() -> {
+                        try { DedicatedDisplay.route(query); }
+                        catch (Exception e) { runOnUiThread(() -> displayError(safeMessage(e))); }
+                    });
+                }).show();
+        } else openMapsAdjacent();
+    }
+
+    private void buildAppDock() { buildScreen(); }
+
+    private void buildScreen() {
+        setupVisible = false; cockpitVisible = true;
+        messagePreview = null; dockMessage = null; albumArt = null;
+        rideClock = null; rideButton = null;
+        deviceStatus = text("", 12, 0xffaab4c0, false);
+        updateStatus = text("", 12, 0xffaab4c0, false);
+        boolean compact = getResources().getConfiguration().screenWidthDp < 580;
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(0xff0b1017); root.setPadding(dp(12), dp(8), dp(12), dp(8));
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
+            androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            view.setPadding(bars.left + dp(12), bars.top + dp(8), bars.right + dp(12), bars.bottom + dp(8));
+            return insets;
+        });
+        LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand = text("RideBridge", 20, 0xfff4f6fa, true);
+        header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
+        castStatus = text(YamahaCastService.status, 11, 0xff92a9be, false);
+        castStatus.setMaxLines(1); castStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        if (!compact) header.addView(castStatus, new LinearLayout.LayoutParams(0, -2, 1.4f));
+        TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
+        ((android.widget.TextClock) clock).setFormat12Hour("h:mm"); clock.setTextColor(0xffaab4c0); clock.setTextSize(17);
+        header.addView(clock); root.addView(header, new LinearLayout.LayoutParams(-1, dp(34)));
+
+        LinearLayout workspace = new LinearLayout(this);
+        workspace.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout controls = new LinearLayout(this); controls.setOrientation(compact ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        LinearLayout music = rideCard("NOW PLAYING");
+        LinearLayout details = new LinearLayout(this); details.setGravity(Gravity.CENTER_VERTICAL);
+        if (!compact) {
+            albumArt = new android.widget.ImageView(this); albumArt.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            albumArt.setImageResource(android.R.drawable.ic_media_play);
+            LinearLayout.LayoutParams art = new LinearLayout.LayoutParams(dp(58), dp(58)); art.rightMargin = dp(12);
+            details.addView(albumArt, art);
+        }
+        trackStatus = text("Open Spotify to start listening", compact ? 16 : 19, 0xfff4f6fa, true);
+        trackStatus.setMaxLines(3); trackStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        details.addView(trackStatus, new LinearLayout.LayoutParams(0, -1, 1));
+        music.addView(details, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout transport = new LinearLayout(this);
+        previousButton = rideAction("|◀", false); previousButton.setContentDescription("Previous track");
+        previousButton.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS));
+        playPauseButton = rideAction("▶", true); playPauseButton.setContentDescription("Play or pause music");
+        playPauseButton.setOnClickListener(v -> sendMedia(MediaAction.TOGGLE));
+        nextButton = rideAction("▶|", false); nextButton.setContentDescription("Next track");
+        nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
+        transport.addView(previousButton, rideWeight(compact ? 56 : 72)); transport.addView(playPauseButton, rideWeight(compact ? 56 : 72));
+        transport.addView(nextButton, rideWeight(compact ? 56 : 72)); music.addView(transport);
+        LinearLayout.LayoutParams musicParams = compact
+            ? new LinearLayout.LayoutParams(-1, 0, 1)
+            : new LinearLayout.LayoutParams(0, -1, 1.3f);
+        if (compact) musicParams.bottomMargin = dp(8); else musicParams.rightMargin = dp(10);
+        controls.addView(music, musicParams);
+
+        LinearLayout messages = rideCard("WHATSAPP");
+        messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
+        messagePreview.setMaxLines(2); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        messagePreview.setOnClickListener(v -> {
+            GX12NotificationListener.NotificationPreview message = GX12NotificationListener.latestWhatsAppPreview;
+            try { if (message != null && message.open != null) message.open.send(); else openWhatsApp(); }
+            catch (android.app.PendingIntent.CanceledException e) { openWhatsApp(); }
+        });
+        messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout messageActions = new LinearLayout(this);
+        Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
+        Button voice = rideAction("Voice", false); voice.setOnClickListener(v -> startGoogleVoice());
+        messageActions.addView(listen, rideWeight(56)); messageActions.addView(voice, rideWeight(56));
+        if (!compact) messages.addView(messageActions);
+        controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, dp(70))
+            : new LinearLayout.LayoutParams(0, -1, 1));
+        workspace.addView(controls, new LinearLayout.LayoutParams(0, -1, 1));
+        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, 0, 1); wp.topMargin = dp(8);
+        root.addView(workspace, wp);
+
+        LinearLayout dock = new LinearLayout(this);
+        String[] labels = compact ? new String[]{"Map", "Apps", "Cast", "Setup"} : new String[]{"Map", "Cast", "Apps", "Voice", "Setup"};
+        for (String label : labels) {
+            Button action = rideAction(label, false);
+            action.setOnClickListener(v -> {
+                switch (label) {
+                    case "Map": rideMapAction(); break;
+                    case "Spotify": openSpotify(); break;
+                    case "WhatsApp": openWhatsApp(); break;
+                    case "Cast": castOrStop(); break;
+                    case "Voice": startGoogleVoice(); break;
+                    case "Setup": buildSetupScreen(); break;
+                    default: showRideApps();
+                }
+            }); dock.addView(action, rideWeight(compact ? 56 : 64));
+        }
+        LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(-1, -2); dp.topMargin = dp(8);
+        root.addView(dock, dp);
+        setContentView(root);
+        androidx.core.view.ViewCompat.requestApplyInsets(root);
+        refreshMediaSession(); refreshWhatsAppPreview();
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    private LinearLayout rideCard(String label) {
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(8), dp(14), dp(8)); card.setBackground(rideBackground(0xff18212d, 18));
+        TextView title = text(label, 11, 0xff92a9be, true); title.setLetterSpacing(0.12f);
+        card.addView(title, new LinearLayout.LayoutParams(-1, dp(18))); return card;
+    }
+
+    private android.graphics.drawable.GradientDrawable rideBackground(int color, int radius) {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(color); shape.setCornerRadius(dp(radius)); return shape;
+    }
+
+    private Button rideAction(String label, boolean primary) {
+        Button action = button(label); action.setAllCaps(false); action.setTextSize(16);
+        action.setTypeface(Typeface.DEFAULT, Typeface.BOLD); action.setMinWidth(0); action.setMinimumWidth(0);
+        action.setMinHeight(dp(56)); action.setMinimumHeight(dp(56));
+        action.setPadding(dp(4), dp(4), dp(4), dp(4)); action.setMaxLines(1);
+        action.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}}, new int[]{0xff8191a1, primary ? 0xff0b1017 : 0xfff4f6fa}));
+        action.setBackgroundTintList(null);
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[]{-android.R.attr.state_enabled}, rideBackground(0xff24303d, 14));
+        states.addState(new int[]{android.R.attr.state_pressed}, rideBackground(0xff526c87, 14));
+        states.addState(new int[]{}, rideBackground(primary ? 0xff90c8ff : 0xff263548, 14));
+        action.setBackground(states); return action;
+    }
+
+    private LinearLayout.LayoutParams rideWeight(int height) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(height), 1);
+        p.setMargins(dp(3), dp(4), dp(3), 0); return p;
+    }
+
+    private LinearLayout.LayoutParams rideParams(int height) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(height)); p.topMargin = dp(8); return p;
+    }
+
+    private void castOrStop() {
+        if (YamahaCastService.active) {
+            stopService(new Intent(this, YamahaCastService.class));
+            android.widget.Toast.makeText(this, "Casting stopped", android.widget.Toast.LENGTH_SHORT).show();
+        } else {
+            if (castStatus == null) castStatus = text("", 14, 0xfff4f6fa, false);
+            chooseDash();
+        }
+    }
+
+    private void showRideApps() {
+        new android.app.AlertDialog.Builder(this).setTitle("Ride apps")
+            .setItems(new String[]{"Spotify", "WhatsApp", "Yamaha Y-Connect", "Garmin StreetCross", "Google voice", "Setup"}, (dialog, which) -> {
+                switch (which) {
+                    case 0: openSpotify(); break; case 1: openWhatsApp(); break; case 2: openYamahaApp(); break;
+                    case 3: openStreetCross(); break; case 4: startGoogleVoice(); break; default: buildSetupScreen();
+                }
+            }).setNegativeButton("Close", null).show();
+    }
+
+    private void readMessageAloud() {
+        if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) { openNotificationAccess(); return; }
+        GX12NotificationListener.NotificationPreview preview = GX12NotificationListener.latestWhatsAppPreview;
+        if (preview == null) { android.widget.Toast.makeText(this, "No new message to read", android.widget.Toast.LENGTH_SHORT).show(); return; }
+        if (speech == null) {
+            speech = new android.speech.tts.TextToSpeech(this, result -> {
+                speechReady = result == android.speech.tts.TextToSpeech.SUCCESS;
+                if (speechReady) readMessageAloud();
+                else android.widget.Toast.makeText(this, "Speech is unavailable on this phone", android.widget.Toast.LENGTH_SHORT).show();
+            });
+        } else if (speechReady) speech.speak(preview.title + ". " + preview.text,
+            android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "whatsapp-preview");
     }
 
     private Button dockButton(String title) {
@@ -355,7 +586,7 @@ public final class MainActivity extends android.app.Activity {
         ComponentName listener = new ComponentName(this, GX12NotificationListener.class);
         if (!hasNotificationAccess(listener)) {
             mediaController = null;
-            trackStatus.setText("Spotify controls are off. Enable access above to control Spotify from this screen.");
+            trackStatus.setText("Connect music in Setup");
             updateMediaButtons(false, false, false);
             return;
         }
@@ -370,7 +601,14 @@ public final class MainActivity extends android.app.Activity {
                 }
             }
             if (mediaController == null) {
-                trackStatus.setText("Spotify is not active. Open Spotify and start playback to use these controls.");
+                for (MediaController session : sessions) {
+                    PlaybackState playback = session.getPlaybackState();
+                    if (playback != null && playback.getState() == PlaybackState.STATE_PLAYING) { mediaController = session; break; }
+                }
+            }
+            if (mediaController == null && !sessions.isEmpty()) mediaController = sessions.get(0);
+            if (mediaController == null) {
+                trackStatus.setText("Open Spotify and start a track");
                 updateMediaButtons(false, false, false);
                 return;
             }
@@ -381,11 +619,17 @@ public final class MainActivity extends android.app.Activity {
             boolean playing = state != null && state.getState() == PlaybackState.STATE_PLAYING;
             String label = title == null || title.isBlank() ? "Active media player" : title;
             if (artist != null && !artist.isBlank()) label += "\n" + artist;
-            trackStatus.setText(label + (playing ? "\nPlaying" : "\nNot playing"));
+            trackStatus.setText(label + (cockpitVisible ? "" : (playing ? "\nPlaying" : "\nNot playing")));
+            if (albumArt != null) {
+                android.graphics.Bitmap image = metadata == null ? null : metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+                if (image == null && metadata != null) image = metadata.getBitmap(MediaMetadata.METADATA_KEY_ART);
+                if (image != null) albumArt.setImageBitmap(image);
+                else albumArt.setImageResource(android.R.drawable.ic_media_play);
+            }
             long actions = state == null ? 0 : state.getActions();
             updateMediaButtons(true, (actions & PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0,
                     (actions & PlaybackState.ACTION_SKIP_TO_NEXT) != 0);
-            playPauseButton.setText(playing ? "Pause" : "Play");
+            playPauseButton.setText(cockpitVisible ? (playing ? "Ⅱ" : "▶") : (playing ? "Pause" : "Play"));
         } catch (SecurityException | IllegalStateException error) {
             mediaController = null;
             trackStatus.setText("Android has not granted access yet. Enable RideBridge under Notification access.");
@@ -412,7 +656,7 @@ public final class MainActivity extends android.app.Activity {
                 if (state != null && state.getState() == PlaybackState.STATE_PLAYING) controls.pause();
                 else controls.play();
             }
-            handler.postDelayed(trackRefresh, 500);
+            handler.removeCallbacks(trackRefresh); handler.postDelayed(trackRefresh, 500);
         } catch (SecurityException ignored) {
             trackStatus.setText("This media player did not accept that command.");
         }
@@ -444,12 +688,12 @@ public final class MainActivity extends android.app.Activity {
     private void refreshWhatsAppPreview() {
         if (messagePreview == null && dockMessage == null) return;
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) {
-            if (messagePreview != null) messagePreview.setText("WhatsApp previews are off. Enable Music + WhatsApp access above.");
+            if (messagePreview != null) messagePreview.setText("Connect WhatsApp previews in Setup");
             if (dockMessage != null) dockMessage.setText("WhatsApp\nPreviews are off. Enable access on the ride screen.");
             return;
         }
         GX12NotificationListener.NotificationPreview preview = GX12NotificationListener.latestWhatsAppPreview;
-        String label = preview == null ? "Waiting for a new WhatsApp notification. The app does not fetch chat history." : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
+        String label = preview == null ? "No new messages" : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
         if (dockMessage != null) dockMessage.setText("WhatsApp\n" + (preview == null ? "No new preview" : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
@@ -719,7 +963,7 @@ public final class MainActivity extends android.app.Activity {
     private String sha256(File file) throws Exception { MessageDigest d = MessageDigest.getInstance("SHA-256"); try (InputStream in = new java.io.FileInputStream(file)) { byte[] b = new byte[8192]; int n; while ((n = in.read(b)) != -1) d.update(b, 0, n); } StringBuilder s = new StringBuilder(); for (byte v : d.digest()) s.append(String.format(Locale.ROOT, "%02x", v & 0xff)); return s.toString(); }
     private boolean canInstallPackages() { return Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls(); }
     private void openInstaller(File apk) { try { Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".apkprovider", apk); Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE); i.setDataAndType(uri, "application/vnd.android.package-archive"); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); if (downloadedApk != null && downloadedApk.equals(apk)) downloadedApk = null; startActivity(i); } catch (Exception e) { showUpdateMessage("Could not open Android’s installer: " + safeMessage(e)); } }
-    private void showUpdateMessage(String message) { runOnUiThread(() -> updateStatus.setText(message)); }
+    private void showUpdateMessage(String message) { runOnUiThread(() -> { if (updateStatus != null) updateStatus.setText(message); }); }
     private String safeMessage(Exception error) { String m = error.getMessage(); return m == null || m.isBlank() ? error.getClass().getSimpleName() : m; }
     private String appVersion() { try { PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0); return info.versionName + " (" + info.versionCode + ")"; } catch (Exception ignored) { return "unknown"; } }
     private TextView text(String value, int size, int color, boolean bold) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD); return v; }

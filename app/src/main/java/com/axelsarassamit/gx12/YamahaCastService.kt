@@ -40,6 +40,8 @@ class YamahaCastService : Service() {
     private var captureThread: HandlerThread? = null
     private var frame: Bitmap? = null
     private var worker: Thread? = null
+    private var dedicated = false
+    private var waitingForFrameSince = 0L
 
     override fun onBind(intent: Intent?) = null
 
@@ -48,7 +50,8 @@ class YamahaCastService : Service() {
         if (running) return START_NOT_STICKY
         val token = intent?.getParcelableExtra<Intent>("capture")
         val address = intent?.getStringExtra("device")
-        if (token == null || address == null || intent.getIntExtra("result", 0) != Activity.RESULT_OK) {
+        dedicated = intent?.getBooleanExtra("dedicated", false) == true
+        if (address == null || (!dedicated && (token == null || intent.getIntExtra("result", 0) != Activity.RESULT_OK))) {
             status = "Screen sharing was not approved. Tap Cast to try again."
             stopSelf(); return START_NOT_STICKY
         }
@@ -58,15 +61,21 @@ class YamahaCastService : Service() {
             val stop = PendingIntent.getService(this, 1, Intent(this, YamahaCastService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
             val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             val notice = Notification.Builder(this, "yamaha_cast")
-                .setSmallIcon(android.R.drawable.ic_menu_compass).setContentTitle("RideBridge is sharing your screen")
+                .setSmallIcon(android.R.drawable.ic_menu_compass).setContentTitle(if (dedicated) "RideBridge map is on your bike" else "RideBridge is sharing your screen")
                 .setContentText("Yamaha dash • tap Stop to end sharing")
                 .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
-            startForeground(22, notice)
+            if (Build.VERSION.SDK_INT >= 29) startForeground(22, notice,
+                if (dedicated) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                else android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            else startForeground(22, notice)
             running = true; active = true
             status = "Connecting to the selected Yamaha dash…"
+            if (dedicated) {
+                DedicatedDisplay.start(this)
+            } else {
             captureThread = HandlerThread("RideBridgeCapture").also { it.start() }
             val captureHandler = Handler(captureThread!!.looper)
-            projection = getSystemService(MediaProjectionManager::class.java).getMediaProjection(Activity.RESULT_OK, token)
+            projection = getSystemService(MediaProjectionManager::class.java).getMediaProjection(Activity.RESULT_OK, token!!)
             projection!!.registerCallback(object : MediaProjection.Callback() {
                 override fun onStop() {
                     if (running) { status = "Screen sharing ended. Tap Cast to start a new session."; stopSelf() }
@@ -97,6 +106,7 @@ class YamahaCastService : Service() {
             display = projection!!.createVirtualDisplay("RideBridge Yamaha", 480, 234,
                 resources.configuration.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader!!.surface, null, captureHandler)
+            }
             deadline = SystemClock.elapsedRealtime() + 20000
             watchdog.scheduleWithFixedDelay({
                 if (running && SystemClock.elapsedRealtime() > deadline) {
@@ -146,12 +156,19 @@ class YamahaCastService : Service() {
             var started = SystemClock.elapsedRealtime()
             while (running) {
                 deadline = SystemClock.elapsedRealtime() + 15000
-                val jpeg = synchronized(lock) {
+                val jpeg = if (dedicated) DedicatedDisplay.latestFrame() else synchronized(lock) {
                     frame?.let { bitmap -> ByteArrayOutputStream().use { output ->
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 45, output); output.toByteArray()
                     } }
                 }
-                if (jpeg == null) { Thread.sleep(100); continue }
+                if (jpeg == null) {
+                    if (waitingForFrameSince == 0L) waitingForFrameSince = SystemClock.elapsedRealtime()
+                    check(SystemClock.elapsedRealtime() - waitingForFrameSince < 10000) {
+                        "No map frames. Reconnect bike display in Setup. ${if (dedicated) DedicatedDisplay.status else ""}"
+                    }
+                    Thread.sleep(100); continue
+                }
+                waitingForFrameSince = 0L
                 val payload = byteArrayOf(3, sequence.toByte(), (sequence ushr 8).toByte()) + jpeg
                 link.write(NaviLiteCodec.build(6, 0, 1, payload))
                 do { val ack = frames.next(); if (ack.serviceType == 80) break } while (running)
@@ -173,6 +190,8 @@ class YamahaCastService : Service() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) { stopSelf() }
+
     override fun onDestroy() {
         running = false; active = false
         if (status.startsWith("Casting to") || status.startsWith("Connecting")) status = "Casting stopped."
@@ -180,6 +199,7 @@ class YamahaCastService : Service() {
         try { socket?.close() } catch (_: Exception) { }
         socket = null
         worker?.interrupt()
+        if (dedicated) DedicatedDisplay.stop()
         display?.release(); display = null
         reader?.setOnImageAvailableListener(null, null); reader?.close(); reader = null
         projection?.stop(); projection = null

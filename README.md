@@ -2,9 +2,17 @@
 
 An independent Android motorcycle cockpit targeting the Yamaha XMAX 2024 Tech MAX. It brings together Google Maps, Spotify, Yamaha Y-Connect, Garmin StreetCross, WhatsApp and Google voice, with large controls, headset status, a timer and signed in-app updates. Previously called GX12 Companion; the package identity and release download name stay the same so existing installations can update.
 
+## Landscape cockpit and bike-only map
+
+Version 0.6.0 replaces the scrolling ride homepage with a landscape cockpit. Music and WhatsApp stay in fixed panels, with large playback controls, track artwork, explicit Read aloud, voice and an app dock. Setup holds permissions, update checks and device tools.
+
+The optional **Set up bike-only map** flow prepares a separate Google Maps display through local Wireless debugging. The phone then stays on music/messages while the XMAX receives map images. It uses the installed Maps app and its existing login, with no paid Google Maps Platform project. This mode is experimental and has not been tested on the user's physical phone/bike. See [the full setup guide](BIKE_DISPLAY_SETUP.md) for pairing ports, session teardown and OEM limitations.
+
+Without that setup, ordinary screen sharing and Maps split-screen remain available. This fallback needs the map visible on the phone. Accounts remain in their official apps; RideBridge does not collect login credentials or provide a personal WhatsApp login.
+
 ## Experimental Yamaha dash casting
 
-RideBridge includes Pillion's NaviLite protocol code, pinned to revision `29497f4ea3bccc5cd40c4647f8e4d8345eeddda3`, with its license and required notice. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This version supports the XMAX CCU part family `006-B3952`, using its 480 × 234 image size. No physical bike validation has been performed for this build.
+RideBridge includes Pillion's NaviLite protocol code, pinned to revision `29497f4ea3bccc5cd40c4647f8e4d8345eeddda3`, with its license and required notice. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The image protocol supports the XMAX CCU part family `006-B3952`, using its 480 × 234 image size. No physical bike validation has been performed for this build.
 
 1. Park the bike. Keep the Yamaha CCU paired through the normal bike setup.
 2. Close StreetCross or another app currently casting to the dash.
@@ -13,7 +21,7 @@ RideBridge includes Pillion's NaviLite protocol code, pinned to revision `29497f
 5. Open Google Maps and rotate the phone landscape with normal phone controls. Use the dash's navigation view. A portrait map is letterboxed to fit the wide dash.
 6. End with **Stop casting**, the notification Stop action, or Android's sharing indicator.
 
-Android must approve every screen-sharing session. Frames remain in memory and are sent by Classic Bluetooth RFCOMM to the explicitly chosen paired CCU using service `00007220-0000-1000-8000-00805f9b34fb`. There are no stored recordings or screen uploads. Connection and acknowledgement timeouts close the socket. Capture stops after connection failure, process death or revoked screen sharing. This is map-image casting, not integration with bike controls or replacement of safety instruments. No automatic reconnect or Bluetooth pairing changes are performed.
+Android must approve every screen-sharing session. Frames remain in memory and are sent by Classic Bluetooth RFCOMM to the explicitly chosen paired CCU using service `00007220-0000-1000-8000-00805f9b34fb`. There are no stored recordings or screen uploads. Connection and acknowledgement timeouts close the socket. Capture stops after connection failure, process death or revoked screen sharing. This is map-image casting, not integration with bike controls or replacement of safety instruments. No automatic reconnect or Bluetooth pairing changes are performed. The separate-display mode is described above.
 
 Pillion-derived code is licensed under PolyForm Noncommercial 1.0.0. This distribution is for noncommercial personal and hobby use. Required Notice: Copyright 2026 the Pillion authors.
 
@@ -25,9 +33,9 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Tick off helmet, headset, phone mount, and route reminders. Checklist state is kept on the phone.
 - Open Google Maps or enter a destination and hand it off to Maps.
 - Use **Open map beside app dock** to ask Android to place Google Maps next to the RideBridge dock in split-screen. The phone's Android version and manufacturer determine whether adjacent app launch is supported; if it is ignored, Maps opens normally. From the dock, Google Maps, StreetCross, Spotify, Y-Connect, and WhatsApp can be launched into the adjacent pane when Android permits it.
-- The main ride actions use larger touch targets for easier tapping with riding gloves; the dock scrolls vertically, and media controls are stacked rather than crowded into small side-by-side buttons.
+- The main ride actions use larger touch targets for easier tapping with riding gloves; the ride screen stays fixed, and full-screen transport buttons are 72dp tall. The compact split-screen companion reduces controls to 56dp and shows a shorter message preview.
 - Launch Garmin StreetCross where installed and supported by the motorcycle/region. StreetCross and Google Maps are separate navigation apps; the hub does not combine their maps.
-- Launch Spotify and control Spotify playback from the ride screen after granting optional Android Notification access.
+- Launch Spotify and control compatible active music sessions (Spotify preferred) from the ride screen after granting optional Android Notification access.
 - Open the official Yamaha Motorcycle Connect (Y-Connect) app.
 - Open WhatsApp and optionally show the latest WhatsApp notification preview on this phone. It does not access chat history, send replies, or upload message content.
 - Start the phone's configured voice assistant without requesting microphone access. Set Google as Android's assistant for Google voice commands.

@@ -52,9 +52,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    packaging { resources.merges += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/LICENSE", "META-INF/NOTICE") }
 }
 
 dependencies {
     implementation("androidx.core:core:1.16.0")
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
+    implementation("org.conscrypt:conscrypt-android:2.5.3")
     testImplementation("junit:junit:4.13.2")
 }

@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <queries>
+        <package android:name="com.google.android.apps.maps" />
         <package android:name="com.spotify.music" />
         <package android:name="jp.co.yamahamotor.yamahamotorcycleconnect.sccu" />
         <package android:name="com.garmin.android.apps.streetcross" />
@@ -20,6 +21,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -30,7 +33,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
+            android:screenOrientation="userLandscape"
             android:resizeableActivity="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -49,7 +52,7 @@
         </service>
 
         <service android:name=".YamahaCastService" android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:foregroundServiceType="mediaProjection|connectedDevice" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
