@@ -163,7 +163,10 @@ public final class MainActivity extends android.app.Activity {
         page.addView(bluetooth, buttonParams());
         castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
         addCockpitCard(page, "BIKE DISPLAY • EXPERIMENTAL", castStatus);
-        Button display = button("GUIDED BIKE DISPLAY SETUP"); display.setOnClickListener(v -> showDisplaySetup());
+        Button display = button("HOW TO CAST TO THE BIKE"); display.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
+            .setTitle("Bluetooth map sharing")
+            .setMessage("Pair your phone with the Yamaha in Bluetooth settings. On the bike, open its navigation screen. Return to the ride screen, tap Cast, select the Yamaha and approve screen sharing. Then open your map app. Mobile data can provide the map internet connection. No Wi-Fi configuration is needed for ordinary screen sharing. The shared map also remains visible on the phone.")
+            .setPositiveButton("Got it", null).show());
         page.addView(display, buttonParams());
         Button notifications = button("CASTING NOTIFICATION ACCESS"); notifications.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 24);
@@ -173,6 +176,11 @@ public final class MainActivity extends android.app.Activity {
         addCockpitCard(page, "APP UPDATES", updateStatus);
         Button update = button("CHECK FOR UPDATES"); update.setOnClickListener(v -> checkForUpdate()); page.addView(update, buttonParams());
         page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
+        Button advanced = button("ADVANCED DISPLAY OPTIONS"); advanced.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
+            .setTitle("Separate map screen • experimental")
+            .setMessage("Only this optional mode uses Wireless debugging to put the map on a separate display while keeping phone controls visible. The current implementation may stop when Wi-Fi disconnects. Use normal Cast for mobile-data-only rides.")
+            .setNegativeButton("Close", null).setPositiveButton("Open advanced setup", (dialog, which) -> showDisplaySetup()).show());
+        page.addView(advanced, buttonParams());
         Button about = button("ABOUT + DISPLAY HELP"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
         ScrollView scroll = new ScrollView(this); scroll.addView(page);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
