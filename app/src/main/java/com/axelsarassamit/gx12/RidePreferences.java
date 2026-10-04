@@ -8,13 +8,13 @@ import java.util.*;
 /** Explicit app selection. No account credentials or notification text are saved here. */
 public final class RidePreferences {
     public static SharedPreferences prefs(Context context) { return context.getSharedPreferences("ride_config", 0); }
-    public static final String[] MESSAGE_NAMES = {"WhatsApp", "WhatsApp Business", "LINE", "Messenger", "TikTok", "SMS"};
+    public static final String[] MESSAGE_NAMES = {"WhatsApp", "WhatsApp Business", "LINE", "Messenger", "TikTok", "SMS", "Telegram", "Signal", "Instagram", "Viber", "Discord", "WeChat"};
     public static String[] messagePackages(Context context) {
         String sms = Telephony.Sms.getDefaultSmsPackage(context);
         String tiktok = "com.zhiliaoapp.musically";
         try { context.getPackageManager().getPackageInfo("com.ss.android.ugc.trill", 0); tiktok = "com.ss.android.ugc.trill"; }
         catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
-        return new String[]{"com.whatsapp", "com.whatsapp.w4b", "jp.naver.line.android", "com.facebook.orca", tiktok, sms == null ? "" : sms};
+        return new String[]{"com.whatsapp", "com.whatsapp.w4b", "jp.naver.line.android", "com.facebook.orca", tiktok, sms == null ? "" : sms, "org.telegram.messenger", "org.thoughtcrime.securesms", "com.instagram.android", "com.viber.voip", "com.discord", "com.tencent.mm"};
     }
     public static Set<String> selectedMessages(Context context) {
         Set<String> selected = new HashSet<>(prefs(context).getStringSet("message_apps", new HashSet<>(Arrays.asList("com.whatsapp", "com.whatsapp.w4b"))));

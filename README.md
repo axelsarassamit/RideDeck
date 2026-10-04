@@ -9,7 +9,7 @@ Open **Setup > Layout + apps** (also available from the Apps dock).
 - **Left mount**: music panel on the left, quick actions in their normal order.
 - **Centre mount**: balanced panels.
 - **Right mount**: music panel on the right and mirrored quick-action order.
-- Select several notification sources: WhatsApp, WhatsApp Business, LINE, Messenger, TikTok and the phone's current default SMS app. Defaults stay WhatsApp only until changed. A separate current preview is held in memory for each selected app. **Next app** cycles through them, and Read aloud reads the displayed preview. Old notifications are not fetched.
+- Select several notification sources: WhatsApp, WhatsApp Business, LINE, Messenger, TikTok and the phone's current default SMS app. Defaults stay WhatsApp only until changed. A separate current preview is held in memory for each selected app. **Next app** cycles through them, and Read aloud reads the displayed preview. Currently active notifications are loaded when access connects; dismissed notification history is not fetched.
 - Choose Google Maps, Waze, Grab Driver, LINE MAN RIDER or Garmin StreetCross as the navigation/rider app. Map launches the selected app when not using the dedicated display.
 
 All non-Google apps on the dedicated bike display are experimental, not hardware-verified integrations. The whole selected rider app is shown, not a separately extracted map. Their sign-in, orders, routing and protected-screen behaviour stay inside the original apps. RideBridge does not accept jobs or automate rider workflows. Only Google Maps has RideBridge's destination handoff in dedicated display mode. Choose a new display app before preparing a session.
@@ -58,7 +58,7 @@ These tools do not record GPS, distance, speed, or a route. Yamaha account, moto
 
 ## Music controls and privacy
 
-Android requires the user to enable RideBridge in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. RideBridge uses Spotify's active media session for track details and playback buttons. For messaging, it reads only new notifications from the sources you select and keeps one current preview per app in memory while the app process runs. It does not read chat history, persist message content, process unselected apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
+Android requires the user to enable RideBridge in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. RideBridge uses Spotify's active media session for track details and playback buttons. For messaging, it reads new and currently active notifications from the sources you select and keeps one current preview per app in memory while the app process runs. It does not read chat history, persist message content, process unselected apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
 
 Android may block Notification access for a sideloaded app. If you choose to enable Spotify controls, open **Settings > Apps > RideBridge > ⋮ > Allow restricted settings**, then return to RideBridge and enable Notification access. This is optional; Maps, Y-Connect, the ride timer, checklist, Spotify launch shortcut, and headset controls can be used without it.
 
@@ -104,3 +104,7 @@ The GX12's external USB-C port is documented for charging. These diagnostics do 
 ## Quick camera
 
 Tap Camera on the ride dock and choose Front photo, Rear photo, Front video or Rear video. The built-in camera has large capture, record, stop, mode and camera-switch buttons. Photos save to Pictures/RideBridge and videos to Movies/RideBridge on Android 10+, visible in the gallery. Camera permission is requested on first use; video sound requires microphone access and is silent if denied. Android 8/9 require storage permission. Recording is foreground-only and stops when leaving the camera. Hardware capture needs a phone test.
+
+## Portrait and message reading (0.9.0)
+
+RideBridge follows the phone orientation setting and supports portrait and landscape. Portrait stacks music and messages. Choose app lists all enabled sources, including sources without a current notification. Latest from all apps shows the newest received notification; new arrivals return the card to that latest view. Tap the preview for a large scrollable message view. Text comes from Android notifications (up to 20,000 characters), not full chat history; redacted or truncated source notifications cannot be expanded by RideBridge. Telegram, Signal, Instagram, Viber, Discord and WeChat are additional selectable sources. Actual notifications and layout require a physical phone check.

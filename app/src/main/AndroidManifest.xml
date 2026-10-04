@@ -24,6 +24,12 @@
         <intent>
             <action android:name="android.intent.action.ASSIST" />
         </intent>
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.thoughtcrime.securesms" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.viber.voip" />
+        <package android:name="com.discord" />
+        <package android:name="com.tencent.mm" />
     </queries>
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -42,11 +48,11 @@
         android:icon="@drawable/ridebridge_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
-        <activity android:name=".QuickCameraActivity" android:exported="false" android:screenOrientation="userLandscape" />
+        <activity android:name=".QuickCameraActivity" android:exported="false" android:screenOrientation="user" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="userLandscape"
+            android:screenOrientation="user"
             android:resizeableActivity="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

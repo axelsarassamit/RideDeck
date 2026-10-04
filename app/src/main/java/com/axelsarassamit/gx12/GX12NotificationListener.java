@@ -27,20 +27,43 @@ public final class GX12NotificationListener extends NotificationListenerService 
         public final String appName;
         public final android.app.PendingIntent open;
         NotificationPreview(String title, String text, String key, android.app.PendingIntent open, String packageName, String appName) {
-            this.title = title.substring(0, Math.min(160, title.length())); this.text = text.substring(0, Math.min(1000, text.length())); this.key = key; this.open = open; this.packageName = packageName; this.appName = appName;
+            this.title = title.substring(0, Math.min(160, title.length())); this.text = text.substring(0, Math.min(20000, text.length())); this.key = key; this.open = open; this.packageName = packageName; this.appName = appName;
         }
     }
+
+    @Override public void onListenerConnected() {
+        super.onListenerConnected(); refreshActive();
+    }
+    public void refreshActive() {
+        try {
+            StatusBarNotification[] active = getActiveNotifications();
+            if (active != null) {
+                java.util.Arrays.sort(active, java.util.Comparator.comparingLong(StatusBarNotification::getPostTime));
+                for (StatusBarNotification item : active) onNotificationPosted(item);
+            }
+        } catch (SecurityException ignored) { }
+    }
+    private static volatile GX12NotificationListener connected;
+    @Override public void onCreate() { super.onCreate(); connected = this; }
+    public static void reloadSelected() { if (connected != null) connected.refreshActive(); }
+    @Override public void onDestroy() { if (connected == this) connected = null; super.onDestroy(); }
 
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn == null || !RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
         Notification notification = sbn.getNotification();
-        if (notification == null) return;
+        if (notification == null || (notification.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
         Bundle extras = notification.extras;
         CharSequence title = extras == null ? null : extras.getCharSequence(Notification.EXTRA_TITLE);
         CharSequence body = extras == null ? null : extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
         if (TextUtils.isEmpty(body) && extras != null) body = extras.getCharSequence(Notification.EXTRA_TEXT);
         CharSequence lines = extras == null ? null : extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES) == null ? null : TextUtils.join("\n", extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES));
-        if (!TextUtils.isEmpty(lines)) body = lines;
+        if (TextUtils.isEmpty(body) && !TextUtils.isEmpty(lines)) body = lines;
+        androidx.core.app.NotificationCompat.MessagingStyle style = androidx.core.app.NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification);
+        if (style != null && !style.getMessages().isEmpty()) {
+            androidx.core.app.NotificationCompat.MessagingStyle.Message last = style.getMessages().get(style.getMessages().size() - 1);
+            body = last.getText();
+            if (last.getPerson() != null && !TextUtils.isEmpty(last.getPerson().getName())) title = last.getPerson().getName();
+        }
         if (!TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
             NotificationPreview preview = new NotificationPreview(title == null ? "Message" : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(this, sbn.getPackageName()));
             synchronized (GX12NotificationListener.class) {

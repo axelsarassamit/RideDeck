@@ -72,7 +72,8 @@ public final class MainActivity extends android.app.Activity {
     private android.widget.ImageView albumArt;
     private android.speech.tts.TextToSpeech speech;
     private boolean speechReady;
-    private int messageIndex;
+    private String messageApp;
+    private GX12NotificationListener.NotificationPreview newestSeen;
     private boolean setupVisible;
     private boolean cockpitVisible;
     private Chronometer rideClock;
@@ -346,6 +347,7 @@ public final class MainActivity extends android.app.Activity {
         rideClock = null; rideButton = null;
         deviceStatus = text("", 12, 0xffaab4c0, false);
         updateStatus = text("", 12, 0xffaab4c0, false);
+        boolean portrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
         boolean compact = getResources().getConfiguration().screenWidthDp < 580;
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff0b1017); root.setPadding(dp(12), dp(8), dp(12), dp(8));
@@ -399,19 +401,16 @@ public final class MainActivity extends android.app.Activity {
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
-        messagePreview.setMaxLines(2); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        messagePreview.setOnClickListener(v -> {
-            GX12NotificationListener.NotificationPreview message = displayedMessage();
-            try { if (message != null && message.open != null) message.open.send(); else openWhatsApp(); }
-            catch (android.app.PendingIntent.CanceledException e) { openWhatsApp(); }
-        });
+        messagePreview.setTextSize(portrait ? 20 : 18);
+        messagePreview.setMaxLines(portrait ? 7 : 4); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        messagePreview.setOnClickListener(v -> showFullMessage());
         messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout messageActions = new LinearLayout(this);
         Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
-        Button voice = rideAction("Next app", false); voice.setOnClickListener(v -> { messageIndex++; refreshWhatsAppPreview(); });
+        Button voice = rideAction("Choose app", false); voice.setOnClickListener(v -> chooseMessageSource());
         messageActions.addView(listen, rideWeight(56)); messageActions.addView(voice, rideWeight(56));
-        if (!compact) messages.addView(messageActions);
-        controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, dp(70))
+        messages.addView(messageActions);
+        controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
         if (!compact && RidePreferences.prefs(this).getInt("mount", 1) == 2) {
             controls.removeView(music); controls.addView(music);
@@ -494,7 +493,38 @@ public final class MainActivity extends android.app.Activity {
 
     private GX12NotificationListener.NotificationPreview displayedMessage() {
         List<GX12NotificationListener.NotificationPreview> messages = GX12NotificationListener.selectedPreviews(this);
-        return messages.isEmpty() ? null : messages.get(Math.floorMod(messageIndex, messages.size()));
+        if (messages.isEmpty()) return null;
+        if (messages.get(0) != newestSeen) { newestSeen = messages.get(0); messageApp = null; }
+        if (messageApp == null) return messages.get(0);
+        for (GX12NotificationListener.NotificationPreview item : messages) if (item.packageName.equals(messageApp)) return item;
+        return null;
+    }
+
+    private void chooseMessageSource() {
+        String[] packages = RidePreferences.messagePackages(this);
+        java.util.List<String> names = new java.util.ArrayList<>(), choices = new java.util.ArrayList<>();
+        names.add("Latest from all apps"); choices.add(null);
+        java.util.Set<String> selected = RidePreferences.selectedMessages(this);
+        for (int i = 0; i < packages.length; i++) if (!packages[i].isEmpty() && selected.contains(packages[i])) {
+            names.add(RidePreferences.MESSAGE_NAMES[i]); choices.add(packages[i]);
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Message source")
+            .setItems(names.toArray(new String[0]), (dialog, which) -> { messageApp = choices.get(which); refreshWhatsAppPreview(); })
+            .setNegativeButton("Close", null).show();
+    }
+
+    private void showFullMessage() {
+        GX12NotificationListener.NotificationPreview item = displayedMessage();
+        if (item == null) { chooseMessageSource(); return; }
+        TextView body = text(item.title + "\n\n" + item.text, 24, 0xff20252b, false);
+        body.setPadding(dp(24), dp(16), dp(24), dp(16));
+        ScrollView scroll = new ScrollView(this); scroll.addView(body);
+        new android.app.AlertDialog.Builder(this).setTitle(item.appName).setView(scroll)
+            .setNegativeButton("Close", null).setNeutralButton("Read aloud", (dialog, which) -> readMessageAloud())
+            .setPositiveButton("Open app", (dialog, which) -> {
+                try { if (item.open != null) item.open.send(); else launchChosenApp(item.packageName); }
+                catch (android.app.PendingIntent.CanceledException e) { launchChosenApp(item.packageName); }
+            }).show();
     }
 
     private void showQuickCamera() {
@@ -536,7 +566,7 @@ public final class MainActivity extends android.app.Activity {
                 java.util.Set<String> enabled = new java.util.HashSet<>();
                 for (int i = 0; i < packages.length; i++) if (checked[i] && !packages[i].isEmpty()) enabled.add(packages[i]);
                 RidePreferences.prefs(this).edit().putStringSet("message_apps", enabled).commit();
-                GX12NotificationListener.clearPreviews(); messageIndex = 0; buildScreen();
+                GX12NotificationListener.reloadSelected(); messageApp = null; buildScreen();
                 android.widget.Toast.makeText(this, "Saved. New notifications from selected apps will appear after access is enabled.", android.widget.Toast.LENGTH_LONG).show();
             }).show();
     }
@@ -728,7 +758,7 @@ public final class MainActivity extends android.app.Activity {
             return;
         }
         GX12NotificationListener.NotificationPreview preview = displayedMessage();
-        String label = preview == null ? "No new messages from selected apps" : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
+        String label = preview == null ? "No message notification available. Tap Choose app." : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
         if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " - " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
