@@ -29,6 +29,11 @@ public final class RidePreferences {
         for (int i = 0; i < packages.length; i++) if (packages[i].equals(pkg)) return MESSAGE_NAMES[i];
         return "Messages";
     }
+    public static final String[] BIKE_NAMES = {"Automatic / other Yamaha with StreetCross", "XMAX 2024 Tech MAX", "XMAX / NMAX (compatible navigation dash)", "MT-07 (2025)", "R9 (2026)", "MT-09 (2024 / 2025)", "MT-09 SP (2026)", "XSR900 (2025)", "XSR900 GP", "Tracer 9 GT+", "Niken GT", "TMAX (compatible navigation dash)"};
+    public static String bikeName(Context context) {
+        int choice = prefs(context).getInt("bike_profile", 1);
+        return BIKE_NAMES[Math.max(0, Math.min(choice, BIKE_NAMES.length - 1))];
+    }
     public static final String[] MAP_NAMES = {"Google Maps", "Waze", "Grab Driver", "LINE MAN RIDER", "Garmin StreetCross"};
     public static final String[] MAP_PACKAGES = {"com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.garmin.android.apps.streetcross"};
     public static String selectedMap(Context context) { return prefs(context).getString("map_app", MAP_PACKAGES[0]); }

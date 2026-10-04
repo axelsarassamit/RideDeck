@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 /** Screen frames stay in memory and travel only to the explicitly selected paired CCU. */
 class YamahaCastService : Service() {
     companion object {
-        @JvmField @Volatile var status = "Ready to test on your XMAX 2024 Tech MAX."
+        @JvmField @Volatile var status = "Ready to connect to a compatible Yamaha navigation dash."
         @JvmField @Volatile var active = false
         const val STOP = "ridebridge.STOP_CAST"
     }
@@ -148,20 +148,18 @@ class YamahaCastService : Service() {
             link.open()
             val frames = FrameReader(link)
             val size = Handshake(link, frames).perform()
-            check(size.width == 480 && size.height == 234) {
-                "CCU did not identify as the supported XMAX dash. Stop and send the nRF service screenshots."
-            }
+            check(size.width == 480 && size.height in listOf(234, 240)) { "Unsupported NaviLite display size" }
             var sequence = 1
             var count = 0
             var started = SystemClock.elapsedRealtime()
             while (running) {
                 deadline = SystemClock.elapsedRealtime() + 15000
-                val jpeg = if (dedicated) DedicatedDisplay.latestFrame() else synchronized(lock) {
+                val sourceJpeg = if (dedicated) DedicatedDisplay.latestFrame() else synchronized(lock) {
                     frame?.let { bitmap -> ByteArrayOutputStream().use { output ->
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 45, output); output.toByteArray()
                     } }
                 }
-                if (jpeg == null) {
+                if (sourceJpeg == null) {
                     if (waitingForFrameSince == 0L) waitingForFrameSince = SystemClock.elapsedRealtime()
                     check(SystemClock.elapsedRealtime() - waitingForFrameSince < 10000) {
                         "No map frames. Reconnect bike display in Setup. ${if (dedicated) DedicatedDisplay.status else ""}"
@@ -169,13 +167,20 @@ class YamahaCastService : Service() {
                     Thread.sleep(100); continue
                 }
                 waitingForFrameSince = 0L
+                val jpeg = if (size.height == 234) sourceJpeg else {
+                    val source = android.graphics.BitmapFactory.decodeByteArray(sourceJpeg, 0, sourceJpeg.size)
+                        ?: error("Invalid map image")
+                    val resized = Bitmap.createScaledBitmap(source, size.width, size.height, true)
+                    try { ByteArrayOutputStream().use { output -> resized.compress(Bitmap.CompressFormat.JPEG, 45, output); output.toByteArray() } }
+                    finally { if (resized !== source) resized.recycle(); source.recycle() }
+                }
                 val payload = byteArrayOf(3, sequence.toByte(), (sequence ushr 8).toByte()) + jpeg
                 link.write(NaviLiteCodec.build(6, 0, 1, payload))
                 do { val ack = frames.next(); if (ack.serviceType == 80) break } while (running)
                 sequence = (sequence + 1) and 65535; count++
                 val now = SystemClock.elapsedRealtime()
                 if (now - started >= 1000) {
-                    status = "Casting to XMAX • 480 × 234 • $count frames/s"
+                    status = "Casting • ${size.width} × ${size.height} • $count frames/s"
                     count = 0; started = now
                 }
                 Thread.sleep(100) // At most 10 frames/s, with dash acknowledgement for every frame.

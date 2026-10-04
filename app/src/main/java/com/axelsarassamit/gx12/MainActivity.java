@@ -157,6 +157,18 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         Button personalize = button("LAYOUT + APP CHOICES"); personalize.setOnClickListener(v -> showPersonalization());
         addSection(page, "YOUR COCKPIT", personalize);
+        android.widget.Spinner bikes = new android.widget.Spinner(this);
+        android.widget.ArrayAdapter<String> bikeOptions = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, RidePreferences.BIKE_NAMES);
+        bikes.setAdapter(bikeOptions); bikes.setBackgroundColor(0xffdce5ee); bikes.setMinimumHeight(dp(64));
+        bikes.setSelection(Math.max(0, Math.min(RidePreferences.prefs(this).getInt("bike_profile", 1), RidePreferences.BIKE_NAMES.length - 1)));
+        bikes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
+                RidePreferences.prefs(MainActivity.this).edit().putInt("bike_profile", position).apply();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        page.addView(text("YOUR BIKE", 16, 0xfff4f6fa, true)); page.addView(bikes, new LinearLayout.LayoutParams(-1, dp(64)));
+        page.addView(text("Requires a Yamaha navigation dash compatible with Garmin StreetCross. Display size is detected from the connected CCU. Listed models are based on Pillion reports, not RideBridge hardware tests.", 14, 0xffaab4c0, false));
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
         deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
@@ -226,7 +238,7 @@ public final class MainActivity extends android.app.Activity {
                         .putExtra("device", castDeviceAddress).putExtra("dedicated", true);
                     startForegroundService(dedicated); castDeviceAddress = null; buildScreen(); return;
                 }
-                new android.app.AlertDialog.Builder(this).setTitle("Share " + RidePreferences.mapName(this) + " with your XMAX")
+                new android.app.AlertDialog.Builder(this).setTitle("Share " + RidePreferences.mapName(this) + " with your bike")
                     .setMessage("Test while parked. Close StreetCross or other dash casting apps. On the next Android screen, choose your selected navigation/rider app if single-app sharing is offered. Whole-screen sharing also shows messages and other visible content. Rotate the phone landscape for a larger map. Open the dash navigation view using its normal controls.")
                     .setPositiveButton("Choose screen", (d, w) -> {
                         android.media.projection.MediaProjectionManager manager = getSystemService(android.media.projection.MediaProjectionManager.class);
@@ -266,8 +278,8 @@ public final class MainActivity extends android.app.Activity {
             while ((line = reader.readLine()) != null) content.append(line).append('\n');
             license = content.toString();
         } catch (Exception e) { license = "https://polyformproject.org/licenses/noncommercial/1.0.0/"; }
-        new android.app.AlertDialog.Builder(this).setTitle("RideBridge • XMAX 2024 Tech MAX")
-            .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, approve screen sharing, open Google Maps and use the dash navigation view. Only 006-B3952 XMAX CCUs are enabled in this version.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
+        new android.app.AlertDialog.Builder(this).setTitle("RideBridge - " + RidePreferences.bikeName(this))
+            .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, approve screen sharing, open Google Maps and use the dash navigation view. Compatible NaviLite CCUs use their detected display size. Model selection alone does not establish compatibility.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
             .setPositiveButton("Close", null).show();
     }
 

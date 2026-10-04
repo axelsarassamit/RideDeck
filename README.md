@@ -26,7 +26,7 @@ Without that setup, ordinary screen sharing and Maps split-screen remain availab
 
 ## Experimental Yamaha dash casting
 
-RideBridge includes Pillion's NaviLite protocol code, pinned to revision `29497f4ea3bccc5cd40c4647f8e4d8345eeddda3`, with its license and required notice. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The image protocol supports the XMAX CCU part family `006-B3952`, using its 480 × 234 image size. No physical bike validation has been performed for this build.
+RideBridge includes Pillion's NaviLite protocol code, pinned to revision `29497f4ea3bccc5cd40c4647f8e4d8345eeddda3`, with its license and required notice. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Display size follows Pillion CCU part-number detection: `006-B3952` uses 480 × 234, other compatible NaviLite units use 480 × 240. No physical bike validation has been performed for this build.
 
 1. Park the bike. Keep the Yamaha CCU paired through the normal bike setup.
 2. Close StreetCross or another app currently casting to the dash.
@@ -112,3 +112,7 @@ RideBridge follows the phone orientation setting and supports portrait and lands
 ## Voice replies (0.9.1)
 
 Tap a preview to expand it; tap the expanded text again to close. Reply uses the method chosen in Setup > Layout + app choices > Reply method. Voice to text launches the phone speech recognition service, shows the recognized words, recipient and app, and sends only after Send is tapped. The recognition provider may process speech online. Direct replies require an active notification with a free-form Android reply action. Voice message mode opens the original conversation for that app to record/send audio; RideBridge does not record a chat voice note itself. These paths need a phone test with each messaging app.
+
+## Bike selector (0.10.0)
+
+Setup includes a saved bike dropdown. The list follows [Pillion compatibility reports](https://pillion.app/en/bikes/), with an automatic/other StreetCross-compatible Yamaha option. Pillion reports MT-07 (2025), R9 (2026), MT-09 (2024/2025), MT-09 SP (2026) and XSR900 (2025); XSR900 GP, Tracer 9 GT+, Niken GT, TMAX and XMAX are listed as likely rather than confirmed there. NMAX is included based on the upstream scooter CCU mapping. A supported navigation dash and Garmin StreetCross compatibility are required; model names alone do not guarantee it. RideBridge hardware validation remains outstanding. Actual CCU detection controls frame dimensions, not the dropdown. Other manufacturers and Android Auto displays use different protocols and are not covered.
