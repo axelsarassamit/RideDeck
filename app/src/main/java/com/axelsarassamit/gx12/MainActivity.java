@@ -148,7 +148,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff101419); root.setPadding(dp(16), dp(16), dp(16), dp(16));
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text("Setup • use while parked", 24, 0xfff4f6fa, true);
+        TextView heading = text("Setup - use while parked", 24, 0xfff4f6fa, true);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         Button back = button("DONE"); back.setOnClickListener(v -> buildScreen());
         header.addView(back, new LinearLayout.LayoutParams(dp(120), dp(56))); root.addView(header);
@@ -157,12 +157,12 @@ public final class MainActivity extends android.app.Activity {
         addSection(page, "YOUR COCKPIT", personalize);
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
-        deviceStatus = text("Checking headset…", 14, 0xfff4f6fa, false);
+        deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
         addCockpitCard(page, "CONNECTIONS", deviceStatus);
         Button bluetooth = button("BLUETOOTH SETTINGS"); bluetooth.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         page.addView(bluetooth, buttonParams());
         castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
-        addCockpitCard(page, "BIKE DISPLAY • EXPERIMENTAL", castStatus);
+        addCockpitCard(page, "BIKE DISPLAY - EXPERIMENTAL", castStatus);
         Button display = button("HOW TO CAST TO THE BIKE"); display.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
             .setTitle("Bluetooth map sharing")
             .setMessage("Pair your phone with the Yamaha in Bluetooth settings. On the bike, open its navigation screen. Return to the ride screen, tap Cast, select the Yamaha and approve screen sharing. Then open your map app. Mobile data can provide the map internet connection. No Wi-Fi configuration is needed for ordinary screen sharing. The shared map also remains visible on the phone.")
@@ -177,7 +177,7 @@ public final class MainActivity extends android.app.Activity {
         Button update = button("CHECK FOR UPDATES"); update.setOnClickListener(v -> checkForUpdate()); page.addView(update, buttonParams());
         page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
         Button advanced = button("ADVANCED DISPLAY OPTIONS"); advanced.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
-            .setTitle("Separate map screen • experimental")
+            .setTitle("Separate map screen - experimental")
             .setMessage("Only this optional mode uses Wireless debugging to put the map on a separate display while keeping phone controls visible. The current implementation may stop when Wi-Fi disconnects. Use normal Cast for mobile-data-only rides.")
             .setNegativeButton("Close", null).setPositiveButton("Open advanced setup", (dialog, which) -> showDisplaySetup()).show());
         page.addView(advanced, buttonParams());
@@ -422,7 +422,7 @@ public final class MainActivity extends android.app.Activity {
         root.addView(workspace, wp);
 
         LinearLayout dock = new LinearLayout(this);
-        String[] labels = compact ? new String[]{"Map", "Apps", "Cast", "Setup"} : new String[]{"Map", "Cast", "Apps", "Voice", "Setup"};
+        String[] labels = compact ? new String[]{"Map", "Apps", "Camera", "Cast", "Setup"} : new String[]{"Map", "Cast", "Apps", "Camera", "Voice", "Setup"};
         if (RidePreferences.prefs(this).getInt("mount", 1) == 2) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
@@ -432,6 +432,7 @@ public final class MainActivity extends android.app.Activity {
                     case "Spotify": openSpotify(); break;
                     case "WhatsApp": openWhatsApp(); break;
                     case "Cast": castOrStop(); break;
+                    case "Camera": showQuickCamera(); break;
                     case "Voice": startGoogleVoice(); break;
                     case "Setup": buildSetupScreen(); break;
                     default: showRideApps();
@@ -494,6 +495,23 @@ public final class MainActivity extends android.app.Activity {
     private GX12NotificationListener.NotificationPreview displayedMessage() {
         List<GX12NotificationListener.NotificationPreview> messages = GX12NotificationListener.selectedPreviews(this);
         return messages.isEmpty() ? null : messages.get(Math.floorMod(messageIndex, messages.size()));
+    }
+
+    private void showQuickCamera() {
+        LinearLayout choices = new LinearLayout(this); choices.setOrientation(LinearLayout.VERTICAL);
+        choices.setPadding(dp(16), dp(8), dp(16), dp(8));
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Quick camera")
+            .setView(choices).setNegativeButton("Cancel", null).create();
+        for (boolean video : new boolean[]{false, true}) {
+            LinearLayout row = new LinearLayout(this);
+            for (boolean front : new boolean[]{false, true}) {
+                Button action = rideAction((front ? "Front" : "Rear") + (video ? " video" : " photo"), false);
+                action.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    startActivity(new Intent(this, QuickCameraActivity.class).putExtra("front", front).putExtra("video", video));
+                }); row.addView(action, rideWeight(72));
+            } choices.addView(row);
+        } dialog.show();
     }
 
     private void showPersonalization() {
@@ -712,7 +730,7 @@ public final class MainActivity extends android.app.Activity {
         GX12NotificationListener.NotificationPreview preview = displayedMessage();
         String label = preview == null ? "No new messages from selected apps" : preview.appName + " â€¢ " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
-        if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
+        if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " - " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
 
     private void toggleRide() {

@@ -100,3 +100,7 @@ The app has no analytics or backend. It reads paired devices after nearby-device
 ## Hardware investigation
 
 The GX12's external USB-C port is documented for charging. These diagnostics do not establish that it exposes USB data or firmware access. Do not connect exposed internal board pins to a computer or open the housing casually: the unit contains a rechargeable lithium battery and opening it can damage the seal. External photos of labels, ports, and cable ends are safe and may help identify the exact hardware revision.
+
+## Quick camera
+
+Tap Camera on the ride dock and choose Front photo, Rear photo, Front video or Rear video. The built-in camera has large capture, record, stop, mode and camera-switch buttons. Photos save to Pictures/RideBridge and videos to Movies/RideBridge on Android 10+, visible in the gallery. Camera permission is requested on first use; video sound requires microphone access and is silent if denied. Android 8/9 require storage permission. Recording is foreground-only and stops when leaving the camera. Hardware capture needs a phone test.

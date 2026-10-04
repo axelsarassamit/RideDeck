@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <queries>
         <package android:name="com.waze" />
         <package android:name="com.grabtaxi.driver2" />
@@ -38,6 +42,7 @@
         android:icon="@drawable/ridebridge_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
+        <activity android:name=".QuickCameraActivity" android:exported="false" android:screenOrientation="userLandscape" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -51,7 +56,7 @@
 
         <service
             android:name=".GX12NotificationListener"
-            android:label="RideBridge music and WhatsApp"
+            android:label="RideBridge music and messages"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
