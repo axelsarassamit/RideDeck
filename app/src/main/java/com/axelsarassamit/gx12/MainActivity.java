@@ -837,8 +837,9 @@ public final class MainActivity extends android.app.Activity {
     private void openNotificationAccess() {
         ComponentName listener = new ComponentName(this, GX12NotificationListener.class);
         if (hasNotificationAccess(listener)) {
-            refreshMediaSession();
-            return;
+            android.service.notification.NotificationListenerService.requestRebind(listener);
+            GX12NotificationListener.reloadSelected();
+            openNotificationSettings(listener); return;
         }
         new android.app.AlertDialog.Builder(this)
         .setTitle("Music controls and selected messages")
@@ -848,13 +849,32 @@ public final class MainActivity extends android.app.Activity {
                     Intent appInfo = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
                     startActivity(appInfo);
                 })
-                .setPositiveButton("Notification access", (dialog, which) -> startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)))
+                .setPositiveButton("Notification access", (dialog, which) -> openNotificationSettings(listener))
                 .show();
+    }
+
+    private void openNotificationSettings(ComponentName listener) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            Intent detail = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS);
+            detail.putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, listener.flattenToString());
+            try { startActivity(detail); return; } catch (android.content.ActivityNotFoundException | SecurityException ignored) { }
+        }
+        try { startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
+        catch (android.content.ActivityNotFoundException | SecurityException e) {
+            new android.app.AlertDialog.Builder(this).setTitle("Open notification access manually")
+                .setMessage("In Android Settings, search for Notification access and enable RideBridge. If access is restricted, open RideBridge App info and choose Allow restricted settings from its menu when available.")
+                .setNegativeButton("Close", null).setPositiveButton("Open Settings", (d, w) -> {
+                    try { startActivity(new Intent(Settings.ACTION_SETTINGS)); }
+                    catch (android.content.ActivityNotFoundException ignored) { android.widget.Toast.makeText(this, "Open Android Settings manually", android.widget.Toast.LENGTH_LONG).show(); }
+                }).show();
+        }
     }
 
     private boolean hasNotificationAccess(ComponentName listener) {
         String enabled = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
-        return enabled != null && enabled.contains(listener.flattenToString());
+        if (enabled == null) return false;
+        for (String entry : enabled.split(":")) if (listener.equals(ComponentName.unflattenFromString(entry))) return true;
+        return false;
     }
 
     private void refreshWhatsAppPreview() {
