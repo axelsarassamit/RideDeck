@@ -64,7 +64,7 @@ active player used if Spotify has no session. Available skip actions vary by pla
 WhatsApp previews come from local notifications, not full chat history. Read aloud
 is explicitly requested and uses Android's text-to-speech engine. That engine's
 privacy and online/offline behaviour depend on the phone's selected engine.
-There is no personal WhatsApp account login or reply implementation in RideBridge.
+Accounts remain in the original app. Optional voice-to-text replies use its notification reply action after a Send confirmation; voice-message recording opens the original app.
 Y-Connect and StreetCross remain app launch integrations.
 
 ## App and mount choices (0.7.0)

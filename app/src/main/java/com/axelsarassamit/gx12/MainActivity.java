@@ -73,6 +73,7 @@ public final class MainActivity extends android.app.Activity {
     private android.speech.tts.TextToSpeech speech;
     private boolean speechReady;
     private String messageApp;
+    private GX12NotificationListener.NotificationPreview voiceReplyTarget;
     private GX12NotificationListener.NotificationPreview newestSeen;
     private boolean setupVisible;
     private boolean cockpitVisible;
@@ -240,6 +241,12 @@ public final class MainActivity extends android.app.Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == 82) {
+            GX12NotificationListener.NotificationPreview target = voiceReplyTarget; voiceReplyTarget = null;
+            java.util.ArrayList<String> words = data == null ? null : data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+            if (result == RESULT_OK && target != null && words != null && !words.isEmpty() && !words.get(0).trim().isEmpty()) confirmVoiceReply(target, words.get(0));
+            return;
+        }
         if (request == REQUEST_CAST && result == RESULT_OK && data != null && castDeviceAddress != null) {
             try {
                 Intent service = new Intent(this, YamahaCastService.class).putExtra("capture", data)
@@ -519,11 +526,41 @@ public final class MainActivity extends android.app.Activity {
         TextView body = text(item.title + "\n\n" + item.text, 24, 0xff20252b, false);
         body.setPadding(dp(24), dp(16), dp(24), dp(16));
         ScrollView scroll = new ScrollView(this); scroll.addView(body);
-        new android.app.AlertDialog.Builder(this).setTitle(item.appName).setView(scroll)
+        android.app.AlertDialog expanded = new android.app.AlertDialog.Builder(this).setTitle(item.appName + " - tap text to close").setView(scroll)
             .setNegativeButton("Close", null).setNeutralButton("Read aloud", (dialog, which) -> readMessageAloud())
-            .setPositiveButton("Open app", (dialog, which) -> {
-                try { if (item.open != null) item.open.send(); else launchChosenApp(item.packageName); }
-                catch (android.app.PendingIntent.CanceledException e) { launchChosenApp(item.packageName); }
+            .setPositiveButton("Reply", (dialog, which) -> replyByVoice(item)).create();
+        body.setOnClickListener(v -> expanded.dismiss());
+        expanded.show();
+    }
+
+    private void replyByVoice(GX12NotificationListener.NotificationPreview target) {
+        if (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1 || target.reply == null || target.replyInput == null) {
+            new android.app.AlertDialog.Builder(this).setTitle("Reply in " + target.appName)
+                .setMessage("Voice messages are recorded in the original app. If this notification has no text reply action, reply there too.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Open conversation", (d, w) -> {
+                    try { if (target.open != null) target.open.send(); else launchChosenApp(target.packageName); }
+                    catch (android.app.PendingIntent.CanceledException e) { launchChosenApp(target.packageName); }
+                }).show(); return;
+        }
+        Intent speechIntent = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Reply to " + target.title + " in " + target.appName);
+        speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        voiceReplyTarget = target;
+        try { startActivityForResult(speechIntent, 82); }
+        catch (android.content.ActivityNotFoundException e) { voiceReplyTarget = null; android.widget.Toast.makeText(this, "No speech recognition app is available", android.widget.Toast.LENGTH_LONG).show(); }
+    }
+
+    private void confirmVoiceReply(GX12NotificationListener.NotificationPreview target, String words) {
+        new android.app.AlertDialog.Builder(this).setTitle("Send to " + target.title + " - " + target.appName)
+            .setMessage(words).setNegativeButton("Cancel", null).setNeutralButton("Speak again", (d, w) -> replyByVoice(target))
+            .setPositiveButton("Send", (d, w) -> {
+                if (!RidePreferences.selectedMessages(this).contains(target.packageName) || target.reply == null || target.replyInput == null) return;
+                android.os.Bundle results = new android.os.Bundle(); results.putCharSequence(target.replyInput.getResultKey(), words);
+                Intent response = new Intent();
+                android.app.RemoteInput.addResultsToIntent(new android.app.RemoteInput[]{target.replyInput}, response, results);
+                try { target.reply.send(this, 0, response); android.widget.Toast.makeText(this, "Reply handed to " + target.appName, android.widget.Toast.LENGTH_SHORT).show(); }
+                catch (android.app.PendingIntent.CanceledException e) { android.widget.Toast.makeText(this, "Reply expired. Open the conversation to reply.", android.widget.Toast.LENGTH_LONG).show(); }
             }).show();
     }
 
@@ -546,12 +583,16 @@ public final class MainActivity extends android.app.Activity {
 
     private void showPersonalization() {
         new android.app.AlertDialog.Builder(this).setTitle("Your cockpit")
-            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app"}, (dialog, which) -> {
+            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                     .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: balanced panels", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                         RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildScreen();
                     }).setNegativeButton("Cancel", null).show();
-                else if (which == 1) chooseMessageApps(); else chooseMapApp();
+                else if (which == 1) chooseMessageApps(); else if (which == 2) chooseMapApp();
+                else new android.app.AlertDialog.Builder(this).setTitle("Reply method")
+                    .setSingleChoiceItems(new String[]{"Voice to text - confirm before sending", "Voice message - open original app"}, RidePreferences.prefs(this).getInt("reply_mode", 0), (d, choice) -> {
+                        RidePreferences.prefs(this).edit().putInt("reply_mode", choice).apply(); d.dismiss();
+                    }).setNegativeButton("Close", null).show();
             }).setNegativeButton("Close", null).show();
     }
 

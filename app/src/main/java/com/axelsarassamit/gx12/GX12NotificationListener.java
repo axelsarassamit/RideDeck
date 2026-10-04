@@ -26,6 +26,8 @@ public final class GX12NotificationListener extends NotificationListenerService 
         public final String packageName;
         public final String appName;
         public final android.app.PendingIntent open;
+        public android.app.PendingIntent reply;
+        public android.app.RemoteInput replyInput;
         NotificationPreview(String title, String text, String key, android.app.PendingIntent open, String packageName, String appName) {
             this.title = title.substring(0, Math.min(160, title.length())); this.text = text.substring(0, Math.min(20000, text.length())); this.key = key; this.open = open; this.packageName = packageName; this.appName = appName;
         }
@@ -66,6 +68,13 @@ public final class GX12NotificationListener extends NotificationListenerService 
         }
         if (!TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
             NotificationPreview preview = new NotificationPreview(title == null ? "Message" : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(this, sbn.getPackageName()));
+            if (notification.actions != null) for (Notification.Action action : notification.actions) {
+                android.app.RemoteInput[] inputs = action.getRemoteInputs();
+                if (inputs != null && action.actionIntent != null) for (android.app.RemoteInput input : inputs) {
+                    if (input.getAllowFreeFormInput()) { preview.reply = action.actionIntent; preview.replyInput = input; break; }
+                }
+                if (preview.reply != null) break;
+            }
             synchronized (GX12NotificationListener.class) {
                 if (!RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
                 previews.put(sbn.getPackageName(), sbn.getKey(), preview);

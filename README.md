@@ -51,7 +51,7 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Launch Garmin StreetCross where installed and supported by the motorcycle/region. StreetCross and Google Maps are separate navigation apps; the hub does not combine their maps.
 - Launch Spotify and control compatible active music sessions (Spotify preferred) from the ride screen after granting optional Android Notification access.
 - Open the official Yamaha Motorcycle Connect (Y-Connect) app.
-- Open WhatsApp and optionally show the latest WhatsApp notification preview on this phone. It does not access chat history, send replies, or upload message content.
+- Open WhatsApp and optionally show the latest WhatsApp notification preview on this phone. It does not access chat history or upload message content. Optional voice-to-text replies use the source notification reply action after an explicit Send confirmation.
 - Start the phone's configured voice assistant without requesting microphone access. Set Google as Android's assistant for Google voice commands.
 
 These tools do not record GPS, distance, speed, or a route. Yamaha account, motorcycle telemetry, settings, and ride logs remain inside Yamaha's app. Set navigation before moving.
@@ -108,3 +108,7 @@ Tap Camera on the ride dock and choose Front photo, Rear photo, Front video or R
 ## Portrait and message reading (0.9.0)
 
 RideBridge follows the phone orientation setting and supports portrait and landscape. Portrait stacks music and messages. Choose app lists all enabled sources, including sources without a current notification. Latest from all apps shows the newest received notification; new arrivals return the card to that latest view. Tap the preview for a large scrollable message view. Text comes from Android notifications (up to 20,000 characters), not full chat history; redacted or truncated source notifications cannot be expanded by RideBridge. Telegram, Signal, Instagram, Viber, Discord and WeChat are additional selectable sources. Actual notifications and layout require a physical phone check.
+
+## Voice replies (0.9.1)
+
+Tap a preview to expand it; tap the expanded text again to close. Reply uses the method chosen in Setup > Layout + app choices > Reply method. Voice to text launches the phone speech recognition service, shows the recognized words, recipient and app, and sends only after Send is tapped. The recognition provider may process speech online. Direct replies require an active notification with a free-form Android reply action. Voice message mode opens the original conversation for that app to record/send audio; RideBridge does not record a chat voice note itself. These paths need a phone test with each messaging app.
