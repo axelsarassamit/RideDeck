@@ -9,7 +9,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.Typeface;
 import android.text.InputType;
 import android.media.MediaMetadata;
@@ -28,7 +27,6 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.Chronometer;
 import android.widget.EditText;
-import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -47,7 +45,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -55,6 +52,7 @@ import java.util.concurrent.Executors;
 
 public final class MainActivity extends android.app.Activity {
     private static final String REPOSITORY = "axelsarassamit/gearelec-gx12-companion";
+    private static final String YAMAHA_Y_CONNECT_PACKAGE = "jp.co.yamahamotor.yamahamotorcycleconnect.sccu";
     private static final int REQUEST_BLUETOOTH = 12;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -167,7 +165,7 @@ public final class MainActivity extends android.app.Activity {
         mapRow.addView(mapsButton, weightedButtonParams());
         mapRow.addView(spotifyButton, weightedButtonParams());
         page.addView(mapRow);
-        Button yamahaButton = button("Open Yamaha app");
+        Button yamahaButton = button("Yamaha Y-Connect");
         yamahaButton.setOnClickListener(v -> openYamahaApp());
         page.addView(yamahaButton, buttonParams());
         page.addView(destinationButton, buttonParams());
@@ -283,7 +281,16 @@ public final class MainActivity extends android.app.Activity {
             refreshMediaSession();
             return;
         }
-        startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Optional Spotify controls")
+                .setMessage("Android requires Notification access to show Spotify's current track and send playback buttons. This access is sensitive. If Android says access was denied for this sideloaded app, open App info, tap ⋮, choose Allow restricted settings, then return here. GX12 Companion does not process notification text.")
+                .setNegativeButton("Not now", null)
+                .setNeutralButton("App info", (dialog, which) -> {
+                    Intent appInfo = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+                    startActivity(appInfo);
+                })
+                .setPositiveButton("Notification access", (dialog, which) -> startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)))
+                .show();
     }
 
     private boolean hasNotificationAccess(ComponentName listener) {
@@ -352,41 +359,25 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void openYamahaApp() {
-        Intent launcher = new Intent(Intent.ACTION_MAIN);
-        launcher.addCategory(Intent.CATEGORY_LAUNCHER);
-        List<ResolveInfo> yamahaApps = new ArrayList<>();
-        for (ResolveInfo candidate : getPackageManager().queryIntentActivities(launcher, 0)) {
-            String label = candidate.loadLabel(getPackageManager()).toString().toLowerCase(Locale.ROOT);
-            String packageName = candidate.activityInfo.packageName.toLowerCase(Locale.ROOT);
-            if (label.contains("yamaha") || label.contains("y-connect") || label.contains("myride") || packageName.contains("yamaha")) {
-                yamahaApps.add(candidate);
-            }
-        }
-        if (yamahaApps.isEmpty()) {
+        Intent launch = getPackageManager().getLaunchIntentForPackage(YAMAHA_Y_CONNECT_PACKAGE);
+        if (launch == null) {
             new android.app.AlertDialog.Builder(this)
-                    .setTitle("Yamaha app not found")
-                    .setMessage("Install the Yamaha app you use, then try again. If it is installed under another name, tell me its exact name and I can add a direct shortcut.")
-                    .setPositiveButton("OK", null).show();
+                    .setTitle("Yamaha Y-Connect not found")
+                    .setMessage("Install Yamaha Motorcycle Connect from Google Play, then try again.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Google Play", (dialog, which) -> {
+                        Intent store = new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + YAMAHA_Y_CONNECT_PACKAGE));
+                        try { startActivity(store); } catch (Exception ignored) { showRideMessage("Could not open Google Play."); }
+                    }).show();
             return;
         }
-        if (yamahaApps.size() == 1) {
-            launchYamahaActivity(yamahaApps.get(0));
-            return;
-        }
-        CharSequence[] labels = new CharSequence[yamahaApps.size()];
-        for (int i = 0; i < yamahaApps.size(); i++) labels[i] = yamahaApps.get(i).loadLabel(getPackageManager());
-        new android.app.AlertDialog.Builder(this).setTitle("Choose Yamaha app")
-                .setAdapter(new ArrayAdapter<>(this, android.R.layout.select_dialog_item, labels),
-                        (dialog, which) -> launchYamahaActivity(yamahaApps.get(which)))
-                .setNegativeButton("Cancel", null).show();
-    }
-
-    private void launchYamahaActivity(ResolveInfo app) {
-        Intent launch = new Intent(Intent.ACTION_MAIN);
-        launch.addCategory(Intent.CATEGORY_LAUNCHER);
-        launch.setClassName(app.activityInfo.packageName, app.activityInfo.name);
         try { startActivity(launch); }
-        catch (Exception ignored) { showRideMessage("Could not open the selected Yamaha app."); }
+        catch (Exception ignored) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Could not open Y-Connect")
+                    .setMessage("Check that Yamaha Motorcycle Connect is installed and try again.")
+                    .setPositiveButton("OK", null).show();
+        }
     }
 
     private void setDestination() {
@@ -501,7 +492,7 @@ public final class MainActivity extends android.app.Activity {
     private void downloadFile(String address, File target) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) { byte[] buffer = new byte[8192]; int count; while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count); } finally { c.disconnect(); } }
     private String sha256(File file) throws Exception { MessageDigest d = MessageDigest.getInstance("SHA-256"); try (InputStream in = new java.io.FileInputStream(file)) { byte[] b = new byte[8192]; int n; while ((n = in.read(b)) != -1) d.update(b, 0, n); } StringBuilder s = new StringBuilder(); for (byte v : d.digest()) s.append(String.format(Locale.ROOT, "%02x", v & 0xff)); return s.toString(); }
     private boolean canInstallPackages() { return Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls(); }
-    private void openInstaller(File apk) { try { Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".apkprovider", apk); Intent i = new Intent(Intent.ACTION_VIEW); i.setDataAndType(uri, "application/vnd.android.package-archive"); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); if (downloadedApk != null && downloadedApk.equals(apk)) downloadedApk = null; startActivity(i); } catch (Exception e) { showUpdateMessage("Could not open Android’s installer: " + safeMessage(e)); } }
+    private void openInstaller(File apk) { try { Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".apkprovider", apk); Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE); i.setDataAndType(uri, "application/vnd.android.package-archive"); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); if (downloadedApk != null && downloadedApk.equals(apk)) downloadedApk = null; startActivity(i); } catch (Exception e) { showUpdateMessage("Could not open Android’s installer: " + safeMessage(e)); } }
     private void showUpdateMessage(String message) { runOnUiThread(() -> updateStatus.setText(message)); }
     private String safeMessage(Exception error) { String m = error.getMessage(); return m == null || m.isBlank() ? error.getClass().getSimpleName() : m; }
     private String appVersion() { try { PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0); return info.versionName + " (" + info.versionCode + ")"; } catch (Exception ignored) { return "unknown"; } }

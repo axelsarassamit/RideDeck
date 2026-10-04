@@ -1,6 +1,6 @@
 # GEARELEC GX12 Companion
 
-An independent Android ride hub for GEARELEC GX12 users. The app includes a local ride timer, a saved pre-ride checklist, Google Maps destination handoff, Spotify launch and playback controls, a shortcut to the installed Yamaha app, headset pairing status, and signed in-app updates.
+An independent Android ride hub for GEARELEC GX12 users. The app includes a local ride timer, a saved pre-ride checklist, Google Maps destination handoff, Spotify launch and playback controls, a Yamaha Y-Connect shortcut, headset pairing status, and signed in-app updates.
 
 The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP services, but no documented GX12-specific control service. The app does not claim to change headset settings or read its battery.
 
@@ -10,13 +10,15 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Tick off helmet, headset, phone mount, and route reminders. Checklist state is kept on the phone.
 - Open Google Maps or enter a destination and hand it off to Maps.
 - Launch Spotify and control Spotify playback from the ride screen after granting optional Android Notification access.
-- Find and open an installed Yamaha app by its launcher name. If several match, choose the one you use.
+- Open the official Yamaha Motorcycle Connect (Y-Connect) app.
 
 These tools do not record GPS, distance, speed, or a route. Yamaha account, motorcycle telemetry, settings, and ride logs remain inside Yamaha's app. No public Yamaha integration is included. Set navigation before moving and follow local road safety laws.
 
 ## Music controls and privacy
 
-Android requires the user to enable GX12 Companion in **Notification access** before an app can view and control Spotify's active media session. The app uses this access only to show the Spotify track/title when available and send play, pause, previous, and next commands. It does not inspect, store, or transmit notification contents. Access can be revoked at any time from Android Settings.
+Android requires the user to enable GX12 Companion in **Notification access** before an app can view and control Spotify's active media session. The app uses this access only to show the Spotify track/title when available and send play, pause, previous, and next commands. It does not process, store, or transmit notification text. Access can be revoked at any time from Android Settings.
+
+Android may block Notification access for a sideloaded app. If you choose to enable Spotify controls, open **Settings > Apps > GX12 Companion > ⋮ > Allow restricted settings**, then return to GX12 Companion and enable Notification access. This is optional; Maps, Y-Connect, the ride timer, checklist, Spotify launch shortcut, and headset controls can be used without it.
 
 Spotify must expose a compatible Android media session. Some controls may not be available for every item. GX12 Companion does not send proprietary commands to the headset; audio still goes through Android's normal Bluetooth connection.
 
@@ -26,7 +28,7 @@ Download `gx12-companion-release.apk` from the [latest release](https://github.c
 
 Use **Check for updates** in the app. It checks the public GitHub Releases API, downloads the APK and `checksums.txt` over HTTPS, verifies the APK's SHA-256, and opens Android's package installer. Android asks you to approve each installation; the app cannot silently replace itself. Updates are signed with one stable private key so Android can confirm that a release belongs to this app.
 
-New versions are published by pushing a tag such as `v0.3.0`. The GitHub Actions release workflow builds and signs the APK and attaches it and its checksum to a public GitHub Release.
+New versions are published by pushing a tag such as `v0.3.1`. The GitHub Actions release workflow builds and signs the APK and attaches it and its checksum to a public GitHub Release.
 
 ## Release signing setup
 
@@ -51,7 +53,7 @@ For local release builds, set `GX12_KEYSTORE_PATH`, `GX12_KEYSTORE_PASSWORD`, `G
 
 ## Privacy
 
-The app has no analytics or backend. It reads the Android paired-device list after the user grants nearby-device access. Notification access is optional and used to query Spotify's media session and send playback commands; notification text is not read or retained. The app checks launcher apps locally to find Yamaha-named apps and opens the one selected. Ride timer and checklist state stay in app-local preferences. The update button contacts GitHub's public release API and downloads the release APK and checksum. No Bluetooth address is sent to GitHub by the app.
+The app has no analytics or backend. It reads the Android paired-device list after the user grants nearby-device access. Notification access is optional and used to query Spotify's media session and send playback commands; notification text is not read or retained. Ride timer and checklist state stay in app-local preferences. The update button contacts GitHub's public release API and downloads the release APK and checksum. No Bluetooth address is sent to GitHub by the app.
 
 ## Hardware investigation
 

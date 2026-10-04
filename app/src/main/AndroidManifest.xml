@@ -1,10 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <queries>
         <package android:name="com.spotify.music" />
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
+        <package android:name="jp.co.yamahamotor.yamahamotorcycleconnect.sccu" />
     </queries>
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
