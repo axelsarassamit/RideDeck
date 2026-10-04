@@ -145,6 +145,7 @@ public final class MainActivity extends android.app.Activity {
         page.addView(text("Your ride apps, ready in one place", 14, muted, false));
 
         Button splitButton = button("OPEN MAP BESIDE APP DOCK");
+        splitButton.setTextSize(16); splitButton.setMinHeight(dp(76));
         splitButton.setOnClickListener(v -> {
             getPreferences(0).edit().putBoolean("dock_mode", true).apply();
             buildScreen();
@@ -181,6 +182,7 @@ public final class MainActivity extends android.app.Activity {
 
         LinearLayout voiceRow = new LinearLayout(this); voiceRow.setOrientation(LinearLayout.HORIZONTAL);
         Button voiceButton = cockpitButton("TALK TO GOOGLE", "Voice commands");
+        voiceButton.setMinHeight(dp(96));
         voiceButton.setOnClickListener(v -> startGoogleVoice());
         voiceRow.addView(voiceButton, new LinearLayout.LayoutParams(-1, dp(74)));
         page.addView(voiceRow, buttonParams());
@@ -194,7 +196,7 @@ public final class MainActivity extends android.app.Activity {
         rideClock.setTextSize(28); rideClock.setTextColor(ink); rideClock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         rideClock.setGravity(Gravity.CENTER);
         addCockpitCard(page, "RIDE TIMER", rideClock);
-        rideButton = button("Start ride mode"); rideButton.setOnClickListener(v -> toggleRide()); page.addView(rideButton, buttonParams());
+        rideButton = button("Start ride mode"); rideButton.setTextSize(16); rideButton.setMinHeight(dp(72)); rideButton.setOnClickListener(v -> toggleRide()); page.addView(rideButton, buttonParams());
         Button resetRideButton = button("Reset ride timer"); resetRideButton.setOnClickListener(v -> resetRide()); page.addView(resetRideButton, buttonParams());
 
         Button bluetoothButton = button("BLUETOOTH SETTINGS");
@@ -223,35 +225,38 @@ public final class MainActivity extends android.app.Activity {
         dock.addView(text("GX12\nRIDE DOCK", 20, 0xff83b5ff, true));
         TextView explanation = text("Keep Maps in the other Android split-screen pane. App launching depends on phone support.", 12, muted, false);
         LinearLayout.LayoutParams ep = params(); ep.topMargin = dp(5); dock.addView(explanation, ep);
-        Button map = dockButton("GOOGLE MAPS"); map.setOnClickListener(v -> openMapsAdjacent()); dock.addView(map, buttonParams());
-        Button street = dockButton("STREETCROSS"); street.setOnClickListener(v -> openStreetCross(true)); dock.addView(street, buttonParams());
-        Button music = dockButton("SPOTIFY"); music.setOnClickListener(v -> openSpotifyAdjacent()); dock.addView(music, buttonParams());
-        Button yamaha = dockButton("Y-CONNECT"); yamaha.setOnClickListener(v -> openYamahaAppAdjacent()); dock.addView(yamaha, buttonParams());
-        Button whatsApp = dockButton("WHATSAPP"); whatsApp.setOnClickListener(v -> openWhatsAppAdjacent()); dock.addView(whatsApp, buttonParams());
-        Button voice = dockButton("TALK TO GOOGLE"); voice.setOnClickListener(v -> startGoogleVoice()); dock.addView(voice, buttonParams());
+        Button map = dockButton("GOOGLE MAPS"); map.setOnClickListener(v -> openMapsAdjacent()); dock.addView(map, dockButtonParams());
+        Button street = dockButton("STREETCROSS"); street.setOnClickListener(v -> openStreetCross(true)); dock.addView(street, dockButtonParams());
+        Button music = dockButton("SPOTIFY"); music.setOnClickListener(v -> openSpotifyAdjacent()); dock.addView(music, dockButtonParams());
+        Button yamaha = dockButton("Y-CONNECT"); yamaha.setOnClickListener(v -> openYamahaAppAdjacent()); dock.addView(yamaha, dockButtonParams());
+        Button whatsApp = dockButton("WHATSAPP"); whatsApp.setOnClickListener(v -> openWhatsAppAdjacent()); dock.addView(whatsApp, dockButtonParams());
+        Button voice = dockButton("TALK TO GOOGLE"); voice.setOnClickListener(v -> startGoogleVoice()); dock.addView(voice, dockButtonParams());
         TextView media = text("Music controls\n" + (trackStatus == null ? "" : trackStatus.getText()), 13, ink, false);
         trackStatus = media;
         LinearLayout.LayoutParams mp = params(); mp.topMargin = dp(12); dock.addView(media, mp);
-        LinearLayout controls = new LinearLayout(this); controls.setOrientation(LinearLayout.HORIZONTAL);
-        Button previous = button("◀"); previousButton = previous; previous.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS));
-        Button toggle = button("▶ / ❚❚"); playPauseButton = toggle; toggle.setOnClickListener(v -> sendMedia(MediaAction.TOGGLE));
-        Button next = button("▶| "); nextButton = next; next.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
-        controls.addView(previous, weightedButtonParams()); controls.addView(toggle, weightedButtonParams()); controls.addView(next, weightedButtonParams()); dock.addView(controls);
+        Button previous = dockButton("PREVIOUS TRACK"); previousButton = previous; previous.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS)); dock.addView(previous, dockButtonParams());
+        Button toggle = dockButton("PLAY / PAUSE"); playPauseButton = toggle; toggle.setOnClickListener(v -> sendMedia(MediaAction.TOGGLE)); dock.addView(toggle, dockButtonParams());
+        Button next = dockButton("NEXT TRACK"); nextButton = next; next.setOnClickListener(v -> sendMedia(MediaAction.NEXT)); dock.addView(next, dockButtonParams());
         TextView messages = text("", 13, ink, false); dockMessage = messages;
         LinearLayout.LayoutParams wp = params(); wp.topMargin = dp(10); dock.addView(messages, wp);
         Button returnButton = button("FULL RIDE SCREEN"); returnButton.setOnClickListener(v -> { getPreferences(0).edit().putBoolean("dock_mode", false).apply(); buildScreen(); });
+        returnButton.setMinHeight(dp(72));
         LinearLayout.LayoutParams rp = params(); rp.topMargin = dp(12); dock.addView(returnButton, rp);
-        setContentView(dock);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(dock); setContentView(scroll);
     }
 
     private Button dockButton(String title) {
-        Button b = button(title); b.setTextSize(12); b.setMinHeight(dp(54)); b.setPadding(dp(3), dp(3), dp(3), dp(3));
+        Button b = button(title); b.setTextSize(15); b.setMinHeight(dp(76)); b.setPadding(dp(6), dp(6), dp(6), dp(6));
         b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff252e39)); b.setTextColor(0xfff4f6fa); return b;
+    }
+
+    private LinearLayout.LayoutParams dockButtonParams() {
+        LinearLayout.LayoutParams p = params(); p.topMargin = dp(10); return p;
     }
 
     private Button cockpitButton(String eyebrow, String label) {
         Button b = button(eyebrow + "\n" + label);
-        b.setTextSize(16); b.setAllCaps(false); b.setMinHeight(dp(86)); b.setPadding(dp(8), dp(8), dp(8), dp(8));
+        b.setTextSize(17); b.setAllCaps(false); b.setMinHeight(dp(100)); b.setPadding(dp(8), dp(8), dp(8), dp(8));
         b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff252e39)); b.setTextColor(0xfff4f6fa);
         return b;
     }

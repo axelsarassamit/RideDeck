@@ -10,6 +10,7 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Tick off helmet, headset, phone mount, and route reminders. Checklist state is kept on the phone.
 - Open Google Maps or enter a destination and hand it off to Maps.
 - Use **Open map beside app dock** to ask Android to place Google Maps next to the GX12 dock in split-screen. The phone's Android version and manufacturer determine whether adjacent app launch is supported; if it is ignored, Maps opens normally. From the dock, Google Maps, StreetCross, Spotify, Y-Connect, and WhatsApp can be launched into the adjacent pane when Android permits it.
+- The main ride actions use larger touch targets for easier tapping with riding gloves; the dock scrolls vertically, and media controls are stacked rather than crowded into small side-by-side buttons.
 - Launch Garmin StreetCross where installed and supported by the motorcycle/region. StreetCross and Google Maps are separate navigation apps; the hub does not combine their maps.
 - Launch Spotify and control Spotify playback from the ride screen after granting optional Android Notification access.
 - Open the official Yamaha Motorcycle Connect (Y-Connect) app.
