@@ -2,6 +2,15 @@
     <queries>
         <package android:name="com.spotify.music" />
         <package android:name="jp.co.yamahamotor.yamahamotorcycleconnect.sccu" />
+        <package android:name="com.garmin.android.apps.streetcross" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <intent>
+            <action android:name="android.intent.action.VOICE_COMMAND" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.ASSIST" />
+        </intent>
     </queries>
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -17,7 +26,9 @@
         android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:resizeableActivity="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

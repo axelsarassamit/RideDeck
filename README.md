@@ -1,6 +1,6 @@
 # GEARELEC GX12 Companion
 
-An independent Android ride hub for GEARELEC GX12 users. The app includes a local ride timer, a saved pre-ride checklist, Google Maps destination handoff, Spotify launch and playback controls, a Yamaha Y-Connect shortcut, headset pairing status, and signed in-app updates.
+An independent portrait Android ride cockpit for GEARELEC GX12 users. It brings together one-tap access to Google Maps, Spotify, Yamaha Y-Connect, Garmin StreetCross, WhatsApp, and the phone's voice assistant, with music controls, optional WhatsApp notification previews, headset status, a ride timer, a pre-ride checklist, and signed in-app updates.
 
 The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP services, but no documented GX12-specific control service. The app does not claim to change headset settings or read its battery.
 
@@ -9,18 +9,22 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Start, pause, resume, and reset a ride timer. Timer state is kept on the phone.
 - Tick off helmet, headset, phone mount, and route reminders. Checklist state is kept on the phone.
 - Open Google Maps or enter a destination and hand it off to Maps.
+- Use **Open map beside app dock** to ask Android to place Google Maps next to the GX12 dock in split-screen. The phone's Android version and manufacturer determine whether adjacent app launch is supported; if it is ignored, Maps opens normally. From the dock, Google Maps, StreetCross, Spotify, Y-Connect, and WhatsApp can be launched into the adjacent pane when Android permits it.
+- Launch Garmin StreetCross where installed and supported by the motorcycle/region. StreetCross and Google Maps are separate navigation apps; the hub does not combine their maps.
 - Launch Spotify and control Spotify playback from the ride screen after granting optional Android Notification access.
 - Open the official Yamaha Motorcycle Connect (Y-Connect) app.
+- Open WhatsApp and optionally show the latest WhatsApp notification preview on this phone. It does not access chat history, send replies, or upload message content.
+- Start the phone's configured voice assistant without requesting microphone access. Set Google as Android's assistant for Google voice commands.
 
 These tools do not record GPS, distance, speed, or a route. Yamaha account, motorcycle telemetry, settings, and ride logs remain inside Yamaha's app. No public Yamaha integration is included. Set navigation before moving and follow local road safety laws.
 
 ## Music controls and privacy
 
-Android requires the user to enable GX12 Companion in **Notification access** before an app can view and control Spotify's active media session. The app uses this access only to show the Spotify track/title when available and send play, pause, previous, and next commands. It does not process, store, or transmit notification text. Access can be revoked at any time from Android Settings.
+Android requires the user to enable GX12 Companion in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. GX12 Companion uses Spotify's active media session for track details and playback buttons. For WhatsApp, it reads only new notifications from WhatsApp/WhatsApp Business and keeps the latest preview in memory while the app process runs. It does not read chat history, persist message content, process other apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
 
 Android may block Notification access for a sideloaded app. If you choose to enable Spotify controls, open **Settings > Apps > GX12 Companion > ⋮ > Allow restricted settings**, then return to GX12 Companion and enable Notification access. This is optional; Maps, Y-Connect, the ride timer, checklist, Spotify launch shortcut, and headset controls can be used without it.
 
-Spotify must expose a compatible Android media session. Some controls may not be available for every item. GX12 Companion does not send proprietary commands to the headset; audio still goes through Android's normal Bluetooth connection.
+Spotify must expose a compatible Android media session. Some controls may not be available for every item. GX12 Companion does not send proprietary commands to the headset; audio still goes through Android's normal Bluetooth connection. The Talk to Google button calls Android's configured voice assistant. This app requests Android split-screen placement for a map and app dock; the phone decides whether to honor adjacent-app launch. The dock cannot draw inside the Maps, Y-Connect, or StreetCross app, and a live embedded Google map would require a Google Maps Platform API key and billing setup. Android Auto itself requires a compatible vehicle or aftermarket head unit.
 
 ## Install and update
 
