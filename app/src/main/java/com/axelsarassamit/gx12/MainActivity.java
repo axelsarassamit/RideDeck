@@ -143,6 +143,11 @@ public final class MainActivity extends android.app.Activity {
         super.onDestroy();
     }
 
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (focused) ScreenChrome.apply(getWindow(), !setupVisible);
+    }
+
     private void buildSetupScreen() {
         setupVisible = true; cockpitVisible = false;
         albumArt = null; messagePreview = null; messageSource = null; dockMessage = null;
@@ -152,7 +157,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         TextView heading = text("Setup - use while parked", 24, 0xfff4f6fa, true);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        Button back = button("DONE"); back.setOnClickListener(v -> buildScreen());
+        Button back = rideAction("Done", false); back.setOnClickListener(v -> buildScreen());
         header.addView(back, new LinearLayout.LayoutParams(dp(120), dp(56))); root.addView(header);
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         Button personalize = button("LAYOUT + APP CHOICES"); personalize.setOnClickListener(v -> showPersonalization());
@@ -197,7 +202,13 @@ public final class MainActivity extends android.app.Activity {
         page.addView(advanced, buttonParams());
         Button about = button("ABOUT + DISPLAY HELP"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
         ScrollView scroll = new ScrollView(this); scroll.addView(page);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
+            androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(bars.left + dp(16), bars.top + dp(12), bars.right + dp(16), bars.bottom + dp(12)); return insets;
+        });
+        setContentView(root); ScreenChrome.apply(getWindow(), false);
+        androidx.core.view.ViewCompat.requestApplyInsets(root);
     }
 
     private void addCastControls(LinearLayout page) {
@@ -371,7 +382,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff0b1017); root.setPadding(dp(12), dp(8), dp(12), dp(8));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
-            androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(bars.left + dp(12), bars.top + dp(8), bars.right + dp(12), bars.bottom + dp(8));
             return insets;
         });
@@ -462,6 +473,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(-1, -2); dp.topMargin = dp(8);
         root.addView(dock, dp);
         setContentView(root);
+        ScreenChrome.apply(getWindow(), true);
         androidx.core.view.ViewCompat.requestApplyInsets(root);
         refreshMediaSession(); refreshWhatsAppPreview();
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -541,7 +553,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(0xff101419);
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
-            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
         });
         TextView source = text(item == null ? "Messages" : item.appName + " - " + item.title, 24, 0xff83b5ff, true);
@@ -578,6 +590,8 @@ public final class MainActivity extends android.app.Activity {
         if (reader.getWindow() != null) {
             reader.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xff101419));
             reader.getWindow().setLayout(-1, -1);
+            ScreenChrome.apply(reader.getWindow(), true);
+            androidx.core.view.ViewCompat.requestApplyInsets(page);
         }
     }
 

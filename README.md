@@ -124,3 +124,7 @@ The navigation picker also includes HERE WeGo, Sygic, MAPS.ME, OsmAnd, OsmAnd+ a
 ## Full-screen messages (0.10.2)
 
 Tap the message card to open a full-screen reader with Close, Reply, Read aloud and Read/seen. Close leaves read state unchanged. If the source notification provides Android's semantic Mark as read action, RideBridge invokes it; otherwise Read/seen acknowledges only inside RideBridge. Latest received text remains in memory even if the notification disappears, until replaced by a newer message from that app, deselected or the process ends. Removed notification actions are invalidated. This does not fetch chat history or synchronize read status without the source action.
+
+## Screen chrome (0.10.3)
+
+Ride cockpit, message reader and camera hide system bars for more usable space. Swipe inward from the screen edge to reveal Android navigation temporarily. Setup shows dark system bars and reserves room for them, display cutouts and the Done button. OEM overlays and system-controlled installation/permission screens may still appear. Physical layout verification is outstanding.

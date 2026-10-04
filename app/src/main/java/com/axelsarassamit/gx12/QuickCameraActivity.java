@@ -34,7 +34,7 @@ public final class QuickCameraActivity extends ComponentActivity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff101419); root.setPadding(dp(12), dp(12), dp(12), dp(12));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
-            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(edges.left + dp(12), edges.top + dp(12), edges.right + dp(12), edges.bottom + dp(12)); return insets;
         });
         status = new TextView(this); status.setTextColor(0xfff4f6fa); status.setTextSize(18); status.setGravity(Gravity.CENTER);
@@ -45,8 +45,9 @@ public final class QuickCameraActivity extends ComponentActivity {
         flip = action("Switch camera"); flip.setOnClickListener(v -> { front = !front; bind(); }); controls.addView(flip, weight());
         mode = action("Photo / video"); mode.setOnClickListener(v -> { video = !video; bind(); }); controls.addView(mode, weight());
         capture = action("Take photo"); capture.setOnClickListener(v -> shoot()); controls.addView(capture, weight());
-        root.addView(controls); setContentView(root); setBusy(true); permissions();
+        root.addView(controls); setContentView(root); ScreenChrome.apply(getWindow(), true); setBusy(true); permissions();
     }
+    @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused) ScreenChrome.apply(getWindow(), true); }
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private Button action(String label) { Button b = new Button(this); b.setText(label); b.setTextSize(16); b.setAllCaps(false); return b; }
     private LinearLayout.LayoutParams weight() { return new LinearLayout.LayoutParams(0, dp(72), 1); }
