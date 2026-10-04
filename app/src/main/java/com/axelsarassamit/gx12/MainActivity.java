@@ -416,13 +416,15 @@ public final class MainActivity extends android.app.Activity {
         controls.addView(music, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
-        messageSource = text("SELECTED APPS", compact ? 13 : 20, 0xff83b5ff, true);
+        messageSource = text("LATEST MESSAGE", compact ? 13 : 20, 0xff83b5ff, true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
         messagePreview.setTextSize(portrait ? 20 : 18);
         messagePreview.setMaxLines(portrait ? 7 : 4); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messagePreview.setOnClickListener(v -> showFullMessage());
+        messageSource.setOnClickListener(v -> showFullMessage());
+        messages.setOnClickListener(v -> showFullMessage());
         messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout messageActions = new LinearLayout(this);
         Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
@@ -534,15 +536,49 @@ public final class MainActivity extends android.app.Activity {
 
     private void showFullMessage() {
         GX12NotificationListener.NotificationPreview item = displayedMessage();
-        if (item == null) { chooseMessageSource(); return; }
-        TextView body = text(item.title + "\n\n" + item.text, 24, 0xff20252b, false);
-        body.setPadding(dp(24), dp(16), dp(24), dp(16));
-        ScrollView scroll = new ScrollView(this); scroll.addView(body);
-        android.app.AlertDialog expanded = new android.app.AlertDialog.Builder(this).setTitle(item.appName + " - tap text to close").setView(scroll)
-            .setNegativeButton("Close", null).setNeutralButton("Read aloud", (dialog, which) -> readMessageAloud())
-            .setPositiveButton("Reply", (dialog, which) -> replyByVoice(item)).create();
-        body.setOnClickListener(v -> expanded.dismiss());
-        expanded.show();
+        android.app.Dialog reader = new android.app.Dialog(this);
+        reader.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(0xff101419);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
+            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
+        });
+        TextView source = text(item == null ? "Messages" : item.appName + " - " + item.title, 24, 0xff83b5ff, true);
+        page.addView(source);
+        TextView body = text(item == null ? "No message available yet. Enable music + message access in Setup and check notification previews in the selected messaging apps." : item.text, 26, 0xfff4f6fa, false);
+        body.setPadding(0, dp(16), 0, dp(16));
+        ScrollView scroll = new ScrollView(this); scroll.addView(body); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout actions = new LinearLayout(this);
+        Button close = rideAction("Close", false); close.setOnClickListener(v -> reader.dismiss()); actions.addView(close, rideWeight(72));
+        Button read = rideAction(item != null && item.markRead != null ? "Mark as read" : "Read / seen", false);
+        read.setEnabled(item != null && !item.acknowledged);
+        read.setOnClickListener(v -> {
+            if (item == null) return;
+            boolean sourceRead = false;
+            if (item.markRead != null) try { item.markRead.send(); sourceRead = true; } catch (android.app.PendingIntent.CanceledException ignored) { }
+            item.acknowledged = true; refreshWhatsAppPreview(); reader.dismiss();
+            android.widget.Toast.makeText(this, sourceRead ? "Read action sent to " + item.appName : "Marked seen in RideBridge only", android.widget.Toast.LENGTH_SHORT).show();
+        }); actions.addView(read, rideWeight(72));
+        Button reply = rideAction("Reply", true); reply.setEnabled(item != null);
+        reply.setOnClickListener(v -> { reader.dismiss(); replyByVoice(item); }); actions.addView(reply, rideWeight(72));
+        Button aloud = rideAction("Read aloud", false); aloud.setEnabled(item != null);
+        aloud.setOnClickListener(v -> readMessageAloud(item)); actions.addView(aloud, rideWeight(72));
+        if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+            LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
+            for (int row = 0; row < 2; row++) {
+                LinearLayout pair = new LinearLayout(this);
+                for (int column = 0; column < 2; column++) {
+                    android.view.View action = actions.getChildAt(0); actions.removeViewAt(0); pair.addView(action, rideWeight(72));
+                } rows.addView(pair);
+            } page.addView(rows);
+        } else page.addView(actions);
+        body.setOnClickListener(v -> reader.dismiss());
+        reader.setContentView(page); reader.show();
+        if (reader.getWindow() != null) {
+            reader.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xff101419));
+            reader.getWindow().setLayout(-1, -1);
+        }
     }
 
     private void replyByVoice(GX12NotificationListener.NotificationPreview target) {
@@ -660,12 +696,15 @@ public final class MainActivity extends android.app.Activity {
 
     private void readMessageAloud() {
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) { openNotificationAccess(); return; }
-        GX12NotificationListener.NotificationPreview preview = displayedMessage();
+        readMessageAloud(displayedMessage());
+    }
+
+    private void readMessageAloud(GX12NotificationListener.NotificationPreview preview) {
         if (preview == null) { android.widget.Toast.makeText(this, "No new message to read", android.widget.Toast.LENGTH_SHORT).show(); return; }
         if (speech == null) {
             speech = new android.speech.tts.TextToSpeech(this, result -> {
                 speechReady = result == android.speech.tts.TextToSpeech.SUCCESS;
-                if (speechReady) readMessageAloud();
+                if (speechReady) readMessageAloud(preview);
                 else android.widget.Toast.makeText(this, "Speech is unavailable on this phone", android.widget.Toast.LENGTH_SHORT).show();
             });
         } else if (speechReady) speech.speak(preview.appName + ". " + preview.title + ". " + preview.text,
@@ -811,6 +850,9 @@ public final class MainActivity extends android.app.Activity {
             return;
         }
         GX12NotificationListener.NotificationPreview preview = displayedMessage();
+        if (messageSource != null) messageSource.setText(preview == null
+            ? (messageApp == null ? "LATEST MESSAGE" : RidePreferences.appName(this, messageApp).toUpperCase(java.util.Locale.ROOT))
+            : preview.appName.toUpperCase(java.util.Locale.ROOT) + (preview.acknowledged ? " - SEEN" : ""));
         String label = preview == null ? "No message notification available. Tap Choose app." : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
         if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " - " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));

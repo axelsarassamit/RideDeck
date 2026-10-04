@@ -26,6 +26,8 @@ public final class GX12NotificationListener extends NotificationListenerService 
         public final String packageName;
         public final String appName;
         public final android.app.PendingIntent open;
+        public volatile boolean acknowledged;
+        public android.app.PendingIntent markRead;
         public android.app.PendingIntent reply;
         public android.app.RemoteInput replyInput;
         NotificationPreview(String title, String text, String key, android.app.PendingIntent open, String packageName, String appName) {
@@ -69,11 +71,12 @@ public final class GX12NotificationListener extends NotificationListenerService 
         if (!TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
             NotificationPreview preview = new NotificationPreview(title == null ? "Message" : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(this, sbn.getPackageName()));
             if (notification.actions != null) for (Notification.Action action : notification.actions) {
+                if (android.os.Build.VERSION.SDK_INT >= 28 && action.getSemanticAction() == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) preview.markRead = action.actionIntent;
                 android.app.RemoteInput[] inputs = action.getRemoteInputs();
                 if (inputs != null && action.actionIntent != null) for (android.app.RemoteInput input : inputs) {
                     if (input.getAllowFreeFormInput()) { preview.reply = action.actionIntent; preview.replyInput = input; break; }
                 }
-                if (preview.reply != null) break;
+
             }
             synchronized (GX12NotificationListener.class) {
                 if (!RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
@@ -86,8 +89,9 @@ public final class GX12NotificationListener extends NotificationListenerService 
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null) return;
         synchronized (GX12NotificationListener.class) {
-            previews.remove(sbn.getPackageName(), sbn.getKey());
-            if (latestWhatsAppPreview != null && sbn.getKey().equals(latestWhatsAppPreview.key)) latestWhatsAppPreview = null;
+            for (NotificationPreview item : previews.selected(RidePreferences.selectedMessages(this))) {
+                if (sbn.getKey().equals(item.key)) { item.reply = null; item.replyInput = null; item.markRead = null; }
+            }
         }
     }
     @Override public void onListenerDisconnected() { clearPreviews(); super.onListenerDisconnected(); }

@@ -120,3 +120,7 @@ Setup includes a saved bike dropdown. The list follows [Pillion compatibility re
 ## More navigation choices (0.10.1)
 
 The navigation picker also includes HERE WeGo, Sygic, MAPS.ME, OsmAnd, OsmAnd+ and Organic Maps. Install the chosen app separately and prepare routes/downloads in it. Existing app subscriptions or paid features still apply. Launching, adjacent view and experimental bike projection use the selected app; destination handoff inside RideBridge remains Google Maps only. Other apps must have their route prepared in their own interface. Bike projection behavior has not been tested for these apps.
+
+## Full-screen messages (0.10.2)
+
+Tap the message card to open a full-screen reader with Close, Reply, Read aloud and Read/seen. Close leaves read state unchanged. If the source notification provides Android's semantic Mark as read action, RideBridge invokes it; otherwise Read/seen acknowledges only inside RideBridge. Latest received text remains in memory even if the notification disappears, until replaced by a newer message from that app, deselected or the process ends. Removed notification actions are invalidated. This does not fetch chat history or synchronize read status without the source action.
