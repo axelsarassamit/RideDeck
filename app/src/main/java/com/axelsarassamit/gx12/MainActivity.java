@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Typeface;
 import android.text.InputType;
 import android.media.MediaMetadata;
@@ -27,6 +28,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.Chronometer;
 import android.widget.EditText;
+import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -156,13 +158,19 @@ public final class MainActivity extends android.app.Activity {
         page.addView(resetRideButton, buttonParams());
         LinearLayout mapRow = new LinearLayout(this);
         mapRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button mapsButton = button("Open maps");
+        Button mapsButton = button("Google Maps");
         mapsButton.setOnClickListener(v -> openMaps());
+        Button spotifyButton = button("Spotify");
+        spotifyButton.setOnClickListener(v -> openSpotify());
         Button destinationButton = button("Set destination");
         destinationButton.setOnClickListener(v -> setDestination());
         mapRow.addView(mapsButton, weightedButtonParams());
-        mapRow.addView(destinationButton, weightedButtonParams());
+        mapRow.addView(spotifyButton, weightedButtonParams());
         page.addView(mapRow);
+        Button yamahaButton = button("Open Yamaha app");
+        yamahaButton.setOnClickListener(v -> openYamahaApp());
+        page.addView(yamahaButton, buttonParams());
+        page.addView(destinationButton, buttonParams());
 
         TextView checklistHeading = text("Before you ride", 15, ink, true);
         LinearLayout.LayoutParams checkHeadParams = params(); checkHeadParams.topMargin = dp(18); page.addView(checklistHeading, checkHeadParams);
@@ -176,9 +184,9 @@ public final class MainActivity extends android.app.Activity {
             page.addView(check);
         }
 
-        trackStatus = text("Checking Android media sessions…", 14, ink, false);
-        addSection(page, "MUSIC", trackStatus);
-        Button accessButton = button("Enable music controls");
+        trackStatus = text("Checking Spotify playback…", 14, ink, false);
+        addSection(page, "SPOTIFY", trackStatus);
+        Button accessButton = button("Enable Spotify controls");
         accessButton.setOnClickListener(v -> openNotificationAccess());
         page.addView(accessButton, buttonParams());
         LinearLayout mediaRow = new LinearLayout(this); mediaRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -187,7 +195,7 @@ public final class MainActivity extends android.app.Activity {
         nextButton = button("Next"); nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
         mediaRow.addView(previousButton, weightedButtonParams()); mediaRow.addView(playPauseButton, weightedButtonParams()); mediaRow.addView(nextButton, weightedButtonParams());
         page.addView(mediaRow);
-        page.addView(text("Music buttons use Android’s active media session. Enabling them gives GX12 Companion notification access, which Android says can expose notifications. This app does not read or store notification text.", 12, muted, false));
+        page.addView(text("Buttons target Spotify playback. Android requires notification access to expose its media session. GX12 Companion does not read or store notification text.", 12, muted, false));
 
         updateStatus = text("Current version " + appVersion() + ". Check GitHub for a signed update.", 14, ink, false);
         addSection(page, "APP UPDATES", updateStatus);
@@ -206,16 +214,22 @@ public final class MainActivity extends android.app.Activity {
         ComponentName listener = new ComponentName(this, GX12NotificationListener.class);
         if (!hasNotificationAccess(listener)) {
             mediaController = null;
-            trackStatus.setText("Music controls are off. Enable access above to use Android’s current media player.");
+            trackStatus.setText("Spotify controls are off. Enable access above to control Spotify from this screen.");
             updateMediaButtons(false, false, false);
             return;
         }
         try {
             MediaSessionManager manager = (MediaSessionManager) getSystemService(MEDIA_SESSION_SERVICE);
             List<MediaController> sessions = manager.getActiveSessions(listener);
-            mediaController = sessions.isEmpty() ? null : sessions.get(0);
+            mediaController = null;
+            for (MediaController session : sessions) {
+                if ("com.spotify.music".equals(session.getPackageName())) {
+                    mediaController = session;
+                    break;
+                }
+            }
             if (mediaController == null) {
-                trackStatus.setText("No active media player. Start music or audio, then return here.");
+                trackStatus.setText("Spotify is not active. Open Spotify and start playback to use these controls.");
                 updateMediaButtons(false, false, false);
                 return;
             }
@@ -321,7 +335,58 @@ public final class MainActivity extends android.app.Activity {
 
     private void openMaps() {
         Intent maps = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="));
+        maps.setPackage("com.google.android.apps.maps");
         try { startActivity(maps); } catch (Exception ignored) { showRideMessage("No maps app is available on this phone."); }
+    }
+
+    private void openSpotify() {
+        Intent spotify = getPackageManager().getLaunchIntentForPackage("com.spotify.music");
+        if (spotify != null) {
+            try { startActivity(spotify); return; } catch (Exception ignored) { }
+        }
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com")));
+        } catch (Exception ignored) {
+            showRideMessage("Spotify is not installed and no browser is available.");
+        }
+    }
+
+    private void openYamahaApp() {
+        Intent launcher = new Intent(Intent.ACTION_MAIN);
+        launcher.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> yamahaApps = new ArrayList<>();
+        for (ResolveInfo candidate : getPackageManager().queryIntentActivities(launcher, 0)) {
+            String label = candidate.loadLabel(getPackageManager()).toString().toLowerCase(Locale.ROOT);
+            String packageName = candidate.activityInfo.packageName.toLowerCase(Locale.ROOT);
+            if (label.contains("yamaha") || label.contains("y-connect") || label.contains("myride") || packageName.contains("yamaha")) {
+                yamahaApps.add(candidate);
+            }
+        }
+        if (yamahaApps.isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Yamaha app not found")
+                    .setMessage("Install the Yamaha app you use, then try again. If it is installed under another name, tell me its exact name and I can add a direct shortcut.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        if (yamahaApps.size() == 1) {
+            launchYamahaActivity(yamahaApps.get(0));
+            return;
+        }
+        CharSequence[] labels = new CharSequence[yamahaApps.size()];
+        for (int i = 0; i < yamahaApps.size(); i++) labels[i] = yamahaApps.get(i).loadLabel(getPackageManager());
+        new android.app.AlertDialog.Builder(this).setTitle("Choose Yamaha app")
+                .setAdapter(new ArrayAdapter<>(this, android.R.layout.select_dialog_item, labels),
+                        (dialog, which) -> launchYamahaActivity(yamahaApps.get(which)))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void launchYamahaActivity(ResolveInfo app) {
+        Intent launch = new Intent(Intent.ACTION_MAIN);
+        launch.addCategory(Intent.CATEGORY_LAUNCHER);
+        launch.setClassName(app.activityInfo.packageName, app.activityInfo.name);
+        try { startActivity(launch); }
+        catch (Exception ignored) { showRideMessage("Could not open the selected Yamaha app."); }
     }
 
     private void setDestination() {
@@ -337,6 +402,7 @@ public final class MainActivity extends android.app.Activity {
                     String query = destination.getText().toString().trim();
                     if (query.isEmpty()) { openMaps(); return; }
                     Intent search = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)));
+                    search.setPackage("com.google.android.apps.maps");
                     try { startActivity(search); } catch (Exception ignored) { showRideMessage("No maps app is available on this phone."); }
                 }).show();
     }
