@@ -1,5 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <queries>
+        <package android:name="com.waze" />
+        <package android:name="com.grabtaxi.driver2" />
+        <package android:name="com.linecorp.lineman.driver" />
+        <package android:name="jp.naver.line.android" />
+        <package android:name="com.facebook.orca" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="smsto" /></intent>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.spotify.music" />
         <package android:name="jp.co.yamahamotor.yamahamotorcycleconnect.sccu" />

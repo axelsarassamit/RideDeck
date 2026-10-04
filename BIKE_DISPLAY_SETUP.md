@@ -66,3 +66,9 @@ is explicitly requested and uses Android's text-to-speech engine. That engine's
 privacy and online/offline behaviour depend on the phone's selected engine.
 There is no personal WhatsApp account login or reply implementation in RideBridge.
 Y-Connect and StreetCross remain app launch integrations.
+
+## App and mount choices (0.7.0)
+
+Setup > Layout + apps sets mount position, selected messaging sources and the bike-display app. Google Maps remains the default. Waze, Grab Driver, LINE MAN RIDER and StreetCross use their own login and UI. Their external-display support is experimental; the whole selected app is captured, including any visible customer/job information. Configure routes/jobs in the original app while parked. RideBridge can only hand a destination to Google Maps in this mode. Change app before preparing the helper; stop an active session first.
+
+Mount position is a manual reach/layout preference, not GPS tracking or automatic mount detection. Chat previews are notification-based and remain in memory, one per selected app. Select SMS again if you change the default SMS app. Read aloud uses the selected Android speech engine and may use its online services.

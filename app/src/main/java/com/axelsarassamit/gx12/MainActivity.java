@@ -71,6 +71,7 @@ public final class MainActivity extends android.app.Activity {
     private android.widget.ImageView albumArt;
     private android.speech.tts.TextToSpeech speech;
     private boolean speechReady;
+    private int messageIndex;
     private boolean setupVisible;
     private boolean cockpitVisible;
     private Chronometer rideClock;
@@ -146,6 +147,8 @@ public final class MainActivity extends android.app.Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(16), dp(20), dp(16), dp(22));
         page.setBackgroundColor(0xff101419);
+        Button personalize = button("LAYOUT + APPS"); personalize.setOnClickListener(v -> showPersonalization());
+        page.addView(personalize, buttonParams());
         Button backToRide = button("BACK TO RIDE SCREEN");
         backToRide.setOnClickListener(v -> buildScreen()); page.addView(backToRide, buttonParams());
         TextView displaySetup = text(DedicatedDisplay.status, 15, ink, false);
@@ -196,7 +199,7 @@ public final class MainActivity extends android.app.Activity {
         nextButton = button("Next"); nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
         mediaRow.addView(previousButton, weightedButtonParams()); mediaRow.addView(playPauseButton, weightedButtonParams()); mediaRow.addView(nextButton, weightedButtonParams());
         page.addView(mediaRow);
-        Button accessButton = button("ENABLE MUSIC + WHATSAPP ACCESS");
+        Button accessButton = button("ENABLE MUSIC + MESSAGE ACCESS");
         accessButton.setOnClickListener(v -> openNotificationAccess()); page.addView(accessButton, buttonParams());
 
         LinearLayout voiceRow = new LinearLayout(this); voiceRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -207,7 +210,7 @@ public final class MainActivity extends android.app.Activity {
         page.addView(voiceRow, buttonParams());
 
         messagePreview = text("WhatsApp previews are off. Enable access above, then choose what Android shares.", 14, ink, false);
-        addCockpitCard(page, "WHATSAPP • LATEST ALERT", messagePreview);
+        addCockpitCard(page, "MESSAGES • LATEST ALERT", messagePreview);
         Button whatsappButton = button("OPEN WHATSAPP"); whatsappButton.setOnClickListener(v -> openWhatsApp());
         page.addView(whatsappButton, buttonParams());
 
@@ -275,8 +278,8 @@ public final class MainActivity extends android.app.Activity {
                         .putExtra("device", castDeviceAddress).putExtra("dedicated", true);
                     startForegroundService(dedicated); castDeviceAddress = null; buildScreen(); return;
                 }
-                new android.app.AlertDialog.Builder(this).setTitle("Share Google Maps with your XMAX")
-                    .setMessage("Test while parked. Close StreetCross or other dash casting apps. On the next Android screen, choose Google Maps if single-app sharing is offered. Whole-screen sharing also shows messages and other visible content. Rotate the phone landscape for a larger map. Open the dash navigation view using its normal controls.")
+                new android.app.AlertDialog.Builder(this).setTitle("Share " + RidePreferences.mapName(this) + " with your XMAX")
+                    .setMessage("Test while parked. Close StreetCross or other dash casting apps. On the next Android screen, choose your selected navigation/rider app if single-app sharing is offered. Whole-screen sharing also shows messages and other visible content. Rotate the phone landscape for a larger map. Open the dash navigation view using its normal controls.")
                     .setPositiveButton("Choose screen", (d, w) -> {
                         android.media.projection.MediaProjectionManager manager = getSystemService(android.media.projection.MediaProjectionManager.class);
                         startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CAST);
@@ -319,7 +322,7 @@ public final class MainActivity extends android.app.Activity {
             new android.app.AlertDialog.Builder(this).setMessage("Bike-only Maps requires Android 11 or newer. Ordinary screen sharing is available.")
                 .setPositiveButton("Close", null).show(); return;
         }
-        new android.app.AlertDialog.Builder(this).setTitle("Bike-only Google Maps • experimental")
+        new android.app.AlertDialog.Builder(this).setTitle("Bike display • " + RidePreferences.mapName(this))
             .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideBridge debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideBridge using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Cast and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideBridge in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
             .setNeutralButton("Developer options", (dialog, which) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)))
             .setNegativeButton("Pair", (dialog, which) -> displayPairDialog())
@@ -373,6 +376,9 @@ public final class MainActivity extends android.app.Activity {
 
     private void rideMapAction() {
         if (YamahaCastService.active && DedicatedDisplay.ready) {
+            if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
+                displayError(RidePreferences.mapName(this) + " is selected for the bike display. Set its route/job in that app before casting. RideBridge cannot accept delivery jobs or set routes inside it."); return;
+            }
             EditText destination = new EditText(this); destination.setHint("Address or place name");
             new android.app.AlertDialog.Builder(this).setTitle("Destination on bike display").setView(destination)
                 .setNegativeButton("Cancel", null).setPositiveButton("Navigate", (dialog, which) -> {
@@ -438,32 +444,37 @@ public final class MainActivity extends android.app.Activity {
         transport.addView(nextButton, rideWeight(compact ? 56 : 72)); music.addView(transport);
         LinearLayout.LayoutParams musicParams = compact
             ? new LinearLayout.LayoutParams(-1, 0, 1)
-            : new LinearLayout.LayoutParams(0, -1, 1.3f);
+            : new LinearLayout.LayoutParams(0, -1, RidePreferences.prefs(this).getInt("mount", 1) == 1 ? 1 : 1.3f);
         if (compact) musicParams.bottomMargin = dp(8); else musicParams.rightMargin = dp(10);
         controls.addView(music, musicParams);
 
-        LinearLayout messages = rideCard("WHATSAPP");
+        LinearLayout messages = rideCard("MESSAGES");
         messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
         messagePreview.setMaxLines(2); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messagePreview.setOnClickListener(v -> {
-            GX12NotificationListener.NotificationPreview message = GX12NotificationListener.latestWhatsAppPreview;
+            GX12NotificationListener.NotificationPreview message = displayedMessage();
             try { if (message != null && message.open != null) message.open.send(); else openWhatsApp(); }
             catch (android.app.PendingIntent.CanceledException e) { openWhatsApp(); }
         });
         messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout messageActions = new LinearLayout(this);
         Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
-        Button voice = rideAction("Voice", false); voice.setOnClickListener(v -> startGoogleVoice());
+        Button voice = rideAction("Next app", false); voice.setOnClickListener(v -> { messageIndex++; refreshWhatsAppPreview(); });
         messageActions.addView(listen, rideWeight(56)); messageActions.addView(voice, rideWeight(56));
         if (!compact) messages.addView(messageActions);
         controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, dp(70))
             : new LinearLayout.LayoutParams(0, -1, 1));
+        if (!compact && RidePreferences.prefs(this).getInt("mount", 1) == 2) {
+            controls.removeView(music); controls.addView(music);
+            musicParams.rightMargin = 0; musicParams.leftMargin = dp(10); music.setLayoutParams(musicParams);
+        }
         workspace.addView(controls, new LinearLayout.LayoutParams(0, -1, 1));
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, 0, 1); wp.topMargin = dp(8);
         root.addView(workspace, wp);
 
         LinearLayout dock = new LinearLayout(this);
         String[] labels = compact ? new String[]{"Map", "Apps", "Cast", "Setup"} : new String[]{"Map", "Cast", "Apps", "Voice", "Setup"};
+        if (RidePreferences.prefs(this).getInt("mount", 1) == 2) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
             action.setOnClickListener(v -> {
@@ -531,19 +542,75 @@ public final class MainActivity extends android.app.Activity {
         }
     }
 
+    private GX12NotificationListener.NotificationPreview displayedMessage() {
+        List<GX12NotificationListener.NotificationPreview> messages = GX12NotificationListener.selectedPreviews(this);
+        return messages.isEmpty() ? null : messages.get(Math.floorMod(messageIndex, messages.size()));
+    }
+
+    private void showPersonalization() {
+        new android.app.AlertDialog.Builder(this).setTitle("Your cockpit")
+            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app"}, (dialog, which) -> {
+                if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
+                    .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: balanced panels", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
+                        RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildScreen();
+                    }).setNegativeButton("Cancel", null).show();
+                else if (which == 1) chooseMessageApps(); else chooseMapApp();
+            }).setNegativeButton("Close", null).show();
+    }
+
+    private void chooseMessageApps() {
+        String[] packages = RidePreferences.messagePackages(this);
+        java.util.Set<String> selected = RidePreferences.selectedMessages(this);
+        boolean[] checked = new boolean[packages.length];
+        for (int i = 0; i < packages.length; i++) checked[i] = selected.contains(packages[i]);
+        new android.app.AlertDialog.Builder(this).setTitle("Choose message previews")
+            .setMultiChoiceItems(RidePreferences.MESSAGE_NAMES, checked, (dialog, which, enabled) -> checked[which] = enabled)
+            .setNegativeButton("Cancel", null).setPositiveButton("Save", (dialog, which) -> {
+                java.util.Set<String> enabled = new java.util.HashSet<>();
+                for (int i = 0; i < packages.length; i++) if (checked[i] && !packages[i].isEmpty()) enabled.add(packages[i]);
+                RidePreferences.prefs(this).edit().putStringSet("message_apps", enabled).commit();
+                GX12NotificationListener.clearPreviews(); messageIndex = 0; buildScreen();
+                android.widget.Toast.makeText(this, "Saved. New notifications from selected apps will appear after access is enabled.", android.widget.Toast.LENGTH_LONG).show();
+            }).show();
+    }
+
+    private void chooseMapApp() {
+        if (YamahaCastService.active || DedicatedDisplay.ready) { displayError("Stop casting and end the prepared display before changing its app."); return; }
+        int current = java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this));
+        new android.app.AlertDialog.Builder(this).setTitle("Navigation / rider app")
+            .setSingleChoiceItems(RidePreferences.MAP_NAMES, current, (dialog, which) -> {
+                RidePreferences.prefs(this).edit().putString("map_app", RidePreferences.MAP_PACKAGES[which]).apply();
+                dialog.dismiss(); buildScreen();
+                android.widget.Toast.makeText(this, "Selected " + RidePreferences.MAP_NAMES[which] + ". Bike display support is experimental.", android.widget.Toast.LENGTH_LONG).show();
+            }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void launchChosenApp(String pkg) {
+        Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (launch == null) { displayError("This app is not installed or does not expose a launch screen."); return; }
+        try { startActivity(launch); } catch (Exception e) { displayError("Could not open the selected app."); }
+    }
+
     private void showRideApps() {
+        java.util.ArrayList<String> labels = new java.util.ArrayList<>();
+        java.util.ArrayList<String> packages = new java.util.ArrayList<>();
+        labels.add("Spotify"); packages.add("com.spotify.music");
+        labels.add(RidePreferences.mapName(this)); packages.add(RidePreferences.selectedMap(this));
+        String[] chatPackages = RidePreferences.messagePackages(this);
+        for (int i = 0; i < chatPackages.length; i++) if (RidePreferences.selectedMessages(this).contains(chatPackages[i])) {
+            labels.add(RidePreferences.MESSAGE_NAMES[i]); packages.add(chatPackages[i]);
+        }
+        labels.add("Yamaha Y-Connect"); packages.add(YAMAHA_Y_CONNECT_PACKAGE);
+        labels.add("Layout + apps"); packages.add("");
         new android.app.AlertDialog.Builder(this).setTitle("Ride apps")
-            .setItems(new String[]{"Spotify", "WhatsApp", "Yamaha Y-Connect", "Garmin StreetCross", "Google voice", "Setup"}, (dialog, which) -> {
-                switch (which) {
-                    case 0: openSpotify(); break; case 1: openWhatsApp(); break; case 2: openYamahaApp(); break;
-                    case 3: openStreetCross(); break; case 4: startGoogleVoice(); break; default: buildSetupScreen();
-                }
+            .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                if (packages.get(which).isEmpty()) showPersonalization(); else launchChosenApp(packages.get(which));
             }).setNegativeButton("Close", null).show();
     }
 
     private void readMessageAloud() {
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) { openNotificationAccess(); return; }
-        GX12NotificationListener.NotificationPreview preview = GX12NotificationListener.latestWhatsAppPreview;
+        GX12NotificationListener.NotificationPreview preview = displayedMessage();
         if (preview == null) { android.widget.Toast.makeText(this, "No new message to read", android.widget.Toast.LENGTH_SHORT).show(); return; }
         if (speech == null) {
             speech = new android.speech.tts.TextToSpeech(this, result -> {
@@ -551,8 +618,8 @@ public final class MainActivity extends android.app.Activity {
                 if (speechReady) readMessageAloud();
                 else android.widget.Toast.makeText(this, "Speech is unavailable on this phone", android.widget.Toast.LENGTH_SHORT).show();
             });
-        } else if (speechReady) speech.speak(preview.title + ". " + preview.text,
-            android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "whatsapp-preview");
+        } else if (speechReady) speech.speak(preview.appName + ". " + preview.title + ". " + preview.text,
+            android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "message-preview");
     }
 
     private Button dockButton(String title) {
@@ -669,8 +736,8 @@ public final class MainActivity extends android.app.Activity {
             return;
         }
         new android.app.AlertDialog.Builder(this)
-        .setTitle("Music controls and WhatsApp previews")
-                .setMessage("Android Notification access is a broad, sensitive permission. If enabled, this app reads Spotify playback details and the latest WhatsApp notification preview only. It ignores other apps' notification text, keeps the preview temporarily on this phone, and never uploads it. You can revoke access in Android Settings. On some phones, first open App info, tap ⋮, and choose Allow restricted settings.")
+        .setTitle("Music controls and selected messages")
+                .setMessage("Android Notification access is a broad, sensitive permission. If enabled, this app reads Spotify playback details and new notifications from your selected messaging apps only. Notifications may include alerts beyond chats. It ignores unselected apps' notification text, keeps the preview temporarily on this phone, and never uploads it. You can revoke access in Android Settings. On some phones, first open App info, tap ⋮, and choose Allow restricted settings.")
                 .setNegativeButton("Not now", null)
                 .setNeutralButton("App info", (dialog, which) -> {
                     Intent appInfo = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
@@ -688,14 +755,14 @@ public final class MainActivity extends android.app.Activity {
     private void refreshWhatsAppPreview() {
         if (messagePreview == null && dockMessage == null) return;
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) {
-            if (messagePreview != null) messagePreview.setText("Connect WhatsApp previews in Setup");
-            if (dockMessage != null) dockMessage.setText("WhatsApp\nPreviews are off. Enable access on the ride screen.");
+            if (messagePreview != null) messagePreview.setText("Choose chat apps and enable access in Setup");
+            if (dockMessage != null) dockMessage.setText("Messages\nChoose apps and enable access in Setup.");
             return;
         }
-        GX12NotificationListener.NotificationPreview preview = GX12NotificationListener.latestWhatsAppPreview;
-        String label = preview == null ? "No new messages" : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
+        GX12NotificationListener.NotificationPreview preview = displayedMessage();
+        String label = preview == null ? "No new messages from selected apps" : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
-        if (dockMessage != null) dockMessage.setText("WhatsApp\n" + (preview == null ? "No new preview" : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
+        if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
 
     private void toggleRide() {
@@ -748,6 +815,11 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void openMapsAdjacent() {
+        if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
+            Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
+            if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
+            try { startAdjacent(launch); } catch (Exception e) { launchChosenApp(RidePreferences.selectedMap(this)); } return;
+        }
         Intent maps = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="));
         maps.setPackage("com.google.android.apps.maps");
         try { startAdjacent(maps); }

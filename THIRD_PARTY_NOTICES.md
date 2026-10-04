@@ -14,7 +14,7 @@ Changes: Android-only logger, bounded frame parsing, checksum validation,
 authentication bounds checks. RideBridge uses a separate Android capture
 service, explicit paired-device selection, session timeouts and stop controls.
 PillionAdb and DashServer are also adapted from the same revision under the same
-license. Changes include authenticated local frame transport, Maps-only launch,
+license. Changes include authenticated local frame transport, launch restricted to the explicitly selected navigation/rider app,
 session teardown and keeping phone controls visible. RideBridge does not invoke
 the upstream usage-stats grants, legacy TCP debugging or phone panel-off logic.
 Pillion's XMAX CCU mapping selects 480 x 234 pixels for 006-B3952 part numbers.

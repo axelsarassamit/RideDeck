@@ -32,10 +32,12 @@ object DedicatedDisplay {
         ready = false
         val adb = PillionAdb.getInstance(context)
         check(adb.connectDevice("127.0.0.1", port)) { "Connection failed. Keep Wireless debugging enabled and check its connection port." }
+        val pkg = RidePreferences.selectedMap(context)
+        require(pkg in RidePreferences.MAP_PACKAGES) { "Unsupported display app" }
         val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 255) }
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
         // Fixed helper only, with a random local session token. No grants, appops, pkill or TCP mode changes.
-        adb.runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer 960 468 160 45 480 234 $session >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
+        adb.runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer 960 468 160 45 480 234 $session $pkg >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
         token = session; ready = true
         status = "Bike-only display prepared. Start casting within 30 seconds. Repeat Connect after stopping or rebooting."
     }
@@ -43,8 +45,8 @@ object DedicatedDisplay {
     fun start(context: Context) {
         check(ready) { "Prepare the bike display in Setup first" }
         val session = token ?: error("No display session")
-        val component = context.packageManager.getLaunchIntentForPackage("com.google.android.apps.maps")?.component?.flattenToString()
-            ?: error("Install Google Maps first")
+        val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
+            ?: error("Install the selected navigation/rider app first")
         reading = true
         Thread({
             try {

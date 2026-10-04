@@ -102,6 +102,7 @@ object DashServer {
     private val PANEL_OFF_RETRY_DELAYS_MS = longArrayOf(700L, 1500L)
 
     private var sessionToken = ""
+    private var selectedPackage = "com.google.android.apps.maps"
     @Volatile private var connectedClient = false
 
     @JvmStatic
@@ -118,6 +119,8 @@ object DashServer {
         val launchComponent: String? = null
         sessionToken = args.getOrNull(6) ?: return
         if (!sessionToken.matches(Regex("[0-9a-f]{64}"))) return
+        selectedPackage = args.getOrNull(7) ?: "com.google.android.apps.maps"
+        if (selectedPackage !in setOf("com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.garmin.android.apps.streetcross")) return
         // launchComponent example: com.waze/com.waze.FreeMapAppActivity
 
         try {
@@ -240,11 +243,11 @@ object DashServer {
                 when {
                     line.startsWith("PROMOTE ") -> {
                         val component = line.removePrefix("PROMOTE ").trim()
-                        if (component.startsWith("com.google.android.apps.maps/")) promoteApp(component)
+                        if (component.startsWith("$selectedPackage/")) promoteApp(component)
                     }
                     line.startsWith("ROUTE ") -> {
                         val uri = line.removePrefix("ROUTE ").trim()
-                        if (uri.startsWith("google.navigation:q=")) {
+                        if (selectedPackage == "com.google.android.apps.maps" && uri.startsWith("google.navigation:q=")) {
                             exec("am", "start", "--display", displayId.toString(), "-a", "android.intent.action.VIEW", "-d", uri, "-p", "com.google.android.apps.maps")
                         }
                     }

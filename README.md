@@ -2,6 +2,20 @@
 
 An independent Android motorcycle cockpit targeting the Yamaha XMAX 2024 Tech MAX. It brings together Google Maps, Spotify, Yamaha Y-Connect, Garmin StreetCross, WhatsApp and Google voice, with large controls, headset status, a timer and signed in-app updates. Previously called GX12 Companion; the package identity and release download name stay the same so existing installations can update.
 
+## Mount position and app choices
+
+Open **Setup > Layout + apps** (also available from the Apps dock).
+
+- **Left mount**: music panel on the left, quick actions in their normal order.
+- **Centre mount**: balanced panels.
+- **Right mount**: music panel on the right and mirrored quick-action order.
+- Select several notification sources: WhatsApp, WhatsApp Business, LINE, Messenger, TikTok and the phone's current default SMS app. Defaults stay WhatsApp only until changed. A separate current preview is held in memory for each selected app. **Next app** cycles through them, and Read aloud reads the displayed preview. Old notifications are not fetched.
+- Choose Google Maps, Waze, Grab Driver, LINE MAN RIDER or Garmin StreetCross as the navigation/rider app. Map launches the selected app when not using the dedicated display.
+
+All non-Google apps on the dedicated bike display are experimental, not hardware-verified integrations. The whole selected rider app is shown, not a separately extracted map. Their sign-in, orders, routing and protected-screen behaviour stay inside the original apps. RideBridge does not accept jobs or automate rider workflows. Only Google Maps has RideBridge's destination handoff in dedicated display mode. Choose a new display app before preparing a session.
+
+Chat integration means notification previews, opening the original notification and optional explicit speech, not account login, full inbox access or replies. SMS uses notifications without READ_SMS. TikTok notifications can include general alerts as well as messages. Missing, hidden or redacted notification content cannot be recovered by RideBridge. Removing app selections clears old previews.
+
 ## Landscape cockpit and bike-only map
 
 Version 0.6.0 replaces the scrolling ride homepage with a landscape cockpit. Music and WhatsApp stay in fixed panels, with large playback controls, track artwork, explicit Read aloud, voice and an app dock. Setup holds permissions, update checks and device tools.
@@ -44,7 +58,7 @@ These tools do not record GPS, distance, speed, or a route. Yamaha account, moto
 
 ## Music controls and privacy
 
-Android requires the user to enable RideBridge in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. RideBridge uses Spotify's active media session for track details and playback buttons. For WhatsApp, it reads only new notifications from WhatsApp/WhatsApp Business and keeps the latest preview in memory while the app process runs. It does not read chat history, persist message content, process other apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
+Android requires the user to enable RideBridge in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. RideBridge uses Spotify's active media session for track details and playback buttons. For messaging, it reads only new notifications from the sources you select and keeps one current preview per app in memory while the app process runs. It does not read chat history, persist message content, process unselected apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
 
 Android may block Notification access for a sideloaded app. If you choose to enable Spotify controls, open **Settings > Apps > RideBridge > ⋮ > Allow restricted settings**, then return to RideBridge and enable Notification access. This is optional; Maps, Y-Connect, the ride timer, checklist, Spotify launch shortcut, and headset controls can be used without it.
 
@@ -81,7 +95,7 @@ For local release builds, set `GX12_KEYSTORE_PATH`, `GX12_KEYSTORE_PASSWORD`, `G
 
 ## Privacy
 
-The app has no analytics or backend. It reads paired devices after nearby-device permission. Optional notification access provides Spotify controls and the latest WhatsApp preview held only in memory. Screen sharing is separately approved by Android for each casting session; whole-screen sharing includes any visible messages. Timer and checklist state stay in local preferences. The update button contacts GitHub and downloads the APK and checksum. Bluetooth addresses and messages are not uploaded to GitHub.
+The app has no analytics or backend. It reads paired devices after nearby-device permission. Optional notification access provides Spotify controls and the selected message previews held only in memory. Screen sharing is separately approved by Android for each casting session; whole-screen sharing includes any visible messages. Timer and checklist state stay in local preferences. The update button contacts GitHub and downloads the APK and checksum. Bluetooth addresses and messages are not uploaded to GitHub.
 
 ## Hardware investigation
 
