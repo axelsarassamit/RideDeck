@@ -55,6 +55,9 @@ public final class MainActivity extends android.app.Activity {
     private static final String YAMAHA_Y_CONNECT_PACKAGE = "jp.co.yamahamotor.yamahamotorcycleconnect.sccu";
     private static final String GARMIN_STREETCROSS_PACKAGE = "com.garmin.android.apps.streetcross";
     private static final int REQUEST_BLUETOOTH = 12;
+    private static final int REQUEST_CAST = 23;
+    private String castDeviceAddress;
+    private TextView castStatus;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView deviceStatus;
@@ -90,12 +93,14 @@ public final class MainActivity extends android.app.Activity {
         @Override public void run() {
             refreshMediaSession();
             refreshWhatsAppPreview();
+            if (castStatus != null) castStatus.setText(YamahaCastService.status);
             handler.postDelayed(this, 2500);
         }
     };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state != null) castDeviceAddress = state.getString("cast_device");
         buildScreen();
         refreshDeviceStatus();
     }
@@ -139,10 +144,11 @@ public final class MainActivity extends android.app.Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(16), dp(20), dp(16), dp(22));
         page.setBackgroundColor(0xff101419);
-        page.addView(text("GEARELEC  •  GX12", 13, blue, true));
-        TextView title = text("Ride cockpit", 30, ink, true);
+        page.addView(text("XMAX 2024 TECH MAX", 13, blue, true));
+        TextView title = text("RideBridge", 30, ink, true);
         LinearLayout.LayoutParams titleParams = params(); titleParams.topMargin = dp(4); page.addView(title, titleParams);
         page.addView(text("Your ride apps, ready in one place", 14, muted, false));
+        addCastControls(page);
 
         Button splitButton = button("OPEN MAP BESIDE APP DOCK");
         splitButton.setTextSize(16); splitButton.setMinHeight(dp(76));
@@ -184,7 +190,7 @@ public final class MainActivity extends android.app.Activity {
         Button voiceButton = cockpitButton("TALK TO GOOGLE", "Voice commands");
         voiceButton.setMinHeight(dp(96));
         voiceButton.setOnClickListener(v -> startGoogleVoice());
-        voiceRow.addView(voiceButton, new LinearLayout.LayoutParams(-1, dp(74)));
+        voiceRow.addView(voiceButton, new LinearLayout.LayoutParams(-1, dp(96)));
         page.addView(voiceRow, buttonParams());
 
         messagePreview = text("WhatsApp previews are off. Enable access above, then choose what Android shares.", 14, ink, false);
@@ -218,11 +224,84 @@ public final class MainActivity extends android.app.Activity {
         restoreRide();
     }
 
+    private void addCastControls(LinearLayout page) {
+        castStatus = text(YamahaCastService.status, 15, 0xfff4f6fa, false);
+        addCockpitCard(page, "YAMAHA DASH • EXPERIMENTAL", castStatus);
+        Button start = button("CAST MAP TO YAMAHA DASH"); start.setMinHeight(dp(80));
+        start.setOnClickListener(v -> chooseDash()); page.addView(start, buttonParams());
+        Button stop = button("STOP CASTING"); stop.setMinHeight(dp(72));
+        stop.setOnClickListener(v -> {
+            stopService(new Intent(this, YamahaCastService.class));
+            handler.postDelayed(() -> castStatus.setText(YamahaCastService.status), 300);
+        }); page.addView(stop, buttonParams());
+        Button about = button("CAST SETUP + ABOUT"); about.setOnClickListener(v -> showAbout());
+        page.addView(about, buttonParams());
+    }
+
+    private void chooseDash() {
+        if (YamahaCastService.active) { castStatus.setText("Already sharing. Stop before starting another session."); return; }
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BLUETOOTH);
+            castStatus.setText("Allow nearby devices, then tap Cast again."); return;
+        }
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null || !adapter.isEnabled()) { castStatus.setText("Turn on Bluetooth before casting."); return; }
+        java.util.ArrayList<BluetoothDevice> devices = new java.util.ArrayList<>();
+        for (BluetoothDevice device : adapter.getBondedDevices()) {
+            String name = device.getName();
+            if (name != null && (name.toUpperCase(Locale.ROOT).contains("CCU") || name.toUpperCase(Locale.ROOT).contains("YAMAHA"))) devices.add(device);
+        }
+        if (devices.isEmpty()) { castStatus.setText("No paired Yamaha CCU found. Pair your dash using the bike's normal setup first. A GX12 headset is not the dash."); return; }
+        String[] names = new String[devices.size()];
+        for (int i = 0; i < devices.size(); i++) names[i] = devices.get(i).getName() + "\n" + devices.get(i).getAddress();
+        new android.app.AlertDialog.Builder(this).setTitle("Choose your Yamaha dash")
+            .setItems(names, (dialog, which) -> {
+                castDeviceAddress = devices.get(which).getAddress();
+                new android.app.AlertDialog.Builder(this).setTitle("Share Google Maps with your XMAX")
+                    .setMessage("Test while parked. Close StreetCross or other dash casting apps. On the next Android screen, choose Google Maps if single-app sharing is offered. Whole-screen sharing also shows messages and other visible content. Rotate the phone landscape for a larger map. Open the dash navigation view using its normal controls.")
+                    .setPositiveButton("Choose screen", (d, w) -> {
+                        android.media.projection.MediaProjectionManager manager = getSystemService(android.media.projection.MediaProjectionManager.class);
+                        startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CAST);
+                    }).setNegativeButton("Cancel", null).show();
+            }).setNegativeButton("Cancel", null).show();
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        state.putString("cast_device", castDeviceAddress); super.onSaveInstanceState(state);
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == REQUEST_CAST && result == RESULT_OK && data != null && castDeviceAddress != null) {
+            try {
+                Intent service = new Intent(this, YamahaCastService.class).putExtra("capture", data)
+                    .putExtra("result", result).putExtra("device", castDeviceAddress);
+                startForegroundService(service);
+                castStatus.setText("Starting screen sharing… Open Maps when ready.");
+            } catch (Exception e) { castStatus.setText("Could not start casting. Return to RideBridge and try again."); }
+        } else if (request == REQUEST_CAST) castStatus.setText("Sharing cancelled. Nothing is being cast.");
+        castDeviceAddress = null;
+    }
+
+    private void showAbout() {
+        String license;
+        try (InputStream stream = getAssets().open("PILLION_LICENSE.md")) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder content = new StringBuilder(); String line;
+            while ((line = reader.readLine()) != null) content.append(line).append('\n');
+            license = content.toString();
+        } catch (Exception e) { license = "https://polyformproject.org/licenses/noncommercial/1.0.0/"; }
+        new android.app.AlertDialog.Builder(this).setTitle("RideBridge • XMAX 2024 Tech MAX")
+            .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, approve screen sharing, open Google Maps and use the dash navigation view. Only 006-B3952 XMAX CCUs are enabled in this version.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
+            .setPositiveButton("Close", null).show();
+    }
+
     private void buildAppDock() {
         int ink = 0xfff4f6fa, muted = 0xffaab4c0;
         LinearLayout dock = new LinearLayout(this); dock.setOrientation(LinearLayout.VERTICAL);
         dock.setPadding(dp(10), dp(14), dp(10), dp(14)); dock.setBackgroundColor(0xff101419);
-        dock.addView(text("GX12\nRIDE DOCK", 20, 0xff83b5ff, true));
+        dock.addView(text("RideBridge\nRIDE DOCK", 20, 0xff83b5ff, true));
+        addCastControls(dock);
         TextView explanation = text("Keep Maps in the other Android split-screen pane. App launching depends on phone support.", 12, muted, false);
         LinearLayout.LayoutParams ep = params(); ep.topMargin = dp(5); dock.addView(explanation, ep);
         Button map = dockButton("GOOGLE MAPS"); map.setOnClickListener(v -> openMapsAdjacent()); dock.addView(map, dockButtonParams());
@@ -309,7 +388,7 @@ public final class MainActivity extends android.app.Activity {
             playPauseButton.setText(playing ? "Pause" : "Play");
         } catch (SecurityException | IllegalStateException error) {
             mediaController = null;
-            trackStatus.setText("Android has not granted access yet. Enable GX12 Companion under Notification access.");
+            trackStatus.setText("Android has not granted access yet. Enable RideBridge under Notification access.");
             updateMediaButtons(false, false, false);
         }
     }
@@ -633,7 +712,7 @@ public final class MainActivity extends android.app.Activity {
 
     private JSONObject getJson(String address) throws Exception { HttpURLConnection c = openConnection(address); c.setRequestProperty("Accept", "application/vnd.github+json"); try (InputStream in = c.getInputStream()) { return new JSONObject(readText(in)); } finally { c.disconnect(); } }
     private String downloadText(String address) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream()) { return readText(in); } finally { c.disconnect(); } }
-    private HttpURLConnection openConnection(String address) throws Exception { HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection(); c.setConnectTimeout(15000); c.setReadTimeout(30000); c.setInstanceFollowRedirects(true); c.setRequestProperty("User-Agent", "GX12-Companion-Android"); return c; }
+    private HttpURLConnection openConnection(String address) throws Exception { HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection(); c.setConnectTimeout(15000); c.setReadTimeout(30000); c.setInstanceFollowRedirects(true); c.setRequestProperty("User-Agent", "RideBridge-Android"); return c; }
     private String readText(InputStream input) throws Exception { StringBuilder b = new StringBuilder(); try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8))) { String line; while ((line = reader.readLine()) != null) b.append(line).append('\n'); } return b.toString(); }
     private String findHash(String checksums, String filename) { for (String line : checksums.split("\\r?\\n")) { String[] f = line.trim().split("\\s+"); if (f.length >= 2 && f[1].replaceFirst("^\\*", "").equals(filename)) return f[0]; } throw new IllegalStateException("No SHA-256 checksum was published for the APK."); }
     private void downloadFile(String address, File target) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) { byte[] buffer = new byte[8192]; int count; while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count); } finally { c.disconnect(); } }

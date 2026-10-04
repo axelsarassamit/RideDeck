@@ -40,7 +40,7 @@ jobs:
           test -n "$GX12_KEYSTORE_PASSWORD" || { echo "Missing GX12_KEYSTORE_PASSWORD repository secret"; exit 1; }
           test -n "$GX12_KEY_ALIAS" || { echo "Missing GX12_KEY_ALIAS repository secret"; exit 1; }
           test -n "$GX12_KEY_PASSWORD" || { echo "Missing GX12_KEY_PASSWORD repository secret"; exit 1; }
-          ./gradlew --no-daemon assembleRelease
+          ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
           mkdir -p release-assets
           cp app/build/outputs/apk/release/app-release.apk release-assets/gx12-companion-release.apk
           cd release-assets
@@ -53,6 +53,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             release-assets/gx12-companion-release.apk \
             release-assets/checksums.txt \
-            --title "GX12 Companion $GITHUB_REF_NAME" \
+            --title "RideBridge $GITHUB_REF_NAME" \
             --generate-notes \
             --latest

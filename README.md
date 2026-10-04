@@ -1,6 +1,21 @@
-# GEARELEC GX12 Companion
+# RideBridge
 
-An independent portrait Android ride cockpit for GEARELEC GX12 users. It brings together one-tap access to Google Maps, Spotify, Yamaha Y-Connect, Garmin StreetCross, WhatsApp, and the phone's voice assistant, with music controls, optional WhatsApp notification previews, headset status, a ride timer, a pre-ride checklist, and signed in-app updates.
+An independent Android motorcycle cockpit targeting the Yamaha XMAX 2024 Tech MAX. It brings together Google Maps, Spotify, Yamaha Y-Connect, Garmin StreetCross, WhatsApp and Google voice, with large controls, headset status, a timer and signed in-app updates. Previously called GX12 Companion; the package identity and release download name stay the same so existing installations can update.
+
+## Experimental Yamaha dash casting
+
+RideBridge includes Pillion's NaviLite protocol code, pinned to revision `29497f4ea3bccc5cd40c4647f8e4d8345eeddda3`, with its license and required notice. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This version supports the XMAX CCU part family `006-B3952`, using its 480 × 234 image size. No physical bike validation has been performed for this build.
+
+1. Park the bike. Keep the Yamaha CCU paired through the normal bike setup.
+2. Close StreetCross or another app currently casting to the dash.
+3. Tap **Cast map to Yamaha dash** and select your paired Yamaha CCU. The headset is a separate Bluetooth device.
+4. Approve Android screen sharing. Select **Google Maps** only if Android offers single-app sharing. Whole-screen mode exposes everything visible on the phone, including message previews.
+5. Open Google Maps and rotate the phone landscape with normal phone controls. Use the dash's navigation view. A portrait map is letterboxed to fit the wide dash.
+6. End with **Stop casting**, the notification Stop action, or Android's sharing indicator.
+
+Android must approve every screen-sharing session. Frames remain in memory and are sent by Classic Bluetooth RFCOMM to the explicitly chosen paired CCU using service `00007220-0000-1000-8000-00805f9b34fb`. There are no stored recordings or screen uploads. Connection and acknowledgement timeouts close the socket. Capture stops after connection failure, process death or revoked screen sharing. This is map-image casting, not integration with bike controls or replacement of safety instruments. No automatic reconnect or Bluetooth pairing changes are performed.
+
+Pillion-derived code is licensed under PolyForm Noncommercial 1.0.0. This distribution is for noncommercial personal and hobby use. Required Notice: Copyright 2026 the Pillion authors.
 
 The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP services, but no documented GX12-specific control service. The app does not claim to change headset settings or read its battery.
 
@@ -9,7 +24,7 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Start, pause, resume, and reset a ride timer. Timer state is kept on the phone.
 - Tick off helmet, headset, phone mount, and route reminders. Checklist state is kept on the phone.
 - Open Google Maps or enter a destination and hand it off to Maps.
-- Use **Open map beside app dock** to ask Android to place Google Maps next to the GX12 dock in split-screen. The phone's Android version and manufacturer determine whether adjacent app launch is supported; if it is ignored, Maps opens normally. From the dock, Google Maps, StreetCross, Spotify, Y-Connect, and WhatsApp can be launched into the adjacent pane when Android permits it.
+- Use **Open map beside app dock** to ask Android to place Google Maps next to the RideBridge dock in split-screen. The phone's Android version and manufacturer determine whether adjacent app launch is supported; if it is ignored, Maps opens normally. From the dock, Google Maps, StreetCross, Spotify, Y-Connect, and WhatsApp can be launched into the adjacent pane when Android permits it.
 - The main ride actions use larger touch targets for easier tapping with riding gloves; the dock scrolls vertically, and media controls are stacked rather than crowded into small side-by-side buttons.
 - Launch Garmin StreetCross where installed and supported by the motorcycle/region. StreetCross and Google Maps are separate navigation apps; the hub does not combine their maps.
 - Launch Spotify and control Spotify playback from the ride screen after granting optional Android Notification access.
@@ -17,15 +32,15 @@ The phone's Bluetooth diagnostics show standard A2DP, AVRCP, HFP, and PBAP servi
 - Open WhatsApp and optionally show the latest WhatsApp notification preview on this phone. It does not access chat history, send replies, or upload message content.
 - Start the phone's configured voice assistant without requesting microphone access. Set Google as Android's assistant for Google voice commands.
 
-These tools do not record GPS, distance, speed, or a route. Yamaha account, motorcycle telemetry, settings, and ride logs remain inside Yamaha's app. No public Yamaha integration is included. Set navigation before moving and follow local road safety laws.
+These tools do not record GPS, distance, speed, or a route. Yamaha account, motorcycle telemetry, settings, and ride logs remain inside Yamaha's app. Set navigation before moving.
 
 ## Music controls and privacy
 
-Android requires the user to enable GX12 Companion in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. GX12 Companion uses Spotify's active media session for track details and playback buttons. For WhatsApp, it reads only new notifications from WhatsApp/WhatsApp Business and keeps the latest preview in memory while the app process runs. It does not read chat history, persist message content, process other apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
+Android requires the user to enable RideBridge in **Notification access** before an app can view and control Spotify's active media session or receive WhatsApp notifications. This is a broad and sensitive Android permission. RideBridge uses Spotify's active media session for track details and playback buttons. For WhatsApp, it reads only new notifications from WhatsApp/WhatsApp Business and keeps the latest preview in memory while the app process runs. It does not read chat history, persist message content, process other apps' notification text, or transmit notification content. Access can be revoked at any time from Android Settings.
 
-Android may block Notification access for a sideloaded app. If you choose to enable Spotify controls, open **Settings > Apps > GX12 Companion > ⋮ > Allow restricted settings**, then return to GX12 Companion and enable Notification access. This is optional; Maps, Y-Connect, the ride timer, checklist, Spotify launch shortcut, and headset controls can be used without it.
+Android may block Notification access for a sideloaded app. If you choose to enable Spotify controls, open **Settings > Apps > RideBridge > ⋮ > Allow restricted settings**, then return to RideBridge and enable Notification access. This is optional; Maps, Y-Connect, the ride timer, checklist, Spotify launch shortcut, and headset controls can be used without it.
 
-Spotify must expose a compatible Android media session. Some controls may not be available for every item. GX12 Companion does not send proprietary commands to the headset; audio still goes through Android's normal Bluetooth connection. The Talk to Google button calls Android's configured voice assistant. This app requests Android split-screen placement for a map and app dock; the phone decides whether to honor adjacent-app launch. The dock cannot draw inside the Maps, Y-Connect, or StreetCross app, and a live embedded Google map would require a Google Maps Platform API key and billing setup. Android Auto itself requires a compatible vehicle or aftermarket head unit.
+Spotify must expose a compatible Android media session. Some controls may not be available for every item. RideBridge does not send proprietary commands to the headset; audio still goes through Android's normal Bluetooth connection. The Talk to Google button calls Android's configured voice assistant. This app requests Android split-screen placement for a map and app dock; the phone decides whether to honor adjacent-app launch. The dock cannot draw inside the Maps, Y-Connect, or StreetCross app, and a live embedded Google map would require a Google Maps Platform API key and billing setup. Android Auto itself requires a compatible vehicle or aftermarket head unit.
 
 ## Install and update
 
@@ -58,7 +73,7 @@ For local release builds, set `GX12_KEYSTORE_PATH`, `GX12_KEYSTORE_PASSWORD`, `G
 
 ## Privacy
 
-The app has no analytics or backend. It reads the Android paired-device list after the user grants nearby-device access. Notification access is optional and used to query Spotify's media session and send playback commands; notification text is not read or retained. Ride timer and checklist state stay in app-local preferences. The update button contacts GitHub's public release API and downloads the release APK and checksum. No Bluetooth address is sent to GitHub by the app.
+The app has no analytics or backend. It reads paired devices after nearby-device permission. Optional notification access provides Spotify controls and the latest WhatsApp preview held only in memory. Screen sharing is separately approved by Android for each casting session; whole-screen sharing includes any visible messages. Timer and checklist state stay in local preferences. The update button contacts GitHub and downloads the APK and checksum. Bluetooth addresses and messages are not uploaded to GitHub.
 
 ## Hardware investigation
 

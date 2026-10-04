@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GX12 Companion"
+rootProject.name = "RideBridge"
 include(":app")
