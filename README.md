@@ -116,3 +116,7 @@ Tap a preview to expand it; tap the expanded text again to close. Reply uses the
 ## Bike selector (0.10.0)
 
 Setup includes a saved bike dropdown. The list follows [Pillion compatibility reports](https://pillion.app/en/bikes/), with an automatic/other StreetCross-compatible Yamaha option. Pillion reports MT-07 (2025), R9 (2026), MT-09 (2024/2025), MT-09 SP (2026) and XSR900 (2025); XSR900 GP, Tracer 9 GT+, Niken GT, TMAX and XMAX are listed as likely rather than confirmed there. NMAX is included based on the upstream scooter CCU mapping. A supported navigation dash and Garmin StreetCross compatibility are required; model names alone do not guarantee it. RideBridge hardware validation remains outstanding. Actual CCU detection controls frame dimensions, not the dropdown. Other manufacturers and Android Auto displays use different protocols and are not covered.
+
+## More navigation choices (0.10.1)
+
+The navigation picker also includes HERE WeGo, Sygic, MAPS.ME, OsmAnd, OsmAnd+ and Organic Maps. Install the chosen app separately and prepare routes/downloads in it. Existing app subscriptions or paid features still apply. Launching, adjacent view and experimental bike projection use the selected app; destination handoff inside RideBridge remains Google Maps only. Other apps must have their route prepared in their own interface. Bike projection behavior has not been tested for these apps.

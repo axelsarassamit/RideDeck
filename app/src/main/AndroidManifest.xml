@@ -30,6 +30,12 @@
         <package android:name="com.viber.voip" />
         <package android:name="com.discord" />
         <package android:name="com.tencent.mm" />
+        <package android:name="com.here.app.maps" />
+        <package android:name="com.sygic.aura" />
+        <package android:name="com.mapswithme.maps.pro" />
+        <package android:name="net.osmand" />
+        <package android:name="net.osmand.plus" />
+        <package android:name="app.organicmaps" />
     </queries>
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

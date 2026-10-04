@@ -34,8 +34,8 @@ public final class RidePreferences {
         int choice = prefs(context).getInt("bike_profile", 1);
         return BIKE_NAMES[Math.max(0, Math.min(choice, BIKE_NAMES.length - 1))];
     }
-    public static final String[] MAP_NAMES = {"Google Maps", "Waze", "Grab Driver", "LINE MAN RIDER", "Garmin StreetCross"};
-    public static final String[] MAP_PACKAGES = {"com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.garmin.android.apps.streetcross"};
+    public static final String[] MAP_NAMES = {"Google Maps", "Waze", "Grab Driver", "LINE MAN RIDER", "Garmin StreetCross", "HERE WeGo", "Sygic", "MAPS.ME", "OsmAnd", "OsmAnd+", "Organic Maps"};
+    public static final String[] MAP_PACKAGES = {"com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.garmin.android.apps.streetcross", "com.here.app.maps", "com.sygic.aura", "com.mapswithme.maps.pro", "net.osmand", "net.osmand.plus", "app.organicmaps"};
     public static String selectedMap(Context context) { return prefs(context).getString("map_app", MAP_PACKAGES[0]); }
     public static String mapName(Context context) {
         String pkg = selectedMap(context);

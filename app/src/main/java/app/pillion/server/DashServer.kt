@@ -120,7 +120,7 @@ object DashServer {
         sessionToken = args.getOrNull(6) ?: return
         if (!sessionToken.matches(Regex("[0-9a-f]{64}"))) return
         selectedPackage = args.getOrNull(7) ?: "com.google.android.apps.maps"
-        if (selectedPackage !in setOf("com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.garmin.android.apps.streetcross")) return
+        if (selectedPackage !in setOf("com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.garmin.android.apps.streetcross", "com.here.app.maps", "com.sygic.aura", "com.mapswithme.maps.pro", "net.osmand", "net.osmand.plus", "app.organicmaps")) return
         // launchComponent example: com.waze/com.waze.FreeMapAppActivity
 
         try {
