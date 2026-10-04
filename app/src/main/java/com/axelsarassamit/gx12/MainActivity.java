@@ -182,9 +182,14 @@ public final class MainActivity extends android.app.Activity {
         page.addView(bluetooth, buttonParams());
         castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
         addCockpitCard(page, "BIKE DISPLAY - EXPERIMENTAL", castStatus);
+        Button cast = button(YamahaCastService.active ? "STOP BIKE DISPLAY" : "START BIKE DISPLAY");
+        cast.setOnClickListener(v -> {
+            if (YamahaCastService.active) { stopService(new Intent(this, YamahaCastService.class)); handler.postDelayed(this::buildSetupScreen, 400); }
+            else chooseDash();
+        }); page.addView(cast, buttonParams());
         Button display = button("HOW TO CAST TO THE BIKE"); display.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
             .setTitle("Bluetooth map sharing")
-            .setMessage("Pair your phone with the Yamaha in Bluetooth settings. On the bike, open its navigation screen. Return to the ride screen, tap Cast, select the Yamaha and approve screen sharing. Then open your map app. Mobile data can provide the map internet connection. No Wi-Fi configuration is needed for ordinary screen sharing. The shared map also remains visible on the phone.")
+            .setMessage("Pair your phone with the Yamaha in Bluetooth settings. On the bike, open its navigation screen. Tap Start bike display in Setup, select the Yamaha and approve screen sharing. Then open your map app. Mobile data can provide the map internet connection. No Wi-Fi configuration is needed for ordinary screen sharing. The shared map also remains visible on the phone.")
             .setPositiveButton("Got it", null).show());
         page.addView(display, buttonParams());
         Button notifications = button("CASTING NOTIFICATION ACCESS"); notifications.setOnClickListener(v -> {
@@ -300,7 +305,7 @@ public final class MainActivity extends android.app.Activity {
                 .setPositiveButton("Close", null).show(); return;
         }
         new android.app.AlertDialog.Builder(this).setTitle("Bike display • " + RidePreferences.mapName(this))
-            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideBridge debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideBridge using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Cast and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideBridge in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
+            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideBridge debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideBridge using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Start bike display in Setup and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideBridge in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
             .setNeutralButton("Developer options", (dialog, which) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)))
             .setNegativeButton("Pair", (dialog, which) -> displayPairDialog())
             .setPositiveButton("Connect", (dialog, which) -> displayConnectDialog()).show();
@@ -340,7 +345,7 @@ public final class MainActivity extends android.app.Activity {
                 worker.execute(() -> {
                     try {
                         DedicatedDisplay.prepare(this, Integer.parseInt(connectionPort));
-                        runOnUiThread(() -> { buildScreen(); chooseDash(); });
+                        runOnUiThread(() -> { buildSetupScreen(); chooseDash(); });
                     } catch (Exception e) { runOnUiThread(() -> displayError("Display setup failed. " + safeMessage(e))); }
                 });
             }).show();
@@ -391,10 +396,9 @@ public final class MainActivity extends android.app.Activity {
         header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
         castStatus = text(YamahaCastService.status, 11, 0xff92a9be, false);
         castStatus.setMaxLines(1); castStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        if (!compact) header.addView(castStatus, new LinearLayout.LayoutParams(0, -2, 1.4f));
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
         ((android.widget.TextClock) clock).setFormat12Hour("h:mm"); clock.setTextColor(0xffaab4c0); clock.setTextSize(17);
-        header.addView(clock); root.addView(header, new LinearLayout.LayoutParams(-1, dp(34)));
+        header.addView(clock); root.addView(header, new LinearLayout.LayoutParams(-1, dp(56)));
 
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
@@ -453,20 +457,18 @@ public final class MainActivity extends android.app.Activity {
         root.addView(workspace, wp);
 
         LinearLayout dock = new LinearLayout(this);
-        String[] labels = compact ? new String[]{"Map", "Apps", "Camera", "Cast", "Setup"} : new String[]{"Map", "Cast", "Apps", "Camera", "Voice", "Setup"};
+        Button settings = rideAction("Setup", false);
+        settings.setOnClickListener(v -> buildSetupScreen());
+        header.addView(settings, new LinearLayout.LayoutParams(dp(88), dp(56)));
+        String[] labels = new String[]{"Map", "Camera", "Voice"};
         if (RidePreferences.prefs(this).getInt("mount", 1) == 2) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
             action.setOnClickListener(v -> {
                 switch (label) {
                     case "Map": rideMapAction(); break;
-                    case "Spotify": openSpotify(); break;
-                    case "WhatsApp": openWhatsApp(); break;
-                    case "Cast": castOrStop(); break;
                     case "Camera": showQuickCamera(); break;
                     case "Voice": startGoogleVoice(); break;
-                    case "Setup": buildSetupScreen(); break;
-                    default: showRideApps();
                 }
             }); dock.addView(action, rideWeight(compact ? 56 : 64));
         }

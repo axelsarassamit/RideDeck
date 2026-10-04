@@ -128,3 +128,7 @@ Tap the message card to open a full-screen reader with Close, Reply, Read aloud 
 ## Screen chrome (0.10.3)
 
 Ride cockpit, message reader and camera hide system bars for more usable space. Swipe inward from the screen edge to reveal Android navigation temporarily. Setup shows dark system bars and reserves room for them, display cutouts and the Done button. OEM overlays and system-controlled installation/permission screens may still appear. Physical layout verification is outstanding.
+
+## Simple ride controls (0.10.4)
+
+The bottom ride dock now has only Map, Camera and Voice. Apps and Cast are removed from it. Setup is a smaller header control. Start/stop casting happens in parked Setup under Bike display. App choices remain in Setup; music and messages keep their own direct controls. The ride header no longer displays verbose casting setup text.
