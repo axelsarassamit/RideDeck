@@ -64,6 +64,7 @@ public final class MainActivity extends android.app.Activity {
     private TextView updateStatus;
     private TextView trackStatus;
     private TextView messagePreview;
+    private TextView messageSource;
     private TextView dockMessage;
     private Button playPauseButton;
     private Button previousButton;
@@ -141,103 +142,40 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void buildSetupScreen() {
-        setupVisible = true; cockpitVisible = false; albumArt = null;
-        int ink = 0xfff4f6fa, muted = 0xffaab4c0, blue = 0xff83b5ff;
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(16), dp(20), dp(16), dp(22));
-        page.setBackgroundColor(0xff101419);
-        Button personalize = button("LAYOUT + APPS"); personalize.setOnClickListener(v -> showPersonalization());
-        page.addView(personalize, buttonParams());
-        Button backToRide = button("BACK TO RIDE SCREEN");
-        backToRide.setOnClickListener(v -> buildScreen()); page.addView(backToRide, buttonParams());
-        TextView displaySetup = text(DedicatedDisplay.status, 15, ink, false);
-        addCockpitCard(page, "MAP ON BIKE â€¢ PHONE CONTROLS", displaySetup);
-        Button setupDisplay = button("SET UP BIKE-ONLY MAP"); setupDisplay.setOnClickListener(v -> showDisplaySetup());
-        page.addView(setupDisplay, buttonParams());
-        Button castNotifications = button("ENABLE CASTING NOTIFICATIONS");
-        castNotifications.setOnClickListener(v -> {
+        setupVisible = true; cockpitVisible = false;
+        albumArt = null; messagePreview = null; messageSource = null; dockMessage = null;
+        trackStatus = null; previousButton = null; playPauseButton = null; nextButton = null;
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(0xff101419); root.setPadding(dp(16), dp(16), dp(16), dp(16));
+        LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView heading = text("Setup • use while parked", 24, 0xfff4f6fa, true);
+        header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
+        Button back = button("DONE"); back.setOnClickListener(v -> buildScreen());
+        header.addView(back, new LinearLayout.LayoutParams(dp(120), dp(56))); root.addView(header);
+        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
+        Button personalize = button("LAYOUT + APP CHOICES"); personalize.setOnClickListener(v -> showPersonalization());
+        addSection(page, "YOUR COCKPIT", personalize);
+        Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
+        page.addView(access, buttonParams());
+        deviceStatus = text("Checking headset…", 14, 0xfff4f6fa, false);
+        addCockpitCard(page, "CONNECTIONS", deviceStatus);
+        Button bluetooth = button("BLUETOOTH SETTINGS"); bluetooth.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
+        page.addView(bluetooth, buttonParams());
+        castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
+        addCockpitCard(page, "BIKE DISPLAY • EXPERIMENTAL", castStatus);
+        Button display = button("GUIDED BIKE DISPLAY SETUP"); display.setOnClickListener(v -> showDisplaySetup());
+        page.addView(display, buttonParams());
+        Button notifications = button("CASTING NOTIFICATION ACCESS"); notifications.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 24);
-            else android.widget.Toast.makeText(this, "Casting notification is available when sharing starts", android.widget.Toast.LENGTH_SHORT).show();
-        }); page.addView(castNotifications, buttonParams());
-        page.addView(text("XMAX 2024 TECH MAX", 13, blue, true));
-        TextView title = text("RideBridge", 30, ink, true);
-        LinearLayout.LayoutParams titleParams = params(); titleParams.topMargin = dp(4); page.addView(title, titleParams);
-        page.addView(text("Your ride apps, ready in one place", 14, muted, false));
-        addCastControls(page);
-
-        Button splitButton = button("OPEN MAP BESIDE APP DOCK");
-        splitButton.setTextSize(16); splitButton.setMinHeight(dp(76));
-        splitButton.setOnClickListener(v -> {
-            getPreferences(0).edit().putBoolean("dock_mode", true).apply();
-            buildScreen();
-            openMapsAdjacent();
-        });
-        page.addView(splitButton, buttonParams());
-
-        deviceStatus = text("Checking headsetâ€¦", 14, ink, false);
-        addCockpitCard(page, "HEADSET", deviceStatus);
-
-        LinearLayout firstRow = new LinearLayout(this); firstRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button mapsButton = cockpitButton("MAPS", "Open Google Maps"); mapsButton.setOnClickListener(v -> openMaps());
-        Button spotifyButton = cockpitButton("MUSIC", "Open Spotify"); spotifyButton.setOnClickListener(v -> openSpotify());
-        firstRow.addView(mapsButton, weightedButtonParams()); firstRow.addView(spotifyButton, weightedButtonParams());
-        page.addView(firstRow);
-        LinearLayout secondRow = new LinearLayout(this); secondRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button yamahaButton = cockpitButton("YAMAHA", "Y-Connect"); yamahaButton.setOnClickListener(v -> openYamahaApp());
-        Button garminButton = cockpitButton("GARMIN", "StreetCross"); garminButton.setOnClickListener(v -> openStreetCross());
-        secondRow.addView(yamahaButton, weightedButtonParams()); secondRow.addView(garminButton, weightedButtonParams());
-        page.addView(secondRow);
-        Button destinationButton = button("SET A DESTINATION"); destinationButton.setOnClickListener(v -> setDestination());
-        page.addView(destinationButton, buttonParams());
-
-        trackStatus = text("Spotify controls are off. Enable access to show the track and control playback.", 14, ink, false);
-        addCockpitCard(page, "NOW PLAYING", trackStatus);
-        LinearLayout mediaRow = new LinearLayout(this); mediaRow.setOrientation(LinearLayout.HORIZONTAL);
-        previousButton = button("Previous"); previousButton.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS));
-        playPauseButton = button("Play / pause"); playPauseButton.setOnClickListener(v -> sendMedia(MediaAction.TOGGLE));
-        nextButton = button("Next"); nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
-        mediaRow.addView(previousButton, weightedButtonParams()); mediaRow.addView(playPauseButton, weightedButtonParams()); mediaRow.addView(nextButton, weightedButtonParams());
-        page.addView(mediaRow);
-        Button accessButton = button("ENABLE MUSIC + MESSAGE ACCESS");
-        accessButton.setOnClickListener(v -> openNotificationAccess()); page.addView(accessButton, buttonParams());
-
-        LinearLayout voiceRow = new LinearLayout(this); voiceRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button voiceButton = cockpitButton("TALK TO GOOGLE", "Voice commands");
-        voiceButton.setMinHeight(dp(96));
-        voiceButton.setOnClickListener(v -> startGoogleVoice());
-        voiceRow.addView(voiceButton, new LinearLayout.LayoutParams(-1, dp(96)));
-        page.addView(voiceRow, buttonParams());
-
-        messagePreview = text("WhatsApp previews are off. Enable access above, then choose what Android shares.", 14, ink, false);
-        addCockpitCard(page, "MESSAGES â€¢ LATEST ALERT", messagePreview);
-        Button whatsappButton = button("OPEN WHATSAPP"); whatsappButton.setOnClickListener(v -> openWhatsApp());
-        page.addView(whatsappButton, buttonParams());
-
-        rideClock = new Chronometer(this);
-        rideClock.setTextSize(28); rideClock.setTextColor(ink); rideClock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        rideClock.setGravity(Gravity.CENTER);
-        addCockpitCard(page, "RIDE TIMER", rideClock);
-        rideButton = button("Start ride mode"); rideButton.setTextSize(16); rideButton.setMinHeight(dp(72)); rideButton.setOnClickListener(v -> toggleRide()); page.addView(rideButton, buttonParams());
-        Button resetRideButton = button("Reset ride timer"); resetRideButton.setOnClickListener(v -> resetRide()); page.addView(resetRideButton, buttonParams());
-
-        Button bluetoothButton = button("BLUETOOTH SETTINGS");
-        bluetoothButton.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
-        addSection(page, "DEVICE", bluetoothButton);
-        String[] reminders = {"Helmet secured", "GX12 fitted and fastened", "Phone mounted safely", "Route ready before moving"};
-        for (int i = 0; i < reminders.length; i++) {
-            CheckBox check = new CheckBox(this); check.setText(reminders[i]); check.setTextColor(ink);
-            check.setChecked(getPreferences(0).getBoolean("check_" + i, false)); final int index = i;
-            check.setOnCheckedChangeListener((button, checked) -> getPreferences(0).edit().putBoolean("check_" + index, checked).apply()); page.addView(check);
-        }
-
-        updateStatus = text("Current version " + appVersion() + ". Check GitHub for a signed update.", 14, ink, false);
+            else android.widget.Toast.makeText(this, "Available when casting starts", android.widget.Toast.LENGTH_SHORT).show();
+        }); page.addView(notifications, buttonParams());
+        updateStatus = text("Installed " + appVersion(), 14, 0xfff4f6fa, false);
         addCockpitCard(page, "APP UPDATES", updateStatus);
-        Button updateButton = button("CHECK FOR UPDATES"); updateButton.setOnClickListener(v -> checkForUpdate()); page.addView(updateButton, buttonParams());
-        page.addView(text("Maps, Y-Connect, Garmin and Spotify open in their own apps. No third-party screens are embedded. Set up before riding; use voice or stop safely before touching the phone.", 12, muted, false));
-
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(page); setContentView(scroll);
-        restoreRide();
+        Button update = button("CHECK FOR UPDATES"); update.setOnClickListener(v -> checkForUpdate()); page.addView(update, buttonParams());
+        page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
+        Button about = button("ABOUT + DISPLAY HELP"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
+        ScrollView scroll = new ScrollView(this); scroll.addView(page);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
     }
 
     private void addCastControls(LinearLayout page) {
@@ -396,7 +334,7 @@ public final class MainActivity extends android.app.Activity {
 
     private void buildScreen() {
         setupVisible = false; cockpitVisible = true;
-        messagePreview = null; dockMessage = null; albumArt = null;
+        messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;
         rideClock = null; rideButton = null;
         deviceStatus = text("", 12, 0xffaab4c0, false);
         updateStatus = text("", 12, 0xffaab4c0, false);
@@ -449,6 +387,9 @@ public final class MainActivity extends android.app.Activity {
         controls.addView(music, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
+        messageSource = text("SELECTED APPS", compact ? 13 : 20, 0xff83b5ff, true);
+        messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
         messagePreview.setMaxLines(2); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messagePreview.setOnClickListener(v -> {
@@ -755,14 +696,15 @@ public final class MainActivity extends android.app.Activity {
     private void refreshWhatsAppPreview() {
         if (messagePreview == null && dockMessage == null) return;
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) {
-            if (messagePreview != null) messagePreview.setText("Choose chat apps and enable access in Setup");
+            if (messageSource != null) messageSource.setText("ACCESS IS OFF");
+            if (messagePreview != null) messagePreview.setText("Enable message access while parked");
             if (dockMessage != null) dockMessage.setText("Messages\nChoose apps and enable access in Setup.");
             return;
         }
         GX12NotificationListener.NotificationPreview preview = displayedMessage();
         String label = preview == null ? "No new messages from selected apps" : preview.appName + " â€¢ " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
-        if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
+        if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
 
     private void toggleRide() {
