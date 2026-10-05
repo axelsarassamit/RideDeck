@@ -17,6 +17,11 @@ public final class GX12NotificationListener extends NotificationListenerService 
     public static synchronized java.util.List<NotificationPreview> selectedPreviews(android.content.Context context) {
         return previews.selected(RidePreferences.selectedMessages(context));
     }
+    public static synchronized void acknowledge(NotificationPreview item) {
+        item.acknowledged = true;
+        previews.acknowledge(item.packageName, item.key, item);
+        if (latestWhatsAppPreview == item) latestWhatsAppPreview = null;
+    }
     public static synchronized void clearPreviews() { previews.clear(); latestWhatsAppPreview = null; }
 
     public static final class NotificationPreview {
@@ -80,7 +85,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
             }
             synchronized (GX12NotificationListener.class) {
                 if (!RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
-                previews.put(sbn.getPackageName(), sbn.getKey(), preview);
+                previews.put(sbn.getPackageName(), sbn.getKey(), preview.title + "\n" + preview.text, preview);
                 latestWhatsAppPreview = preview;
             }
         }

@@ -444,6 +444,9 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout messageActions = new LinearLayout(this);
         Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
         messageActions.addView(listen, rideWeight(56));
+        Button seenNext = rideAction("Seen / next", false);
+        seenNext.setOnClickListener(v -> acknowledgeMessage(displayedMessage()));
+        messageActions.addView(seenNext, rideWeight(56));
         messages.addView(messageActions);
         controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
@@ -545,6 +548,14 @@ public final class MainActivity extends android.app.Activity {
             .setNegativeButton("Close", null).show();
     }
 
+    private void acknowledgeMessage(GX12NotificationListener.NotificationPreview item) {
+        if (item == null) return;
+        GX12NotificationListener.acknowledge(item);
+        if (item.markRead != null) try { item.markRead.send(); }
+        catch (android.app.PendingIntent.CanceledException ignored) { }
+        refreshWhatsAppPreview();
+    }
+
     private void showFullMessage() {
         GX12NotificationListener.NotificationPreview item = displayedMessage();
         android.app.Dialog reader = new android.app.Dialog(this);
@@ -562,19 +573,16 @@ public final class MainActivity extends android.app.Activity {
         ScrollView scroll = new ScrollView(this); scroll.addView(body); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout actions = new LinearLayout(this);
         Button close = rideAction("Close", false); close.setOnClickListener(v -> reader.dismiss()); actions.addView(close, rideWeight(72));
-        Button read = rideAction(item != null && item.markRead != null ? "Mark as read" : "Read / seen", false);
-        read.setEnabled(item != null && !item.acknowledged);
+        Button read = rideAction("Seen / next", false);
+        read.setEnabled(item != null);
         read.setOnClickListener(v -> {
-            if (item == null) return;
-            boolean sourceRead = false;
-            if (item.markRead != null) try { item.markRead.send(); sourceRead = true; } catch (android.app.PendingIntent.CanceledException ignored) { }
-            item.acknowledged = true; refreshWhatsAppPreview(); reader.dismiss();
-            android.widget.Toast.makeText(this, sourceRead ? "Read action sent to " + item.appName : "Marked seen in RideBridge only", android.widget.Toast.LENGTH_SHORT).show();
-        }); actions.addView(read, rideWeight(72));
+            acknowledgeMessage(item); reader.dismiss();
+            if (displayedMessage() != null) showFullMessage();
+        });
         Button reply = rideAction("Reply", true); reply.setEnabled(item != null);
         reply.setOnClickListener(v -> { reader.dismiss(); replyByVoice(item); }); actions.addView(reply, rideWeight(72));
         Button aloud = rideAction("Read aloud", false); aloud.setEnabled(item != null);
-        aloud.setOnClickListener(v -> readMessageAloud(item)); actions.addView(aloud, rideWeight(72));
+        aloud.setOnClickListener(v -> readMessageAloud(item)); actions.addView(aloud, rideWeight(72)); actions.addView(read, rideWeight(72));
         if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
             LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
             for (int row = 0; row < 2; row++) {

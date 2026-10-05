@@ -136,3 +136,7 @@ The bottom ride dock now has only Map, Camera and Voice. Apps and Cast are remov
 ## Tap camera preview (0.10.7)
 
 Tap the live camera picture to take a photo. In video mode, tap to start recording and tap again to stop. Existing capture/record buttons remain available. Preview taps are ignored while a photo or recording is being saved. On-screen hints explain the active tap action.
+
+## Seen / next messages (0.10.8)
+
+Seen / next sits beside Read aloud on the ride card and full-screen reader. It removes the displayed preview from RideBridge and advances to the next pending notification, newest first across selected apps. A source Mark as read action is used when available; otherwise acknowledgement is local only. Repeated refreshes of unchanged seen content do not restore it. Distinct notification keys are queued, while updates to the same notification replace that preview. This is not a full chat history. Up to 100 pending previews and 500 seen fingerprints stay in memory only and reset when the process/listener ends. Phone testing remains outstanding.
