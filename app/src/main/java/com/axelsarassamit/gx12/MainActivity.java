@@ -196,9 +196,21 @@ public final class MainActivity extends android.app.Activity {
         }); page.addView(cast, buttonParams());
         Button display = button("HOW TO CAST TO THE BIKE"); display.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
             .setTitle("Bluetooth map sharing")
-            .setMessage("Pair your phone with the Yamaha in Bluetooth settings. On the bike, open its navigation screen. Tap Start bike display in Setup, select the Yamaha and approve screen sharing. Then open your map app. Mobile data can provide the map internet connection. No Wi-Fi configuration is needed for ordinary screen sharing. The shared map also remains visible on the phone.")
+            .setMessage("Pair the Yamaha in Bluetooth settings. Prepare separate-display access in Advanced display options while parked. Tap Start bike display or Map to send the selected map to the saved bike. Open navigation on the bike. Use Map on the phone to enter a Google Maps destination. The map stays on the bike. Phone Wi-Fi is needed for Wireless debugging setup; the bike receives images over Bluetooth. Operation after disconnecting Wi-Fi still needs verification on your phone.")
             .setPositiveButton("Got it", null).show());
         page.addView(display, buttonParams());
+        Button diagnostics = button("BIKE CONNECTION DIAGNOSTICS");
+        diagnostics.setOnClickListener(v -> {
+            String report;
+            try { report = new String(java.nio.file.Files.readAllBytes(new java.io.File(getFilesDir(), "bike-diagnostics.txt").toPath()), java.nio.charset.StandardCharsets.UTF_8); }
+            catch (Exception e) { report = "No bike session recorded yet."; }
+            final String copy = report;
+            new android.app.AlertDialog.Builder(this).setTitle("Bike connection diagnostics").setMessage(report)
+                .setPositiveButton("Close", null).setNeutralButton("Copy", (d, w) -> {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("RideDeck bike diagnostics", copy));
+                }).show();
+        }); page.addView(diagnostics, buttonParams());
         Button notifications = button("CASTING NOTIFICATION ACCESS"); notifications.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 24);
             else android.widget.Toast.makeText(this, "Available when casting starts", android.widget.Toast.LENGTH_SHORT).show();
@@ -209,7 +221,7 @@ public final class MainActivity extends android.app.Activity {
         page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
         Button advanced = button("ADVANCED DISPLAY OPTIONS"); advanced.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
             .setTitle("Separate map screen - experimental")
-            .setMessage("Only this optional mode uses Wireless debugging to put the map on a separate display while keeping phone controls visible. The current implementation may stop when Wi-Fi disconnects. Use normal Cast for mobile-data-only rides.")
+            .setMessage("Uses Wireless debugging to put the map on a separate display while keeping phone controls visible. Pairing and the connection port are saved. Start bike display attempts reconnection automatically. Wi-Fi disconnection behavior still needs verification on your phone. Phone screen mirroring is disabled.")
             .setNegativeButton("Close", null).setPositiveButton("Open advanced setup", (dialog, which) -> showDisplaySetup()).show());
         page.addView(advanced, buttonParams());
         Button about = button("ABOUT + DISPLAY HELP"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());

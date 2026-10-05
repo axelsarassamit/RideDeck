@@ -12,6 +12,8 @@ import app.pillion.protocol.NaviLiteCodec
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ArrayBlockingQueue
+import java.io.File
 
 /** Screen frames stay in memory and travel only to the explicitly selected paired CCU. */
 class YamahaCastService : Service() {
@@ -29,6 +31,18 @@ class YamahaCastService : Service() {
     private var worker: Thread? = null
     private var dedicated = false
     private var waitingForFrameSince = 0L
+    @Volatile private var imageRequested = true
+    @Volatile private var receiverFailure: String? = null
+    private var receiver: Thread? = null
+    private val ackQueue = ArrayBlockingQueue<Boolean>(1)
+
+    private fun diagnostic(message: String) {
+        synchronized(lock) {
+            val file = File(filesDir, "bike-diagnostics.txt")
+            val previous = runCatching { file.readLines().takeLast(99) }.getOrDefault(emptyList())
+            runCatching { file.writeText((previous + "${System.currentTimeMillis()} $message").joinToString("\n")) }
+        }
+    }
 
     override fun onBind(intent: Intent?) = null
 
@@ -54,6 +68,7 @@ class YamahaCastService : Service() {
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
             else startForeground(22, notice)
             running = true; active = true
+            diagnostic("Session started; metadata only, no addresses, message text or images")
             status = "Connecting to the selected Yamaha dash…"
             deadline = SystemClock.elapsedRealtime() + 20000
             watchdog.scheduleWithFixedDelay({
@@ -90,21 +105,50 @@ class YamahaCastService : Service() {
                     next.connect()
                 }
                 override fun read(buffer: ByteArray) = socket!!.inputStream.read(buffer)
-                override fun write(bytes: ByteArray) { socket!!.outputStream.write(bytes) }
+                override fun write(bytes: ByteArray) { synchronized(lock) { socket!!.outputStream.write(bytes) } }
                 override fun close() { socket?.close() }
             }
             link.open()
             val frames = FrameReader(link)
             val size = Handshake(link, frames).perform()
+            diagnostic("Authenticated; display ${size.width}x${size.height}")
             check(size.width == 480 && size.height in listOf(234, 240)) { "Unsupported NaviLite display size" }
             status = "Bike connected. Starting selected map on the bike display..."
             deadline = SystemClock.elapsedRealtime() + 30000
             DedicatedDisplay.start(this, size.width, size.height)
+            receiver = Thread({
+                try {
+                    while (running) {
+                        val incoming = frames.next()
+                        if (incoming.serviceType == 80) { ackQueue.offer(true); continue }
+                        val action = DashContentCommand.classify(incoming)
+                        diagnostic("RX type=${incoming.frameType} service=${incoming.serviceType} dataType=${incoming.payloadDataType} bytes=${incoming.payload.size} action=$action")
+                        when (action) {
+                            DashContentCommand.Action.START -> {
+                                imageRequested = true
+                                deadline = SystemClock.elapsedRealtime() + 30000
+                                link.write(NaviLiteCodec.build(6, 2, 0, byteArrayOf(1, 0)))
+                                link.write(NaviLiteCodec.build(6, 12, 0, byteArrayOf(1, 0)))
+                                status = "Bike requested navigation images."
+                            }
+                            DashContentCommand.Action.STOP -> {
+                                imageRequested = false
+                                status = "Bike paused navigation images. Open navigation on the bike to resume."
+                            }
+                            DashContentCommand.Action.IGNORE -> Unit
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (running) receiverFailure = e.message ?: "Bike Bluetooth receiver disconnected"
+                }
+            }, "RideDeckDashCommands").also { it.isDaemon = true; it.start() }
             var sequence = 1
             var count = 0
             var started = SystemClock.elapsedRealtime()
             while (running) {
+                receiverFailure?.let { error(it) }
                 deadline = SystemClock.elapsedRealtime() + 15000
+                if (!imageRequested) { Thread.sleep(100); continue }
                 val sourceJpeg = DedicatedDisplay.latestFrame()
                 if (sourceJpeg == null) {
                     check(DedicatedDisplay.receiving()) { DedicatedDisplay.status }
@@ -117,8 +161,11 @@ class YamahaCastService : Service() {
                 waitingForFrameSince = 0L
                 val jpeg = sourceJpeg
                 val payload = byteArrayOf(3, sequence.toByte(), (sequence ushr 8).toByte()) + jpeg
+                ackQueue.clear()
                 link.write(NaviLiteCodec.build(6, 0, 1, payload))
-                do { val ack = frames.next(); if (ack.serviceType == 80) break } while (running)
+                while (running && imageRequested && ackQueue.poll(100, TimeUnit.MILLISECONDS) == null) {
+                    receiverFailure?.let { error(it) }
+                }
                 sequence = (sequence + 1) and 65535; count++
                 val now = SystemClock.elapsedRealtime()
                 if (now - started >= 1000) {
@@ -132,6 +179,7 @@ class YamahaCastService : Service() {
         } catch (e: Exception) {
             if (running) status = "Casting stopped: " + (e.message ?: "Bluetooth connection lost")
         } finally {
+            diagnostic(status)
             running = false
             main.post { stopSelf() }
         }
@@ -146,6 +194,7 @@ class YamahaCastService : Service() {
         try { socket?.close() } catch (_: Exception) { }
         socket = null
         worker?.interrupt()
+        receiver?.interrupt()
         if (dedicated) DedicatedDisplay.stop()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

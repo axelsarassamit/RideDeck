@@ -24,6 +24,7 @@ class ProtocolTest {
         val bytes = byteArrayOf(99, 98) + NaviLiteCodec.build(6, 83, 1, payload)
         val frame = FrameReader(MemoryLink(bytes)).next()
         assertEquals(83, frame.serviceType); assertArrayEquals(payload, frame.payload)
+        assertEquals(6, frame.frameType); assertEquals(1, frame.payloadDataType)
     }
     @Test(expected = IllegalStateException::class) fun badChecksumRejected() {
         val bytes = NaviLiteCodec.build(6, 80, 0, byteArrayOf(1, 0))

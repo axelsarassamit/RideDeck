@@ -4,7 +4,7 @@ import app.pillion.protocol.NaviLiteCodec
 import app.pillion.protocol.Crc32Mpeg2
 
 /** A frame parsed off the wire. */
-data class NaviFrameView(val serviceType: Int, val payload: ByteArray)
+data class NaviFrameView(val serviceType: Int, val payload: ByteArray, val frameType: Int = 0, val payloadDataType: Int = 0)
 
 /**
  * Reads complete NaviLite frames from a [ByteChannel]. Single responsibility: framing/resync.
@@ -30,7 +30,8 @@ class FrameReader(private val channel: ByteChannel) {
         check(Crc32Mpeg2.compute(buf.copyOfRange(0, 12) + buf.copyOfRange(16, len)) == crc) {
             "Yamaha frame checksum failed"
         }
-        val view = NaviFrameView(NaviLiteCodec.serviceTypeAt(buf, 0), NaviLiteCodec.payloadAt(buf, 0))
+        val view = NaviFrameView(NaviLiteCodec.serviceTypeAt(buf, 0), NaviLiteCodec.payloadAt(buf, 0),
+            buf[5].toInt() and 255, buf[11].toInt() and 255)
         buf = buf.copyOfRange(len, buf.size)
         return view
     }
