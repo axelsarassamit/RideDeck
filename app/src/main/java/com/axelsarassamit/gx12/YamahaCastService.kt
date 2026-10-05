@@ -20,6 +20,7 @@ class YamahaCastService : Service() {
     companion object {
         @JvmField @Volatile var status = "Ready to connect to a compatible Yamaha navigation dash."
         @JvmField @Volatile var active = false
+        @JvmField @Volatile var sessionId = ""
         const val STOP = "ridebridge.STOP_CAST"
     }
     private val main = Handler(Looper.getMainLooper())
@@ -49,6 +50,7 @@ class YamahaCastService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == STOP) { stopSelf(); return START_NOT_STICKY }
         if (running) return START_NOT_STICKY
+        sessionId = intent?.getStringExtra("session") ?: "manual"
         val address = intent?.getStringExtra("device")
         dedicated = true
         if (address == null || !DedicatedDisplay.ready) {

@@ -56,6 +56,10 @@ public final class MainActivity extends android.app.Activity {
     private static final String GARMIN_STREETCROSS_PACKAGE = "com.garmin.android.apps.streetcross";
     private static final int REQUEST_BLUETOOTH = 12;
     private String castDeviceAddress;
+    private String autoMapSession;
+    private boolean autoMapPreparing;
+    private boolean activityResumed;
+    private boolean phoneMapPending;
     private TextView castStatus;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -105,6 +109,10 @@ public final class MainActivity extends android.app.Activity {
             refreshMediaSession();
             refreshWhatsAppPreview();
             if (castStatus != null) castStatus.setText(YamahaCastService.status);
+            if (autoMapSession != null && autoMapSession.equals(YamahaCastService.sessionId) && !YamahaCastService.active) {
+                autoMapSession = null;
+                handler.postDelayed(() -> { phoneMapPending = true; if (activityResumed) openPhoneMap(); }, 1500);
+            }
             handler.postDelayed(this, 2500);
         }
     };
@@ -113,12 +121,21 @@ public final class MainActivity extends android.app.Activity {
         super.onCreate(state);
         headsetMic = new HeadsetMicRoute(this);
         if (state != null) castDeviceAddress = state.getString("cast_device");
+        if (state != null) autoMapSession = state.getString("auto_map_session");
+        if (state != null) phoneMapPending = state.getBoolean("phone_map_pending", false);
         buildScreen();
         refreshDeviceStatus();
+        if (state == null && RidePreferences.automaticMap(this) && RidePreferences.prefs(this).getBoolean("map_startup", true)) {
+            handler.postDelayed(() -> {
+                if (activityResumed && !setupVisible && !YamahaCastService.active && autoMapSession == null) rideMapAction();
+            }, 1000);
+        }
     }
 
     @Override protected void onResume() {
         super.onResume();
+        activityResumed = true;
+        if (phoneMapPending) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
         refreshWhatsAppPreview();
@@ -128,6 +145,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onPause() {
+        activityResumed = false;
         if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
         handler.removeCallbacks(trackRefresh);
         SharedPreferences prefs = getPreferences(0);
@@ -180,7 +198,22 @@ public final class MainActivity extends android.app.Activity {
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
         page.addView(text("YOUR BIKE", 16, 0xfff4f6fa, true)); page.addView(bikes, new LinearLayout.LayoutParams(-1, dp(64)));
-        page.addView(text("Requires a Yamaha navigation dash compatible with Garmin StreetCross. Display size is detected from the connected CCU. Listed models are based on Pillion reports, not RideDeck hardware tests.", 14, 0xffaab4c0, false));
+        page.addView(text("Phone split-screen works without a bike display. Bike casting currently supports compatible Yamaha/StreetCross navigation dashboards only.", 14, 0xffaab4c0, false));
+        Button mapMode = button(RidePreferences.automaticMap(this) ? "MAP DISPLAY: AUTOMATIC" : "MAP DISPLAY: MANUAL");
+        mapMode.setOnClickListener(v -> new android.app.AlertDialog.Builder(this).setTitle("Map display mode")
+            .setSingleChoiceItems(new String[]{"Automatic: saved bike display, otherwise phone split-screen", "Manual: choose where the map appears"}, RidePreferences.automaticMap(this) ? 0 : 1,
+                (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_auto", which == 0).apply(); autoMapSession = null; dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
+        page.addView(mapMode, buttonParams());
+        CheckBox mapStartup = new CheckBox(this); mapStartup.setText("Open map automatically when RideDeck starts");
+        mapStartup.setTextColor(0xfff4f6fa);
+        mapStartup.setChecked(RidePreferences.prefs(this).getBoolean("map_startup", true));
+        mapStartup.setOnCheckedChangeListener((b, checked) -> RidePreferences.prefs(this).edit().putBoolean("map_startup", checked).apply());
+        if (RidePreferences.automaticMap(this)) page.addView(mapStartup);
+        Button manualMap = button(RidePreferences.manualPhoneMap(this) ? "MANUAL MAP: PHONE SPLIT-SCREEN" : "MANUAL MAP: BIKE DISPLAY");
+        manualMap.setOnClickListener(v -> new android.app.AlertDialog.Builder(this).setTitle("Manual map destination")
+            .setSingleChoiceItems(new String[]{"Phone split-screen (any bike)", "Compatible bike display"}, RidePreferences.manualPhoneMap(this) ? 0 : 1,
+                (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_manual_phone", which == 0).apply(); dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
+        if (!RidePreferences.automaticMap(this)) page.addView(manualMap, buttonParams());
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
         deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
@@ -299,6 +332,8 @@ public final class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
+        state.putString("auto_map_session", autoMapSession);
+        state.putBoolean("phone_map_pending", phoneMapPending);
         state.putString("cast_device", castDeviceAddress); super.onSaveInstanceState(state);
     }
 
@@ -388,6 +423,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void rideMapAction() {
+        if (!RidePreferences.automaticMap(this) && RidePreferences.manualPhoneMap(this)) { openPhoneMap(); return; }
         if (YamahaCastService.active) {
             if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
                 showRideMessage("The selected map is on the bike. Address entry currently supports Google Maps."); return;
@@ -406,7 +442,53 @@ public final class MainActivity extends android.app.Activity {
                 }).show();
             return;
         }
-        chooseDash();
+        if (RidePreferences.automaticMap(this)) startAutomaticMap();
+        else chooseDash();
+    }
+
+    private void startAutomaticMap() {
+        if (autoMapPreparing || autoMapSession != null) return;
+        String address = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        boolean permitted = Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        boolean displayBike = RidePreferences.prefs(this).getInt("bike_profile", 1) != RidePreferences.BIKE_NAMES.length - 1;
+        if (!MapDisplayPolicy.tryBike(permitted, permitted && adapter != null && adapter.isEnabled(), displayBike && !address.isEmpty(), DedicatedDisplay.savedPort(this) != 0)) {
+            openPhoneMap(); return;
+        }
+        autoMapPreparing = true;
+        showRideMessage("Trying saved bike display...");
+        worker.execute(() -> {
+            try {
+                if (!DedicatedDisplay.ready) DedicatedDisplay.reconnect(this);
+                runOnUiThread(() -> {
+                    autoMapPreparing = false;
+                    if (isFinishing() || isDestroyed()) return;
+                    if (!RidePreferences.automaticMap(this)) return;
+                    autoMapSession = java.util.UUID.randomUUID().toString();
+                    startForegroundService(new Intent(this, YamahaCastService.class).putExtra("device", address).putExtra("session", autoMapSession));
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> { autoMapPreparing = false; if (!isFinishing() && !isDestroyed() && RidePreferences.automaticMap(this)) openPhoneMap(); });
+            }
+        });
+    }
+
+    private void openPhoneMap() {
+        autoMapSession = null;
+        if (!activityResumed) { phoneMapPending = true; return; }
+        phoneMapPending = false;
+        if (YamahaCastService.active) {
+            stopService(new Intent(this, YamahaCastService.class));
+            handler.postDelayed(this::openPhoneMap, 1000);
+            return;
+        }
+        buildScreen();
+        if (Build.VERSION.SDK_INT < 32 && !isInMultiWindowMode()) {
+            new android.app.AlertDialog.Builder(this).setTitle("Phone split-screen")
+                .setMessage("On this Android version, open Recent apps and put RideDeck in split-screen, then tap Map. No bike display or debugging setup is needed.")
+                .setPositiveButton("OK", null).show(); return;
+        }
+        openMapsAdjacent();
     }
 
     private void startSavedDash(String address) {
@@ -1064,12 +1146,12 @@ public final class MainActivity extends android.app.Activity {
         if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
             Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
             if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
-            try { startAdjacent(launch); } catch (Exception e) { launchChosenApp(RidePreferences.selectedMap(this)); } return;
+            try { startAdjacent(launch); } catch (Exception e) { displayError("Could not open map in split-screen. Check that this map app supports split-screen."); } return;
         }
         Intent maps = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="));
         maps.setPackage("com.google.android.apps.maps");
         try { startAdjacent(maps); }
-        catch (Exception ignored) { openMaps(); }
+        catch (Exception ignored) { displayError("Could not open Google Maps in split-screen."); }
     }
 
     private void startAdjacent(Intent intent) {
