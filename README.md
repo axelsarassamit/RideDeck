@@ -144,3 +144,7 @@ Seen / next sits beside Read aloud on the ride card and full-screen reader. It r
 ## Compact cockpit (0.10.9)
 
 Narrow or short windows use a 72dp music strip, with track information beside 56dp transport buttons. Messages receive the remaining space. Setup > Your cockpit > Controls / map placement saves Automatic, Left or Right. Automatic puts controls on the left for left/centre mounts, right for right mounts. Android owns the separate map window placement; the guide explains manual split-screen arrangement, which cannot be forced by RideBridge.
+
+## Full screen and split screen (0.10.10)
+
+Compact music strip is used only when Android reports multi-window mode. Full-screen portrait uses separate music and message cards with balanced heights; full-screen landscape places the cards side by side.

@@ -383,8 +383,8 @@ public final class MainActivity extends android.app.Activity {
         deviceStatus = text("", 12, 0xffaab4c0, false);
         updateStatus = text("", 12, 0xffaab4c0, false);
         boolean portrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
-        boolean compact = getResources().getConfiguration().screenWidthDp < 580
-            || getResources().getConfiguration().screenHeightDp < 480;
+        boolean compact = isInMultiWindowMode();
+        boolean stacked = compact || portrait;
         boolean controlsRight = controlsOnRight();
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff0b1017); root.setPadding(dp(12), dp(8), dp(12), dp(8));
@@ -404,7 +404,7 @@ public final class MainActivity extends android.app.Activity {
 
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout controls = new LinearLayout(this); controls.setOrientation(compact ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        LinearLayout controls = new LinearLayout(this); controls.setOrientation(stacked ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         LinearLayout music = rideCard("NOW PLAYING");
         if (compact) {
             music.removeAllViews(); music.setOrientation(LinearLayout.HORIZONTAL);
@@ -432,8 +432,9 @@ public final class MainActivity extends android.app.Activity {
         transport.addView(nextButton, rideWeight(compact ? 56 : 72)); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(180), -2) : new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams musicParams = compact
             ? new LinearLayout.LayoutParams(-1, dp(72))
+            : portrait ? new LinearLayout.LayoutParams(-1, 0, 0.9f)
             : new LinearLayout.LayoutParams(0, -1, 0.8f);
-        if (compact) musicParams.bottomMargin = dp(8); else musicParams.rightMargin = dp(10);
+        if (stacked) musicParams.bottomMargin = dp(8); else musicParams.rightMargin = dp(10);
         controls.addView(music, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
@@ -454,9 +455,9 @@ public final class MainActivity extends android.app.Activity {
         seenNext.setOnClickListener(v -> acknowledgeMessage(displayedMessage()));
         messageActions.addView(seenNext, rideWeight(56));
         messages.addView(messageActions);
-        controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, 0, 1)
+        controls.addView(messages, stacked ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
-        if (!compact && controlsRight) {
+        if (!stacked && controlsRight) {
             controls.removeView(music); controls.addView(music);
             musicParams.rightMargin = 0; musicParams.leftMargin = dp(10); music.setLayoutParams(musicParams);
         }
