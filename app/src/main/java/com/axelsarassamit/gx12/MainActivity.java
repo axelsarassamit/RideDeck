@@ -443,8 +443,7 @@ public final class MainActivity extends android.app.Activity {
         messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout messageActions = new LinearLayout(this);
         Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
-        Button voice = rideAction("Choose app", false); voice.setOnClickListener(v -> chooseMessageSource());
-        messageActions.addView(listen, rideWeight(56)); messageActions.addView(voice, rideWeight(56));
+        messageActions.addView(listen, rideWeight(56));
         messages.addView(messageActions);
         controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
@@ -530,9 +529,7 @@ public final class MainActivity extends android.app.Activity {
         List<GX12NotificationListener.NotificationPreview> messages = GX12NotificationListener.selectedPreviews(this);
         if (messages.isEmpty()) return null;
         if (messages.get(0) != newestSeen) { newestSeen = messages.get(0); messageApp = null; }
-        if (messageApp == null) return messages.get(0);
-        for (GX12NotificationListener.NotificationPreview item : messages) if (item.packageName.equals(messageApp)) return item;
-        return null;
+        return messages.get(0);
     }
 
     private void chooseMessageSource() {
@@ -889,7 +886,7 @@ public final class MainActivity extends android.app.Activity {
         if (messageSource != null) messageSource.setText(preview == null
             ? (messageApp == null ? "LATEST MESSAGE" : RidePreferences.appName(this, messageApp).toUpperCase(java.util.Locale.ROOT))
             : preview.appName.toUpperCase(java.util.Locale.ROOT) + (preview.acknowledged ? " - SEEN" : ""));
-        String label = preview == null ? "No message notification available. Tap Choose app." : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
+        String label = preview == null ? "No message received yet." : preview.appName + " • " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text);
         if (messagePreview != null) messagePreview.setText(label);
         if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " - " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
