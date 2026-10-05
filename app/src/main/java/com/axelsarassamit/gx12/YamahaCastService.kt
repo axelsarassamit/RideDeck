@@ -108,6 +108,11 @@ class YamahaCastService : Service() {
                 override fun write(bytes: ByteArray) { synchronized(lock) { socket!!.outputStream.write(bytes) } }
                 override fun close() { socket?.close() }
             }
+            status = "Checking separate map display before connecting to bike..."
+            deadline = SystemClock.elapsedRealtime() + 30000
+            DedicatedDisplay.preflight(this)
+            diagnostic("Separate display check passed")
+            deadline = SystemClock.elapsedRealtime() + 20000
             link.open()
             val frames = FrameReader(link)
             val size = Handshake(link, frames).perform()

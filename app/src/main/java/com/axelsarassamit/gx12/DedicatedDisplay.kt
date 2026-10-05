@@ -58,12 +58,20 @@ object DedicatedDisplay {
         status = "Bike-only access prepared. Connection settings saved. Select your Yamaha to start."
     }
 
+    fun preflight(context: Context) {
+        val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
+        val output = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' app_process / app.pillion.server.DashServer PROBE 2>&1")
+        check(output.lineSequence().any { it.trim() == "RIDEDECK_DISPLAY_READY" }) {
+            "Separate display check failed: " + output.takeLast(3500).ifBlank { "No helper output. Reconnect Wireless debugging in Setup." }
+        }
+    }
+
     fun start(context: Context, width: Int, height: Int) {
         check(ready) { "Prepare the bike display in Setup first" }
         val session = token ?: error("No display session")
         val spec = BikeMapRenderSpec(width, height)
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
-        PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer ${spec.renderWidth} ${spec.renderHeight} ${spec.densityDpi} 45 $width $height $session ${RidePreferences.selectedMap(context)} >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
+        val launchOutput = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer ${spec.renderWidth} ${spec.renderHeight} ${spec.densityDpi} 45 $width $height $session ${RidePreferences.selectedMap(context)} >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
         val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
             ?: error("Install the selected navigation/rider app first")
         reading = true
@@ -78,7 +86,11 @@ object DedicatedDisplay {
                         catch (_: Exception) { candidate.close(); Thread.sleep(250) }
                     }
                 }
-                val link = connected ?: error("Display helper did not start. Check Setup.")
+                val link = connected ?: run {
+                    val log = runCatching { PillionAdb.getInstance(context).runShell("tail -c 3500 /data/local/tmp/ridebridge-dash.log 2>&1") }
+                        .getOrDefault("Could not read helper startup log. Reconnect debugging access.")
+                    error("Display helper startup failed. $launchOutput $log")
+                }
                 link.soTimeout = 30000
                 link.getOutputStream().apply { write("$session\nPROMOTE $component\n".toByteArray()); flush() }
                 val input = DataInputStream(link.getInputStream().buffered())

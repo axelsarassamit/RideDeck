@@ -109,6 +109,22 @@ object DashServer {
     @JvmStatic
     fun main(args: Array<String>) {
         if (Looper.myLooper() == null) Looper.prepareMainLooper()
+        if (args.firstOrNull() == "PROBE") {
+            try {
+                val reader = ImageReader.newInstance(960, 468, PixelFormat.RGBA_8888, 2)
+                try {
+                    val display = createTrustedVirtualDisplay(ShellContext(systemContext()), "ridedeck-check", 960, 468, 320, reader.surface)
+                    display.release()
+                } finally { reader.close() }
+                println("RIDEDECK_DISPLAY_READY")
+                System.exit(0)
+            } catch (t: Throwable) {
+                System.err.println("RideDeck display check failed: ${reason(t)}")
+                t.printStackTrace(System.err)
+                System.exit(1)
+            }
+            return
+        }
 
         virtualWidth = args.getOrNull(0)?.toIntOrNull() ?: 480
         virtualHeight = args.getOrNull(1)?.toIntOrNull() ?: 240
@@ -158,6 +174,8 @@ object DashServer {
             Log.i(TAG, "ready, serving frames on 127.0.0.1:$PORT")
         } catch (t: Throwable) {
             Log.e(TAG, "fatal", t)
+            System.err.println("RideDeck helper startup failed: ${reason(t)}")
+            t.printStackTrace(System.err)
             return
         }
         Looper.loop()
@@ -712,7 +730,15 @@ object DashServer {
         val dmClass = android.hardware.display.DisplayManager::class.java
         val ctor = dmClass.getDeclaredConstructor(Context::class.java).apply { isAccessible = true }
         val dm = ctor.newInstance(context)
-        return dm.createVirtualDisplay(name, width, height, dpi, surface, FLAGS)
+        return try {
+            dm.createVirtualDisplay(name, width, height, dpi, surface, FLAGS)
+        } catch (e: IllegalArgumentException) {
+            // OEMs may reject newer power/group flags. Keep a trusted, separate display.
+            System.err.println("Retrying trusted display without optional power flags: ${e.message}")
+            dm.createVirtualDisplay(name, width, height, dpi, surface,
+                FLAG_PUBLIC or FLAG_PRESENTATION or FLAG_OWN_CONTENT_ONLY or
+                    FLAG_SUPPORTS_TOUCH or FLAG_TRUSTED or FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS)
+        }
     }
 
     private fun exec(vararg command: String): Int {
