@@ -285,6 +285,10 @@ object DashServer {
     private fun promoteApp(component: String) {
         if (displayId < 0 || component.isEmpty()) return
         relocateApp(component, displayId)
+        if (taskAndDisplayForPackage(selectedPackage)?.second != displayId) {
+            exec("am", "force-stop", selectedPackage)
+            error("Phone refused bike-only map placement")
+        }
         lastComponent = component
         capturing = true
         startHeartbeat()          // keep the device interactive so the dash group renders
@@ -622,7 +626,9 @@ object DashServer {
         stopHeartbeat()
         // Phone power settings are never changed by RideBridge.
         latestJpeg = null
-        lastComponent?.let { relocateApp(it, 0) } // move the task back to the phone's own display
+        if (lastComponent != null) {
+            exec("am", "force-stop", selectedPackage) // End the dedicated navigation session; never reopen it on the phone.
+        }
         Log.i(TAG, "demoted to phone")
     }
 

@@ -35,16 +35,16 @@ object DedicatedDisplay {
         val pkg = RidePreferences.selectedMap(context)
         require(pkg in RidePreferences.MAP_PACKAGES) { "Unsupported display app" }
         val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 255) }
-        val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
-        // Fixed helper only, with a random local session token. No grants, appops, pkill or TCP mode changes.
-        adb.runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer 960 468 160 45 480 234 $session $pkg >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
         token = session; ready = true
-        status = "Bike-only display prepared. Start casting within 30 seconds. Repeat Connect after stopping or rebooting."
+        status = "Bike-only access prepared. Select your Yamaha to start. Repeat Connect after stopping or rebooting."
     }
 
-    fun start(context: Context) {
+    fun start(context: Context, width: Int, height: Int) {
         check(ready) { "Prepare the bike display in Setup first" }
         val session = token ?: error("No display session")
+        val spec = BikeMapRenderSpec(width, height)
+        val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
+        PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer ${spec.renderWidth} ${spec.renderHeight} ${spec.densityDpi} 45 $width $height $session ${RidePreferences.selectedMap(context)} >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
         val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
             ?: error("Install the selected navigation/rider app first")
         reading = true
@@ -68,7 +68,7 @@ object DedicatedDisplay {
                     check(size in 4..1048576) { "Invalid display image" }
                     val next = ByteArray(size); input.readFully(next)
                     jpeg = next; receivedAt = SystemClock.elapsedRealtime()
-                    status = "Map is on the bike display. Phone controls stay here."
+                    status = "Separate map frames received."
                 }
             } catch (e: Exception) {
                 if (reading) status = "Bike display stopped: ${e.message ?: "connection lost"}"

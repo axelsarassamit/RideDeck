@@ -35,7 +35,7 @@ prevent helper startup, task movement or sustained capture. It is experimental.
 
 Repeat Connect for each new session and after rebooting. An unused prepared
 helper expires after 30 seconds. Stop or a lost local connection exits the helper
-and restores the Maps task to the phone. No automatic helper restart is performed.
+and ends the dedicated Maps session. No automatic helper restart is performed.
 
 The helper uses privileged Android interfaces, whose availability varies across
 phone builds. We do not enable legacy TCP debugging, grant usage stats, change
@@ -48,13 +48,9 @@ Revoke access in Android > Wireless debugging > Paired devices > RideBridge.
 You can then turn Wireless debugging off yourself. The app's locally generated
 debugging identity remains in private storage until uninstall/data clear.
 
-## Ordinary sharing fallback
+## Bike-only requirement (0.11.1)
 
-Without a prepared bike-only display, Cast uses Android's ordinary screen-sharing
-prompt. Choose Google Maps only on versions that offer single-app sharing.
-This fallback needs the Maps window visible on the phone, perhaps in split-screen;
-it cannot promise a hidden map with music-only phone controls. Whole-screen mode
-also shares visible messages. Set destinations and permissions while parked.
+Phone mirroring is disabled. If the helper is not prepared, or Maps cannot move to the separate display, casting fails. Render size follows the bike handshake: 960x468 at 320 dpi for XMAX 480x234, or 960x480 for 480x240. Stop ends the dedicated navigation app session instead of reopening it on the phone. Wi-Fi-off survival and map readability are unverified until tested on the actual phone and bike for 15 minutes with mobile data and Bluetooth.
 
 ## Music and messaging
 

@@ -55,7 +55,6 @@ public final class MainActivity extends android.app.Activity {
     private static final String YAMAHA_Y_CONNECT_PACKAGE = "jp.co.yamahamotor.yamahamotorcycleconnect.sccu";
     private static final String GARMIN_STREETCROSS_PACKAGE = "com.garmin.android.apps.streetcross";
     private static final int REQUEST_BLUETOOTH = 12;
-    private static final int REQUEST_CAST = 23;
     private String castDeviceAddress;
     private TextView castStatus;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -231,6 +230,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void chooseDash() {
+        if (!DedicatedDisplay.ready && !YamahaCastService.active) { showDisplaySetup(); return; }
         if (YamahaCastService.active) { castStatus.setText("Already sharing. Stop before starting another session."); return; }
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BLUETOOTH);
@@ -254,12 +254,8 @@ public final class MainActivity extends android.app.Activity {
                         .putExtra("device", castDeviceAddress).putExtra("dedicated", true);
                     startForegroundService(dedicated); castDeviceAddress = null; buildScreen(); return;
                 }
-                new android.app.AlertDialog.Builder(this).setTitle("Share " + RidePreferences.mapName(this) + " with your bike")
-                    .setMessage("Test while parked. Close StreetCross or other dash casting apps. On the next Android screen, choose your selected navigation/rider app if single-app sharing is offered. Whole-screen sharing also shows messages and other visible content. Rotate the phone landscape for a larger map. Open the dash navigation view using its normal controls.")
-                    .setPositiveButton("Choose screen", (d, w) -> {
-                        android.media.projection.MediaProjectionManager manager = getSystemService(android.media.projection.MediaProjectionManager.class);
-                        startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CAST);
-                    }).setNegativeButton("Cancel", null).show();
+                castDeviceAddress = null;
+                displayError("Bike-only maps must be prepared first. Open Setup > Set up bike-only map. Phone mirroring is disabled.");
             }).setNegativeButton("Cancel", null).show();
     }
 
@@ -275,14 +271,6 @@ public final class MainActivity extends android.app.Activity {
             if (result == RESULT_OK && target != null && words != null && !words.isEmpty() && !words.get(0).trim().isEmpty()) confirmVoiceReply(target, words.get(0));
             return;
         }
-        if (request == REQUEST_CAST && result == RESULT_OK && data != null && castDeviceAddress != null) {
-            try {
-                Intent service = new Intent(this, YamahaCastService.class).putExtra("capture", data)
-                    .putExtra("result", result).putExtra("device", castDeviceAddress);
-                startForegroundService(service);
-                castStatus.setText("Starting screen sharing… Open Maps when ready.");
-            } catch (Exception e) { castStatus.setText("Could not start casting. Return to RideDeck and try again."); }
-        } else if (request == REQUEST_CAST) castStatus.setText("Sharing cancelled. Nothing is being cast.");
         castDeviceAddress = null;
     }
 
@@ -295,13 +283,13 @@ public final class MainActivity extends android.app.Activity {
             license = content.toString();
         } catch (Exception e) { license = "https://polyformproject.org/licenses/noncommercial/1.0.0/"; }
         new android.app.AlertDialog.Builder(this).setTitle("RideDeck - " + RidePreferences.bikeName(this))
-            .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, approve screen sharing, open Google Maps and use the dash navigation view. Compatible NaviLite CCUs use their detected display size. Model selection alone does not establish compatibility.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
+            .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, prepare bike-only maps and use the dash navigation view. Compatible NaviLite CCUs use their detected display size. Model selection alone does not establish compatibility.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
             .setPositiveButton("Close", null).show();
     }
 
     private void showDisplaySetup() {
         if (Build.VERSION.SDK_INT < 30) {
-            new android.app.AlertDialog.Builder(this).setMessage("Bike-only Maps requires Android 11 or newer. Ordinary screen sharing is available.")
+            new android.app.AlertDialog.Builder(this).setMessage("Bike-only Maps requires Android 11 or newer. Phone mirroring is disabled.")
                 .setPositiveButton("Close", null).show(); return;
         }
         new android.app.AlertDialog.Builder(this).setTitle("Bike display • " + RidePreferences.mapName(this))

@@ -164,3 +164,7 @@ Long-press Map closes the RideBridge pane. A normal tap does not close RideBridg
 ## RideDeck design (0.11.0)
 
 Renamed RideDeck with a road-shaped R icon. MotoFlow-inspired charcoal cockpit uses native vector controls. Lime, Ice blue, Amber and White accent themes are in Setup > Layout + app choices > Color theme. Application ID and signing key stay the same.
+
+## Bike-only map trial (0.11.1)
+
+Mirroring fallback is disabled. Helper starts after CCU size negotiation: 960x468 at 320 dpi for 480x234, or 960x480 at 320 dpi for 480x240. Maps must land on the separate display. Stop ends the dedicated Maps session rather than reopening Maps on the phone. Wi-Fi-off operation and readability need a parked physical test; unsupported phones fail without mirroring.
