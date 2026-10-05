@@ -185,6 +185,11 @@ public final class MainActivity extends android.app.Activity {
         page.addView(access, buttonParams());
         deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
         addCockpitCard(page, "CONNECTIONS", deviceStatus);
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            Button nearby = button("ALLOW NEARBY DEVICES");
+            nearby.setOnClickListener(v -> requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BLUETOOTH));
+            page.addView(nearby, buttonParams());
+        }
         Button bluetooth = button("BLUETOOTH SETTINGS"); bluetooth.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         page.addView(bluetooth, buttonParams());
         castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
@@ -1212,7 +1217,6 @@ public final class MainActivity extends android.app.Activity {
     private void refreshDeviceStatus() {
         if (deviceStatus == null) return;
         if (Build.VERSION.SDK_INT >= 31 && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BLUETOOTH);
             deviceStatus.setText("Allow nearby-device access to check whether GX12 is paired."); return;
         }
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
