@@ -172,3 +172,7 @@ Mirroring fallback is disabled. Helper starts after CCU size negotiation: 960x46
 ## Split-screen Setup gear (0.11.2)
 
 A 56dp Setup gear sits beside the compact Map/Camera/Voice dock. It opens the same Setup page inside the current split-screen pane; Done returns to the compact cockpit. Name and clock remain hidden. Full-screen Setup stays in the header.
+
+## Headset voice input (0.11.3)
+
+Replies wait for Bluetooth call-audio routing before launching Android dictation. Android 12+ selects an available Bluetooth communication device; older phones request SCO. Failure or disconnect reports an error and cancels the requested voice activity. Routing is released on return/destroy. Voice uses the hands-free assistant action with Voice Command fallback; generic Assist fallback is removed. External speech/assistant apps control their own capture and may override routing, so headset-only capture is not guaranteed until tested with the actual phone/provider. Calls must be enabled for the headset; music-only pairing does not supply microphone input.

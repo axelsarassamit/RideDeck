@@ -69,6 +69,9 @@ public final class MainActivity extends android.app.Activity {
     private Button previousButton;
     private Button nextButton;
     private android.widget.ImageView albumArt;
+    private boolean externalVoiceDeparted;
+    private HeadsetMicRoute headsetMic;
+    private Runnable pendingHeadsetVoice;
     private android.speech.tts.TextToSpeech speech;
     private boolean speechReady;
     private String messageApp;
@@ -108,6 +111,7 @@ public final class MainActivity extends android.app.Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        headsetMic = new HeadsetMicRoute(this);
         if (state != null) castDeviceAddress = state.getString("cast_device");
         buildScreen();
         refreshDeviceStatus();
@@ -115,6 +119,7 @@ public final class MainActivity extends android.app.Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
         refreshWhatsAppPreview();
         if (downloadedApk != null && canInstallPackages()) openInstaller(downloadedApk);
@@ -123,6 +128,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onPause() {
+        if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
         handler.removeCallbacks(trackRefresh);
         SharedPreferences prefs = getPreferences(0);
         if (prefs.getBoolean("ride_running", false) && rideClock != null) {
@@ -132,6 +138,8 @@ public final class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onDestroy() {
+        if (headsetMic != null) headsetMic.release();
+        pendingHeadsetVoice = null;
         if (speech != null) { speech.stop(); speech.shutdown(); }
         worker.shutdownNow();
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
@@ -265,7 +273,9 @@ public final class MainActivity extends android.app.Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == 83) { headsetMic.release(); return; }
         if (request == 82) {
+            headsetMic.release();
             GX12NotificationListener.NotificationPreview target = voiceReplyTarget; voiceReplyTarget = null;
             java.util.ArrayList<String> words = data == null ? null : data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
             if (result == RESULT_OK && target != null && words != null && !words.isEmpty() && !words.get(0).trim().isEmpty()) confirmVoiceReply(target, words.get(0));
@@ -632,8 +642,18 @@ public final class MainActivity extends android.app.Activity {
             new android.app.AlertDialog.Builder(this).setTitle("Reply in " + target.appName)
                 .setMessage("Voice messages are recorded in the original app. If this notification has no text reply action, reply there too.")
                 .setNegativeButton("Cancel", null).setPositiveButton("Open conversation", (d, w) -> {
-                    try { if (target.open != null) target.open.send(); else launchChosenApp(target.packageName); }
-                    catch (android.app.PendingIntent.CanceledException e) { launchChosenApp(target.packageName); }
+                    withHeadsetMicrophone(() -> {
+                        try {
+                            if (target.open != null) target.open.send();
+                            else {
+                                Intent launch = getPackageManager().getLaunchIntentForPackage(target.packageName);
+                                if (launch == null) { headsetMic.release(); showRideMessage("Messaging app is not available."); return; }
+                                startActivity(launch);
+                            }
+                        } catch (android.app.PendingIntent.CanceledException | android.content.ActivityNotFoundException e) {
+                            headsetMic.release(); showRideMessage("Conversation is no longer available. Try a newer message.");
+                        }
+                    });
                 }).show(); return;
         }
         Intent speechIntent = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -641,8 +661,10 @@ public final class MainActivity extends android.app.Activity {
         speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Reply to " + target.title + " in " + target.appName);
         speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         voiceReplyTarget = target;
-        try { startActivityForResult(speechIntent, 82); }
-        catch (android.content.ActivityNotFoundException e) { voiceReplyTarget = null; android.widget.Toast.makeText(this, "No speech recognition app is available", android.widget.Toast.LENGTH_LONG).show(); }
+        withHeadsetMicrophone(() -> {
+            try { startActivityForResult(speechIntent, 82); }
+            catch (android.content.ActivityNotFoundException e) { headsetMic.release(); voiceReplyTarget = null; showRideMessage("No speech recognition app is available."); }
+        });
     }
 
     private void confirmVoiceReply(GX12NotificationListener.NotificationPreview target, String words) {
@@ -1099,15 +1121,31 @@ public final class MainActivity extends android.app.Activity {
         try { startAdjacent(launch); } catch (Exception ignored) { openWhatsApp(); }
     }
 
-    private void startGoogleVoice() {
-        Intent voice = new Intent("android.intent.action.VOICE_COMMAND");
-        voice.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try { startActivity(voice); }
-        catch (Exception first) {
-            Intent assist = new Intent("android.intent.action.ASSIST");
-            try { startActivity(assist); }
-            catch (Exception ignored) { showRideMessage("No voice assistant is configured. Set Google as the phone's digital assistant in Android Settings."); }
+    private void withHeadsetMicrophone(Runnable listen) {
+        java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
+        if (!permissions.isEmpty()) {
+            pendingHeadsetVoice = listen; requestPermissions(permissions.toArray(new String[0]), 84); return;
         }
+        android.widget.Toast.makeText(this, "Connecting headset microphone…", android.widget.Toast.LENGTH_SHORT).show();
+        headsetMic.start(listen, message -> {
+            finishActivity(82); finishActivity(83); voiceReplyTarget = null; showRideMessage(message);
+        });
+    }
+
+    private void startGoogleVoice() {
+        withHeadsetMicrophone(() -> {
+            Intent voice = new Intent(android.speech.RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE);
+            voice.putExtra(android.speech.RecognizerIntent.EXTRA_SECURE, getSystemService(android.app.KeyguardManager.class).isKeyguardLocked());
+            try { startActivityForResult(voice, 83); }
+            catch (android.content.ActivityNotFoundException first) {
+                try { startActivityForResult(new Intent("android.intent.action.VOICE_COMMAND"), 83); }
+                catch (android.content.ActivityNotFoundException ignored) {
+                    headsetMic.release(); showRideMessage("No hands-free assistant is configured. Set your digital assistant in Android Settings.");
+                }
+            }
+        });
     }
 
     private void setDestination() {
@@ -1186,6 +1224,13 @@ public final class MainActivity extends android.app.Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == 84) {
+            Runnable next = pendingHeadsetVoice; pendingHeadsetVoice = null;
+            boolean granted = results.length > 0;
+            for (int value : results) granted &= value == PackageManager.PERMISSION_GRANTED;
+            if (granted && next != null) withHeadsetMicrophone(next);
+            else { voiceReplyTarget = null; showRideMessage("Microphone and nearby-device permissions are needed for headset voice input."); }
+        }
         if (requestCode == REQUEST_BLUETOOTH) refreshDeviceStatus();
     }
 
