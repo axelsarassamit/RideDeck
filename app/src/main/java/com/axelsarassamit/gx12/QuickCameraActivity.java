@@ -39,7 +39,15 @@ public final class QuickCameraActivity extends ComponentActivity {
         });
         status = new TextView(this); status.setTextColor(0xfff4f6fa); status.setTextSize(18); status.setGravity(Gravity.CENTER);
         root.addView(status);
-        preview = new PreviewView(this); root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
+        preview = new PreviewView(this);
+        preview.setContentDescription("Tap camera preview to capture a photo or start or stop recording");
+        preview.setOnClickListener(v -> {
+            if (capture != null && capture.isEnabled()) {
+                preview.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+                shoot();
+            }
+        });
+        root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout controls = new LinearLayout(this);
         Button done = action("Done"); done.setOnClickListener(v -> finish()); controls.addView(done, weight());
         flip = action("Switch camera"); flip.setOnClickListener(v -> { front = !front; bind(); }); controls.addView(flip, weight());
@@ -87,7 +95,7 @@ public final class QuickCameraActivity extends ComponentActivity {
                 photo = new ImageCapture.Builder().setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build();
                 provider.bindToLifecycle(this, lens, view, photo);
             }
-            status.setText((front ? "Front" : "Rear") + (video ? " video" : " photo"));
+            status.setText((front ? "Front" : "Rear") + (video ? " video - tap picture to record" : " photo - tap picture to capture"));
             capture.setText(video ? "Record" : "Take photo"); setBusy(false);
         } catch (Exception e) { status.setText("Selected camera mode unavailable. Try the other camera or mode."); flip.setEnabled(true); mode.setEnabled(true); }
     }
@@ -110,10 +118,10 @@ public final class QuickCameraActivity extends ComponentActivity {
                 boolean audio = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
                 if (audio) pending = pending.withAudioEnabled();
                 recording = pending.start(ContextCompat.getMainExecutor(this), event -> {
-                    if (event instanceof VideoRecordEvent.Status) status.setText("Recording " + (((VideoRecordEvent.Status)event).getRecordingStats().getRecordedDurationNanos() / 1000000000L) + "s");
+                    if (event instanceof VideoRecordEvent.Status) status.setText("Recording " + (((VideoRecordEvent.Status)event).getRecordingStats().getRecordedDurationNanos() / 1000000000L) + "s - tap picture to stop");
                     if (event instanceof VideoRecordEvent.Finalize) {
                         recording = null; capture.setText("Record"); setBusy(false);
-                        status.setText(((VideoRecordEvent.Finalize)event).hasError() ? "Recording ended with an error. Check your gallery." : "Video saved to gallery");
+                        status.setText(((VideoRecordEvent.Finalize)event).hasError() ? "Recording ended with an error. Check your gallery." : "Video saved - tap picture to record again");
                     }
                 });
                 flip.setEnabled(false); mode.setEnabled(false); capture.setText("Stop recording"); status.setText(audio ? "Recording with sound" : "Recording without sound");
@@ -122,7 +130,7 @@ public final class QuickCameraActivity extends ComponentActivity {
             setBusy(true);
             ImageCapture.OutputFileOptions options = new ImageCapture.OutputFileOptions.Builder(getContentResolver(), MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values(false)).build();
             photo.takePicture(options, ContextCompat.getMainExecutor(this), new ImageCapture.OnImageSavedCallback() {
-                @Override public void onImageSaved(ImageCapture.OutputFileResults result) { status.setText("Photo saved to gallery"); setBusy(false); }
+                @Override public void onImageSaved(ImageCapture.OutputFileResults result) { status.setText("Photo saved - tap picture to take another"); setBusy(false); }
                 @Override public void onError(ImageCaptureException error) { status.setText("Photo could not be saved. Check free storage."); setBusy(false); }
             });
         }

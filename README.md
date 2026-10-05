@@ -132,3 +132,7 @@ Ride cockpit, message reader and camera hide system bars for more usable space. 
 ## Simple ride controls (0.10.4)
 
 The bottom ride dock now has only Map, Camera and Voice. Apps and Cast are removed from it. Setup is a smaller header control. Start/stop casting happens in parked Setup under Bike display. App choices remain in Setup; music and messages keep their own direct controls. The ride header no longer displays verbose casting setup text.
+
+## Tap camera preview (0.10.7)
+
+Tap the live camera picture to take a photo. In video mode, tap to start recording and tap again to stop. Existing capture/record buttons remain available. Preview taps are ignored while a photo or recording is being saved. On-screen hints explain the active tap action.
