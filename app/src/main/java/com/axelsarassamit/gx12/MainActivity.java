@@ -467,7 +467,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout dock = new LinearLayout(this);
         Button settings = rideAction("Setup", false);
         settings.setOnClickListener(v -> buildSetupScreen());
-        header.addView(settings, new LinearLayout.LayoutParams(dp(80), dp(compact ? 40 : 56)));
+        if (!compact) header.addView(settings, new LinearLayout.LayoutParams(dp(80), dp(56)));
         String[] labels = new String[]{"Map", "Camera", "Voice"};
         if (controlsRight) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
@@ -483,6 +483,12 @@ public final class MainActivity extends android.app.Activity {
                     case "Voice": startGoogleVoice(); break;
                 }
             }); dock.addView(action, rideWeight(compact ? 56 : 64));
+        }
+        if (compact) {
+            settings.setContentDescription("Setup - use while parked");
+            LinearLayout.LayoutParams gear = new LinearLayout.LayoutParams(dp(56), dp(56));
+            gear.setMargins(dp(3), dp(4), dp(3), 0);
+            dock.addView(settings, gear);
         }
         LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(-1, -2); dp.topMargin = dp(8);
         root.addView(dock, dp);

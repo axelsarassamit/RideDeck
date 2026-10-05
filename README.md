@@ -168,3 +168,7 @@ Renamed RideDeck with a road-shaped R icon. MotoFlow-inspired charcoal cockpit u
 ## Bike-only map trial (0.11.1)
 
 Mirroring fallback is disabled. Helper starts after CCU size negotiation: 960x468 at 320 dpi for 480x234, or 960x480 at 320 dpi for 480x240. Maps must land on the separate display. Stop ends the dedicated Maps session rather than reopening Maps on the phone. Wi-Fi-off operation and readability need a parked physical test; unsupported phones fail without mirroring.
+
+## Split-screen Setup gear (0.11.2)
+
+A 56dp Setup gear sits beside the compact Map/Camera/Voice dock. It opens the same Setup page inside the current split-screen pane; Done returns to the compact cockpit. Name and clock remain hidden. Full-screen Setup stays in the header.
