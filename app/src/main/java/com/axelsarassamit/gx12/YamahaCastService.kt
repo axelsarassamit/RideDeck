@@ -97,6 +97,8 @@ class YamahaCastService : Service() {
             val frames = FrameReader(link)
             val size = Handshake(link, frames).perform()
             check(size.width == 480 && size.height in listOf(234, 240)) { "Unsupported NaviLite display size" }
+            status = "Bike connected. Starting selected map on the bike display..."
+            deadline = SystemClock.elapsedRealtime() + 30000
             DedicatedDisplay.start(this, size.width, size.height)
             var sequence = 1
             var count = 0
@@ -105,8 +107,9 @@ class YamahaCastService : Service() {
                 deadline = SystemClock.elapsedRealtime() + 15000
                 val sourceJpeg = DedicatedDisplay.latestFrame()
                 if (sourceJpeg == null) {
+                    check(DedicatedDisplay.receiving()) { DedicatedDisplay.status }
                     if (waitingForFrameSince == 0L) waitingForFrameSince = SystemClock.elapsedRealtime()
-                    check(SystemClock.elapsedRealtime() - waitingForFrameSince < 10000) {
+                    check(SystemClock.elapsedRealtime() - waitingForFrameSince < 30000) {
                         "No map frames. Reconnect bike display in Setup. ${if (dedicated) DedicatedDisplay.status else ""}"
                     }
                     Thread.sleep(100); continue

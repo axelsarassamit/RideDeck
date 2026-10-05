@@ -238,7 +238,15 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void chooseDash() {
-        if (!DedicatedDisplay.ready && !YamahaCastService.active) { showDisplaySetup(); return; }
+        if (!DedicatedDisplay.ready && !YamahaCastService.active) {
+            if (DedicatedDisplay.savedPort(this) == 0) { showDisplaySetup(); return; }
+            castStatus.setText("Reconnecting saved bike display access...");
+            worker.execute(() -> {
+                try { DedicatedDisplay.reconnect(this); runOnUiThread(this::chooseDash); }
+                catch (Exception e) { runOnUiThread(() -> { castStatus.setText(safeMessage(e)); displayConnectDialog(); }); }
+            });
+            return;
+        }
         if (YamahaCastService.active) { castStatus.setText("Already sharing. Stop before starting another session."); return; }
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BLUETOOTH);
@@ -252,11 +260,17 @@ public final class MainActivity extends android.app.Activity {
             if (name != null && (name.toUpperCase(Locale.ROOT).contains("CCU") || name.toUpperCase(Locale.ROOT).contains("YAMAHA"))) devices.add(device);
         }
         if (devices.isEmpty()) { castStatus.setText("No paired Yamaha CCU found. Pair your dash using the bike's normal setup first. A GX12 headset is not the dash."); return; }
+        String savedDash = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
+        devices.sort((a, b) -> Boolean.compare(b.getAddress().equals(savedDash), a.getAddress().equals(savedDash)));
+        if (devices.get(0).getAddress().equals(savedDash)) {
+            startSavedDash(savedDash); return;
+        }
         String[] names = new String[devices.size()];
         for (int i = 0; i < devices.size(); i++) names[i] = devices.get(i).getName() + "\n" + devices.get(i).getAddress();
         new android.app.AlertDialog.Builder(this).setTitle("Choose your Yamaha dash")
             .setItems(names, (dialog, which) -> {
                 castDeviceAddress = devices.get(which).getAddress();
+                getSharedPreferences("bike_display", MODE_PRIVATE).edit().putString("dash_address", castDeviceAddress).apply();
                 if (DedicatedDisplay.ready) {
                     Intent dedicated = new Intent(this, YamahaCastService.class)
                         .putExtra("device", castDeviceAddress).putExtra("dedicated", true);
@@ -336,6 +350,8 @@ public final class MainActivity extends android.app.Activity {
 
     private void displayConnectDialog() {
         EditText port = numericField("Connection port");
+        int saved = DedicatedDisplay.savedPort(this);
+        if (saved > 0) port.setText(Integer.toString(saved));
         new android.app.AlertDialog.Builder(this).setTitle("Prepare bike display")
             .setMessage("Enter the port after the colon in IP address & port on the main Wireless debugging screen. This is different from the pairing port. Keep Wi-Fi and Wireless debugging on for this step.")
             .setView(port).setNegativeButton("Cancel", null).setPositiveButton("Connect", (dialog, which) -> {
@@ -355,27 +371,30 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void rideMapAction() {
-        if (isInMultiWindowMode()) {
-            new android.app.AlertDialog.Builder(this).setTitle("Return to RideDeck full screen")
-                .setMessage("Drag the split-screen divider toward the map to hide its pane and expand RideDeck. Android controls this action; RideDeck cannot close another app's pane directly.")
-                .setPositiveButton("OK", null).show();
-            return;
-        }
-        if (YamahaCastService.active && DedicatedDisplay.ready) {
+        if (YamahaCastService.active) {
             if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
-                displayError(RidePreferences.mapName(this) + " is selected for the bike display. Set its route/job in that app before casting. RideDeck cannot accept delivery jobs or set routes inside it."); return;
+                showRideMessage("The selected map is on the bike. Address entry currently supports Google Maps."); return;
             }
-            EditText destination = new EditText(this); destination.setHint("Address or place name");
-            new android.app.AlertDialog.Builder(this).setTitle("Destination on bike display").setView(destination)
-                .setNegativeButton("Cancel", null).setPositiveButton("Navigate", (dialog, which) -> {
-                    String query = destination.getText().toString().trim();
-                    if (query.isEmpty()) return;
+            EditText destination = new EditText(this);
+            destination.setHint("Address or place name");
+            new android.app.AlertDialog.Builder(this).setTitle("Navigate on bike")
+                .setView(destination).setNegativeButton("Cancel", null)
+                .setPositiveButton("Navigate", (dialog, which) -> {
+                    String address = destination.getText().toString().trim();
+                    if (address.isEmpty()) return;
                     worker.execute(() -> {
-                        try { DedicatedDisplay.route(query); }
+                        try { DedicatedDisplay.route(address); }
                         catch (Exception e) { runOnUiThread(() -> displayError(safeMessage(e))); }
                     });
                 }).show();
-        } else openMapsAdjacent();
+            return;
+        }
+        chooseDash();
+    }
+
+    private void startSavedDash(String address) {
+        startForegroundService(new Intent(this, YamahaCastService.class).putExtra("device", address).putExtra("dedicated", true));
+        buildScreen();
     }
 
     private void buildAppDock() { buildScreen(); }

@@ -90,6 +90,7 @@ object DashServer {
 
     @Volatile private var latestJpeg: ByteArray? = null
     @Volatile private var latestSeq = 0L
+    @Volatile private var failureMessage: String? = null
 
     // Battery: encode only while a foreground app is promoted (phone locked). Idle otherwise.
     @Volatile private var capturing = false
@@ -216,15 +217,19 @@ object DashServer {
             Thread { readCommands(client, commands) }.apply { isDaemon = true; start() }
             client.tcpNoDelay = true
             val out = DataOutputStream(BufferedOutputStream(client.getOutputStream()))
-            var sentSeq = -1L
             while (!client.isClosed) {
-                val seq = latestSeq
                 val frame = latestJpeg
-                if (frame != null && seq != sentSeq) {
+                val failure = failureMessage
+                if (failure != null) {
+                    val message = failure.toByteArray(Charsets.UTF_8)
+                    out.writeInt(-message.size); out.write(message); out.flush()
+                    break
+                }
+                if (frame != null) {
                     out.writeInt(frame.size)
                     out.write(frame)
                     out.flush()
-                    sentSeq = seq
+                    Thread.sleep(100) // Still maps must keep the frame channel alive too.
                 } else {
                     Thread.sleep(10)
                 }
@@ -249,6 +254,7 @@ object DashServer {
                         val uri = line.removePrefix("ROUTE ").trim()
                         if (selectedPackage == "com.google.android.apps.maps" && uri.startsWith("google.navigation:q=")) {
                             exec("am", "start", "--display", displayId.toString(), "-a", "android.intent.action.VIEW", "-d", uri, "-p", "com.google.android.apps.maps")
+                            lastComponent?.let { promoteApp(it) }
                         }
                     }
                     line == "DEMOTE" -> demoteApp()
@@ -256,8 +262,9 @@ object DashServer {
                     line == "QUIT" -> shutdown()
                 }
             }
-        } catch (_: Throwable) {
-            // fall through to close
+        } catch (e: Throwable) {
+            failureMessage = "Map launch failed: ${reason(e)}"
+            Thread.sleep(300) // Give the frame writer time to report the actual failure.
         } finally {
             // Closing wakes the writer loop (it checks isClosed) so a broken client's thread ends
             // instead of sleeping forever.

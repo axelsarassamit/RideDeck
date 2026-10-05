@@ -19,6 +19,20 @@ object DedicatedDisplay {
     @Volatile private var receivedAt = 0L
     @Volatile private var reading = false
 
+    @JvmStatic fun savedPort(context: Context): Int =
+        context.getSharedPreferences("bike_display", Context.MODE_PRIVATE).getInt("connection_port", 0)
+    fun receiving(): Boolean = reading
+
+    @JvmStatic fun reconnect(context: Context) {
+        val adb = PillionAdb.getInstance(context)
+        val port = savedPort(context)
+        val connected = adb.isConnected ||
+            (port in 1..65535 && runCatching { adb.connectDevice("127.0.0.1", port) }.getOrDefault(false)) ||
+            runCatching { adb.autoConnectDevice(context, 5000) }.getOrDefault(false)
+        check(connected) { "Could not reconnect. Enable Wireless debugging and enter its current connection port." }
+        prepareSession(context)
+    }
+
     @JvmStatic fun pair(context: Context, pairingPort: Int, code: String): Boolean {
         require(pairingPort in 1..65535 && code.matches(Regex("[0-9]{6}"))) { "Enter the pairing port and six-digit code" }
         PillionAdb.getInstance(context).pairDevice("127.0.0.1", pairingPort, code)
@@ -29,14 +43,19 @@ object DedicatedDisplay {
     @JvmStatic fun prepare(context: Context, port: Int) {
         require(port in 1..65535)
         if (reading) error("Stop casting first")
-        ready = false
         val adb = PillionAdb.getInstance(context)
         check(adb.connectDevice("127.0.0.1", port)) { "Connection failed. Keep Wireless debugging enabled and check its connection port." }
+        context.getSharedPreferences("bike_display", Context.MODE_PRIVATE).edit().putInt("connection_port", port).apply()
+        prepareSession(context)
+    }
+
+    private fun prepareSession(context: Context) {
+        check(!reading) { "Stop casting first" }
         val pkg = RidePreferences.selectedMap(context)
         require(pkg in RidePreferences.MAP_PACKAGES) { "Unsupported display app" }
         val session = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 255) }
         token = session; ready = true
-        status = "Bike-only access prepared. Select your Yamaha to start. Repeat Connect after stopping or rebooting."
+        status = "Bike-only access prepared. Connection settings saved. Select your Yamaha to start."
     }
 
     fun start(context: Context, width: Int, height: Int) {
@@ -60,11 +79,15 @@ object DedicatedDisplay {
                     }
                 }
                 val link = connected ?: error("Display helper did not start. Check Setup.")
-                link.soTimeout = 10000
+                link.soTimeout = 30000
                 link.getOutputStream().apply { write("$session\nPROMOTE $component\n".toByteArray()); flush() }
                 val input = DataInputStream(link.getInputStream().buffered())
                 while (reading) {
                     val size = input.readInt()
+                    if (size in -4096..-1) {
+                        val message = ByteArray(-size); input.readFully(message)
+                        error(String(message, Charsets.UTF_8))
+                    }
                     check(size in 4..1048576) { "Invalid display image" }
                     val next = ByteArray(size); input.readFully(next)
                     jpeg = next; receivedAt = SystemClock.elapsedRealtime()

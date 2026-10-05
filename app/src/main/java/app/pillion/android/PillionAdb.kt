@@ -55,7 +55,7 @@ class PillionAdb private constructor(
     }
 
     /** Connect using the host + port shown on the main Wireless debugging screen. */
-    fun connectDevice(host: String, port: Int): Boolean = connect(host, port)
+    fun connectDevice(host: String, port: Int): Boolean = isConnected || connect(host, port)
 
     /** Discover the adbd endpoint via mDNS and connect (used for reconnect after a reboot). */
     fun autoConnectDevice(context: Context, timeoutMs: Long = 10_000): Boolean =
