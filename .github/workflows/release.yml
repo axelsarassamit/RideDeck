@@ -53,6 +53,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             release-assets/gx12-companion-release.apk \
             release-assets/checksums.txt \
-            --title "RideBridge $GITHUB_REF_NAME" \
+            --title "RideDeck $GITHUB_REF_NAME" \
             --generate-notes \
             --latest

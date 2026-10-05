@@ -61,7 +61,7 @@ class YamahaCastService : Service() {
             val stop = PendingIntent.getService(this, 1, Intent(this, YamahaCastService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
             val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             val notice = Notification.Builder(this, "yamaha_cast")
-                .setSmallIcon(android.R.drawable.ic_menu_compass).setContentTitle(if (dedicated) "RideBridge map is on your bike" else "RideBridge is sharing your screen")
+                .setSmallIcon(android.R.drawable.ic_menu_compass).setContentTitle(if (dedicated) "RideDeck map is on your bike" else "RideDeck is sharing your screen")
                 .setContentText("Yamaha dash • tap Stop to end sharing")
                 .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
             if (Build.VERSION.SDK_INT >= 29) startForeground(22, notice,
@@ -73,7 +73,7 @@ class YamahaCastService : Service() {
             if (dedicated) {
                 DedicatedDisplay.start(this)
             } else {
-            captureThread = HandlerThread("RideBridgeCapture").also { it.start() }
+            captureThread = HandlerThread("RideDeckCapture").also { it.start() }
             val captureHandler = Handler(captureThread!!.looper)
             projection = getSystemService(MediaProjectionManager::class.java).getMediaProjection(Activity.RESULT_OK, token!!)
             projection!!.registerCallback(object : MediaProjection.Callback() {
@@ -103,7 +103,7 @@ class YamahaCastService : Service() {
                     finally { image.close() }
                 }
             }, captureHandler)
-            display = projection!!.createVirtualDisplay("RideBridge Yamaha", 480, 234,
+            display = projection!!.createVirtualDisplay("RideDeck Yamaha", 480, 234,
                 resources.configuration.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader!!.surface, null, captureHandler)
             }
@@ -116,7 +116,7 @@ class YamahaCastService : Service() {
                     main.post { stopSelf() }
                 }
             }, 1, 1, TimeUnit.SECONDS)
-            worker = Thread({ cast(address) }, "RideBridgeBluetooth").also { it.start() }
+            worker = Thread({ cast(address) }, "RideDeckBluetooth").also { it.start() }
         } catch (_: Exception) {
             status = "Could not start sharing. Check nearby-device access and try again."
             stopSelf()

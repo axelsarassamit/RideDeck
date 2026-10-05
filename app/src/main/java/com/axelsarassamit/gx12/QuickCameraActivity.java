@@ -100,9 +100,9 @@ public final class QuickCameraActivity extends ComponentActivity {
         } catch (Exception e) { status.setText("Selected camera mode unavailable. Try the other camera or mode."); flip.setEnabled(true); mode.setEnabled(true); }
     }
     private ContentValues values(boolean movie) {
-        ContentValues values = new ContentValues(); values.put(MediaStore.MediaColumns.DISPLAY_NAME, "RideBridge_" + System.currentTimeMillis());
+        ContentValues values = new ContentValues(); values.put(MediaStore.MediaColumns.DISPLAY_NAME, "RideDeck_" + System.currentTimeMillis());
         values.put(MediaStore.MediaColumns.MIME_TYPE, movie ? "video/mp4" : "image/jpeg");
-        if (Build.VERSION.SDK_INT >= 29) values.put(MediaStore.MediaColumns.RELATIVE_PATH, movie ? "Movies/RideBridge" : "Pictures/RideBridge");
+        if (Build.VERSION.SDK_INT >= 29) values.put(MediaStore.MediaColumns.RELATIVE_PATH, movie ? "Movies/RideDeck" : "Pictures/RideDeck");
         return values;
     }
     private void shoot() {

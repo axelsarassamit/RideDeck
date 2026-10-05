@@ -76,7 +76,7 @@ object DedicatedDisplay {
                 reading = false; ready = false; jpeg = null
                 runCatching { socket?.close() }
             }
-        }, "RideBridgeDisplay").apply { isDaemon = true; start() }
+        }, "RideDeckDisplay").apply { isDaemon = true; start() }
     }
 
     fun latestFrame(): ByteArray? = if (reading && SystemClock.elapsedRealtime() - receivedAt < 1500) jpeg else null

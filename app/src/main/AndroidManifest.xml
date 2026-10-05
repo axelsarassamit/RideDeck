@@ -50,8 +50,8 @@
 
     <application
         android:allowBackup="false"
-        android:label="RideBridge"
-        android:icon="@drawable/ridebridge_icon"
+        android:label="RideDeck"
+        android:icon="@drawable/ridedeck_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity android:name=".QuickCameraActivity" android:exported="false" android:screenOrientation="user" />

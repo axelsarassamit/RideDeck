@@ -160,3 +160,7 @@ Map in full screen requests the selected map alongside RideBridge through Androi
 ## Map gesture correction (0.10.13)
 
 Long-press Map closes the RideBridge pane. A normal tap does not close RideBridge. In split screen, tapping Map explains how to expand RideBridge by dragging the Android divider toward the map. Closing another app pane is not available through a normal Android app API.
+
+## RideDeck design (0.11.0)
+
+Renamed RideDeck with a road-shaped R icon. MotoFlow-inspired charcoal cockpit uses native vector controls. Lime, Ice blue, Amber and White accent themes are in Setup > Layout + app choices > Color theme. Application ID and signing key stay the same.

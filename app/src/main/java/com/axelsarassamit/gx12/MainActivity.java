@@ -153,7 +153,7 @@ public final class MainActivity extends android.app.Activity {
         albumArt = null; messagePreview = null; messageSource = null; dockMessage = null;
         trackStatus = null; previousButton = null; playPauseButton = null; nextButton = null;
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xff101419); root.setPadding(dp(16), dp(16), dp(16), dp(16));
+        root.setBackgroundColor(0xff151715); root.setPadding(dp(16), dp(16), dp(16), dp(16));
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         TextView heading = text("Setup - use while parked", 24, 0xfff4f6fa, true);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
@@ -173,7 +173,7 @@ public final class MainActivity extends android.app.Activity {
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
         page.addView(text("YOUR BIKE", 16, 0xfff4f6fa, true)); page.addView(bikes, new LinearLayout.LayoutParams(-1, dp(64)));
-        page.addView(text("Requires a Yamaha navigation dash compatible with Garmin StreetCross. Display size is detected from the connected CCU. Listed models are based on Pillion reports, not RideBridge hardware tests.", 14, 0xffaab4c0, false));
+        page.addView(text("Requires a Yamaha navigation dash compatible with Garmin StreetCross. Display size is detected from the connected CCU. Listed models are based on Pillion reports, not RideDeck hardware tests.", 14, 0xffaab4c0, false));
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
         deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
@@ -281,7 +281,7 @@ public final class MainActivity extends android.app.Activity {
                     .putExtra("result", result).putExtra("device", castDeviceAddress);
                 startForegroundService(service);
                 castStatus.setText("Starting screen sharing… Open Maps when ready.");
-            } catch (Exception e) { castStatus.setText("Could not start casting. Return to RideBridge and try again."); }
+            } catch (Exception e) { castStatus.setText("Could not start casting. Return to RideDeck and try again."); }
         } else if (request == REQUEST_CAST) castStatus.setText("Sharing cancelled. Nothing is being cast.");
         castDeviceAddress = null;
     }
@@ -294,7 +294,7 @@ public final class MainActivity extends android.app.Activity {
             while ((line = reader.readLine()) != null) content.append(line).append('\n');
             license = content.toString();
         } catch (Exception e) { license = "https://polyformproject.org/licenses/noncommercial/1.0.0/"; }
-        new android.app.AlertDialog.Builder(this).setTitle("RideBridge - " + RidePreferences.bikeName(this))
+        new android.app.AlertDialog.Builder(this).setTitle("RideDeck - " + RidePreferences.bikeName(this))
             .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, approve screen sharing, open Google Maps and use the dash navigation view. Compatible NaviLite CCUs use their detected display size. Model selection alone does not establish compatibility.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
             .setPositiveButton("Close", null).show();
     }
@@ -305,7 +305,7 @@ public final class MainActivity extends android.app.Activity {
                 .setPositiveButton("Close", null).show(); return;
         }
         new android.app.AlertDialog.Builder(this).setTitle("Bike display • " + RidePreferences.mapName(this))
-            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideBridge debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideBridge using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Start bike display in Setup and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideBridge in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
+            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideDeck debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideDeck using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Start bike display in Setup and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideDeck in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
             .setNeutralButton("Developer options", (dialog, which) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)))
             .setNegativeButton("Pair", (dialog, which) -> displayPairDialog())
             .setPositiveButton("Connect", (dialog, which) -> displayConnectDialog()).show();
@@ -358,14 +358,14 @@ public final class MainActivity extends android.app.Activity {
 
     private void rideMapAction() {
         if (isInMultiWindowMode()) {
-            new android.app.AlertDialog.Builder(this).setTitle("Return to RideBridge full screen")
-                .setMessage("Drag the split-screen divider toward the map to hide its pane and expand RideBridge. Android controls this action; RideBridge cannot close another app's pane directly.")
+            new android.app.AlertDialog.Builder(this).setTitle("Return to RideDeck full screen")
+                .setMessage("Drag the split-screen divider toward the map to hide its pane and expand RideDeck. Android controls this action; RideDeck cannot close another app's pane directly.")
                 .setPositiveButton("OK", null).show();
             return;
         }
         if (YamahaCastService.active && DedicatedDisplay.ready) {
             if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
-                displayError(RidePreferences.mapName(this) + " is selected for the bike display. Set its route/job in that app before casting. RideBridge cannot accept delivery jobs or set routes inside it."); return;
+                displayError(RidePreferences.mapName(this) + " is selected for the bike display. Set its route/job in that app before casting. RideDeck cannot accept delivery jobs or set routes inside it."); return;
             }
             EditText destination = new EditText(this); destination.setHint("Address or place name");
             new android.app.AlertDialog.Builder(this).setTitle("Destination on bike display").setView(destination)
@@ -393,14 +393,18 @@ public final class MainActivity extends android.app.Activity {
         boolean stacked = compact || portrait;
         boolean controlsRight = controlsOnRight();
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xff0b1017); root.setPadding(dp(12), dp(8), dp(12), dp(8));
+        root.setBackgroundColor(0xff151715); root.setPadding(dp(12), dp(8), dp(12), dp(8));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(bars.left + dp(12), bars.top + dp(compact ? 4 : 8), bars.right + dp(12), bars.bottom + dp(compact ? 4 : 8));
             return insets;
         });
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand = text("RideBridge", 20, 0xfff4f6fa, true);
+        android.widget.ImageView logo = new android.widget.ImageView(this);
+        logo.setImageResource(R.drawable.ridedeck_icon);
+        header.addView(logo, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        TextView brand = text("RideDeck", 20, 0xfff4f6fa, true);
+        brand.setPadding(dp(8), 0, 0, 0);
         header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
         castStatus = text(YamahaCastService.status, 11, 0xff92a9be, false);
         castStatus.setMaxLines(1); castStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -445,7 +449,7 @@ public final class MainActivity extends android.app.Activity {
         controls.addView(music, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
-        messageSource = text("LATEST MESSAGE", compact ? 13 : 20, 0xff83b5ff, true);
+        messageSource = text("LATEST MESSAGE", compact ? 13 : 20, RideTheme.accent(this), true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
@@ -456,7 +460,7 @@ public final class MainActivity extends android.app.Activity {
         messages.setOnClickListener(v -> showFullMessage());
         messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout messageActions = new LinearLayout(this);
-        Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
+        Button listen = rideAction("Read aloud", true); listen.setOnClickListener(v -> readMessageAloud());
         messageActions.addView(listen, rideWeight(56));
         Button seenNext = rideAction("Seen / next", false);
         seenNext.setOnClickListener(v -> acknowledgeMessage(displayedMessage()));
@@ -481,7 +485,7 @@ public final class MainActivity extends android.app.Activity {
         for (String label : labels) {
             Button action = rideAction(label, false);
             if (label.equals("Map")) {
-                action.setContentDescription(compact ? "Map split-screen controls; hold to close RideBridge" : "Open map beside RideBridge; hold to close RideBridge");
+                action.setContentDescription(compact ? "Map split-screen controls; hold to close RideDeck" : "Open map beside RideDeck; hold to close RideDeck");
                 action.setOnLongClickListener(v -> { finishAndRemoveTask(); return true; });
             }
             action.setOnClickListener(v -> {
@@ -503,7 +507,7 @@ public final class MainActivity extends android.app.Activity {
 
     private LinearLayout rideCard(String label) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(8), dp(14), dp(8)); card.setBackground(rideBackground(0xff18212d, 18));
+        card.setPadding(dp(14), dp(8), dp(14), dp(8)); card.setBackground(rideBackground(0xff202320, 12));
         TextView title = text(label, 11, 0xff92a9be, true); title.setLetterSpacing(0.12f);
         card.addView(title, new LinearLayout.LayoutParams(-1, dp(18))); return card;
     }
@@ -514,17 +518,26 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private Button rideAction(String label, boolean primary) {
-        Button action = button(label); action.setAllCaps(false); action.setTextSize(16);
+        boolean icon = java.util.Arrays.asList("Map", "Camera", "Voice", "Setup", "|◀", "▶", "▶|").contains(label);
+        Button action = icon ? new ControlIconButton(this, label, primary) : button(label); action.setAllCaps(false); action.setTextSize(16);
         action.setTypeface(Typeface.DEFAULT, Typeface.BOLD); action.setMinWidth(0); action.setMinimumWidth(0);
         action.setMinHeight(dp(56)); action.setMinimumHeight(dp(56));
         action.setPadding(dp(4), dp(4), dp(4), dp(4)); action.setMaxLines(1);
-        action.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}}, new int[]{0xff8191a1, primary ? 0xff0b1017 : 0xfff4f6fa}));
+        action.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}}, new int[]{0xff8191a1, primary ? 0xff151715 : 0xfff4f6fa}));
         action.setBackgroundTintList(null);
         android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
-        states.addState(new int[]{-android.R.attr.state_enabled}, rideBackground(0xff24303d, 14));
-        states.addState(new int[]{android.R.attr.state_pressed}, rideBackground(0xff526c87, 14));
-        states.addState(new int[]{}, rideBackground(primary ? 0xff90c8ff : 0xff263548, 14));
-        action.setBackground(states); return action;
+        states.addState(new int[]{-android.R.attr.state_enabled}, rideBackground(0xff252a25, 12));
+        states.addState(new int[]{android.R.attr.state_pressed}, rideBackground(0xff4b554b, 12));
+        states.addState(new int[]{}, rideBackground(primary ? RideTheme.accent(this) : 0xff2c322c, 12));
+        action.setBackground(states);
+        if (label.equals("Read aloud") || label.equals("Seen / next")) {
+            android.graphics.drawable.Drawable mark = getDrawable(label.equals("Read aloud") ? R.drawable.control_speaker : R.drawable.control_seen);
+            mark.setTint(primary ? 0xff101510 : RideTheme.accent(this));
+            mark.setBounds(0, 0, dp(22), dp(22));
+            action.setCompoundDrawables(mark, null, null, null); action.setCompoundDrawablePadding(dp(6));
+            action.setPadding(dp(10), dp(4), dp(10), dp(4));
+        }
+        return action;
     }
 
     private LinearLayout.LayoutParams rideWeight(int height) {
@@ -579,12 +592,12 @@ public final class MainActivity extends android.app.Activity {
         android.app.Dialog reader = new android.app.Dialog(this);
         reader.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(0xff101419);
+        page.setBackgroundColor(0xff151715);
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
             androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
         });
-        TextView source = text(item == null ? "Messages" : item.appName + " - " + item.title, 24, 0xff83b5ff, true);
+        TextView source = text(item == null ? "Messages" : item.appName + " - " + item.title, 24, RideTheme.accent(this), true);
         page.addView(source);
         TextView body = text(item == null ? "No message available yet. Enable music + message access in Setup and check notification previews in the selected messaging apps." : item.text, 26, 0xfff4f6fa, false);
         body.setPadding(0, dp(16), 0, dp(16));
@@ -599,7 +612,7 @@ public final class MainActivity extends android.app.Activity {
         });
         Button reply = rideAction("Reply", true); reply.setEnabled(item != null);
         reply.setOnClickListener(v -> { reader.dismiss(); replyByVoice(item); }); actions.addView(reply, rideWeight(72));
-        Button aloud = rideAction("Read aloud", false); aloud.setEnabled(item != null);
+        Button aloud = rideAction("Read aloud", true); aloud.setEnabled(item != null);
         aloud.setOnClickListener(v -> readMessageAloud(item)); actions.addView(aloud, rideWeight(72)); actions.addView(read, rideWeight(72));
         if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
             LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
@@ -613,7 +626,7 @@ public final class MainActivity extends android.app.Activity {
         body.setOnClickListener(v -> reader.dismiss());
         reader.setContentView(page); reader.show();
         if (reader.getWindow() != null) {
-            reader.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xff101419));
+            reader.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xff151715));
             reader.getWindow().setLayout(-1, -1);
             ScreenChrome.apply(reader.getWindow(), true);
             androidx.core.view.ViewCompat.requestApplyInsets(page);
@@ -670,13 +683,17 @@ public final class MainActivity extends android.app.Activity {
 
     private void showPersonalization() {
         new android.app.AlertDialog.Builder(this).setTitle("Your cockpit")
-            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement"}, (dialog, which) -> {
+            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                     .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                         RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildScreen();
                     }).setNegativeButton("Cancel", null).show();
                 else if (which == 1) chooseMessageApps(); else if (which == 2) chooseMapApp();
                 else if (which == 4) showLayoutChoice();
+                else if (which == 5) new android.app.AlertDialog.Builder(this).setTitle("Color theme")
+                    .setSingleChoiceItems(RideTheme.NAMES, RidePreferences.prefs(this).getInt("color_theme", 0), (d, selected) -> {
+                        RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); buildScreen();
+                    }).setNegativeButton("Close", null).show();
                 else new android.app.AlertDialog.Builder(this).setTitle("Reply method")
                     .setSingleChoiceItems(new String[]{"Voice to text - confirm before sending", "Voice message - open original app"}, RidePreferences.prefs(this).getInt("reply_mode", 0), (d, choice) -> {
                         RidePreferences.prefs(this).edit().putInt("reply_mode", choice).apply(); d.dismiss();
@@ -699,9 +716,9 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void showSplitPlacementGuide() {
-        String arrangement = controlsOnRight() ? "Maps on the left and RideBridge on the right" : "RideBridge on the left and Maps on the right";
+        String arrangement = controlsOnRight() ? "Maps on the left and RideDeck on the right" : "RideDeck on the left and Maps on the right";
         new android.app.AlertDialog.Builder(this).setTitle("Arrange split screen while parked")
-            .setMessage("Preferred landscape layout: " + arrangement + ".\n\nAndroid controls the positions of separate apps. Open split screen from Recent apps, then use your phone's swap control or choose the first app to arrange them. Rotate to landscape for side-by-side panels. In portrait Android normally stacks the apps.\n\nThis preference arranges RideBridge's own controls; it cannot move another app's window automatically.")
+            .setMessage("Preferred landscape layout: " + arrangement + ".\n\nAndroid controls the positions of separate apps. Open split screen from Recent apps, then use your phone's swap control or choose the first app to arrange them. Rotate to landscape for side-by-side panels. In portrait Android normally stacks the apps.\n\nThis preference arranges RideDeck's own controls; it cannot move another app's window automatically.")
             .setPositiveButton("Open map", (dialog, which) -> openMapsAdjacent())
             .setNegativeButton("Done", null).show();
     }
@@ -792,7 +809,7 @@ public final class MainActivity extends android.app.Activity {
     private void addCockpitCard(LinearLayout parent, String heading, View content) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14), dp(12), dp(14), dp(12));
         card.setBackgroundColor(0xff1a212a);
-        TextView label = text(heading, 11, 0xff83b5ff, true); card.addView(label);
+        TextView label = text(heading, 11, RideTheme.accent(this), true); card.addView(label);
         LinearLayout.LayoutParams cp = params(); cp.topMargin = dp(5); card.addView(content, cp);
         LinearLayout.LayoutParams p = params(); p.topMargin = dp(10); parent.addView(card, p);
     }
@@ -847,10 +864,12 @@ public final class MainActivity extends android.app.Activity {
             long actions = state == null ? 0 : state.getActions();
             updateMediaButtons(true, (actions & PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0,
                     (actions & PlaybackState.ACTION_SKIP_TO_NEXT) != 0);
-            playPauseButton.setText(cockpitVisible ? (playing ? "Ⅱ" : "▶") : (playing ? "Pause" : "Play"));
+            if (playPauseButton instanceof ControlIconButton) ((ControlIconButton) playPauseButton).setControl(playing ? "Ⅱ" : "▶");
+            else playPauseButton.setText(playing ? "Pause" : "Play");
+            playPauseButton.setContentDescription(playing ? "Pause music" : "Play music");
         } catch (SecurityException | IllegalStateException error) {
             mediaController = null;
-            trackStatus.setText("Android has not granted access yet. Enable RideBridge under Notification access.");
+            trackStatus.setText("Android has not granted access yet. Enable RideDeck under Notification access.");
             updateMediaButtons(false, false, false);
         }
     }
@@ -908,7 +927,7 @@ public final class MainActivity extends android.app.Activity {
         try { startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
         catch (android.content.ActivityNotFoundException | SecurityException e) {
             new android.app.AlertDialog.Builder(this).setTitle("Open notification access manually")
-                .setMessage("In Android Settings, search for Notification access and enable RideBridge. If access is restricted, open RideBridge App info and choose Allow restricted settings from its menu when available.")
+                .setMessage("In Android Settings, search for Notification access and enable RideDeck. If access is restricted, open RideDeck App info and choose Allow restricted settings from its menu when available.")
                 .setNegativeButton("Close", null).setPositiveButton("Open Settings", (d, w) -> {
                     try { startActivity(new Intent(Settings.ACTION_SETTINGS)); }
                     catch (android.content.ActivityNotFoundException ignored) { android.widget.Toast.makeText(this, "Open Android Settings manually", android.widget.Toast.LENGTH_LONG).show(); }
@@ -1203,7 +1222,7 @@ public final class MainActivity extends android.app.Activity {
 
     private JSONObject getJson(String address) throws Exception { HttpURLConnection c = openConnection(address); c.setRequestProperty("Accept", "application/vnd.github+json"); try (InputStream in = c.getInputStream()) { return new JSONObject(readText(in)); } finally { c.disconnect(); } }
     private String downloadText(String address) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream()) { return readText(in); } finally { c.disconnect(); } }
-    private HttpURLConnection openConnection(String address) throws Exception { HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection(); c.setConnectTimeout(15000); c.setReadTimeout(30000); c.setInstanceFollowRedirects(true); c.setRequestProperty("User-Agent", "RideBridge-Android"); return c; }
+    private HttpURLConnection openConnection(String address) throws Exception { HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection(); c.setConnectTimeout(15000); c.setReadTimeout(30000); c.setInstanceFollowRedirects(true); c.setRequestProperty("User-Agent", "RideDeck-Android"); return c; }
     private String readText(InputStream input) throws Exception { StringBuilder b = new StringBuilder(); try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8))) { String line; while ((line = reader.readLine()) != null) b.append(line).append('\n'); } return b.toString(); }
     private String findHash(String checksums, String filename) { for (String line : checksums.split("\\r?\\n")) { String[] f = line.trim().split("\\s+"); if (f.length >= 2 && f[1].replaceFirst("^\\*", "").equals(filename)) return f[0]; } throw new IllegalStateException("No SHA-256 checksum was published for the APK."); }
     private void downloadFile(String address, File target) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) { byte[] buffer = new byte[8192]; int count; while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count); } finally { c.disconnect(); } }
@@ -1214,7 +1233,7 @@ public final class MainActivity extends android.app.Activity {
     private String safeMessage(Exception error) { String m = error.getMessage(); return m == null || m.isBlank() ? error.getClass().getSimpleName() : m; }
     private String appVersion() { try { PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0); return info.versionName + " (" + info.versionCode + ")"; } catch (Exception ignored) { return "unknown"; } }
     private TextView text(String value, int size, int color, boolean bold) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD); return v; }
-    private Button button(String label) { Button b = new Button(this); b.setText(label); return b; }
+    private Button button(String label) { Button b = new Button(this); b.setText(label); b.setTextColor(0xfff4f6fa); b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff2c322c)); return b; }
     private LinearLayout.LayoutParams params() { return new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); }
     private LinearLayout.LayoutParams buttonParams() { LinearLayout.LayoutParams p = params(); p.topMargin = dp(8); return p; }
     private LinearLayout.LayoutParams weightedButtonParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); p.setMargins(dp(2), dp(4), dp(2), dp(4)); return p; }
