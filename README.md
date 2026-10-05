@@ -148,3 +148,7 @@ Narrow or short windows use a 72dp music strip, with track information beside 56
 ## Full screen and split screen (0.10.10)
 
 Compact music strip is used only when Android reports multi-window mode. Full-screen portrait uses separate music and message cards with balanced heights; full-screen landscape places the cards side by side.
+
+## Split-screen header (0.10.11)
+
+Split screen hides the RideBridge name, clock and Setup header to give messages more room. Return to full screen to access Setup. Full-screen header is unchanged.

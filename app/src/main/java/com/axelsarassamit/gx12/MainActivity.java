@@ -400,7 +400,8 @@ public final class MainActivity extends android.app.Activity {
         castStatus.setMaxLines(1); castStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
         ((android.widget.TextClock) clock).setFormat12Hour("h:mm"); clock.setTextColor(0xffaab4c0); clock.setTextSize(17);
-        header.addView(clock); root.addView(header, new LinearLayout.LayoutParams(-1, dp(compact ? 40 : 56)));
+        header.addView(clock);
+        if (!compact) root.addView(header, new LinearLayout.LayoutParams(-1, dp(56)));
 
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
