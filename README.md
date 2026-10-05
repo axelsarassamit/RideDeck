@@ -156,3 +156,7 @@ Split screen hides the RideBridge name, clock and Setup header to give messages 
 ## Map split-screen toggle (0.10.12)
 
 Map in full screen requests the selected map alongside RideBridge through Android launch-adjacent. If the bike-only map display is active it keeps the existing bike destination action. Map in split screen finishes and removes the RideBridge activity task, leaving the map app available. Android controls expansion and split-screen support. Reopen RideBridge to return to controls; background bike casting is not stopped by this action.
+
+## Map gesture correction (0.10.13)
+
+Long-press Map closes the RideBridge pane. A normal tap does not close RideBridge. In split screen, tapping Map explains how to expand RideBridge by dragging the Android divider toward the map. Closing another app pane is not available through a normal Android app API.

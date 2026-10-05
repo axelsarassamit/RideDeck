@@ -358,8 +358,9 @@ public final class MainActivity extends android.app.Activity {
 
     private void rideMapAction() {
         if (isInMultiWindowMode()) {
-            // End this companion task; Android manages the remaining map window.
-            finishAndRemoveTask();
+            new android.app.AlertDialog.Builder(this).setTitle("Return to RideBridge full screen")
+                .setMessage("Drag the split-screen divider toward the map to hide its pane and expand RideBridge. Android controls this action; RideBridge cannot close another app's pane directly.")
+                .setPositiveButton("OK", null).show();
             return;
         }
         if (YamahaCastService.active && DedicatedDisplay.ready) {
@@ -479,7 +480,10 @@ public final class MainActivity extends android.app.Activity {
         if (controlsRight) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
-            if (label.equals("Map")) action.setContentDescription(compact ? "Close RideBridge split-screen pane" : "Open map beside RideBridge");
+            if (label.equals("Map")) {
+                action.setContentDescription(compact ? "Map split-screen controls; hold to close RideBridge" : "Open map beside RideBridge; hold to close RideBridge");
+                action.setOnLongClickListener(v -> { finishAndRemoveTask(); return true; });
+            }
             action.setOnClickListener(v -> {
                 switch (label) {
                     case "Map": rideMapAction(); break;
