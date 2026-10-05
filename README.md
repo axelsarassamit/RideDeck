@@ -140,3 +140,7 @@ Tap the live camera picture to take a photo. In video mode, tap to start recordi
 ## Seen / next messages (0.10.8)
 
 Seen / next sits beside Read aloud on the ride card and full-screen reader. It removes the displayed preview from RideBridge and advances to the next pending notification, newest first across selected apps. A source Mark as read action is used when available; otherwise acknowledgement is local only. Repeated refreshes of unchanged seen content do not restore it. Distinct notification keys are queued, while updates to the same notification replace that preview. This is not a full chat history. Up to 100 pending previews and 500 seen fingerprints stay in memory only and reset when the process/listener ends. Phone testing remains outstanding.
+
+## Compact cockpit (0.10.9)
+
+Narrow or short windows use a 72dp music strip, with track information beside 56dp transport buttons. Messages receive the remaining space. Setup > Your cockpit > Controls / map placement saves Automatic, Left or Right. Automatic puts controls on the left for left/centre mounts, right for right mounts. Android owns the separate map window placement; the guide explains manual split-screen arrangement, which cannot be forced by RideBridge.

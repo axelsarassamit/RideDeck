@@ -383,12 +383,14 @@ public final class MainActivity extends android.app.Activity {
         deviceStatus = text("", 12, 0xffaab4c0, false);
         updateStatus = text("", 12, 0xffaab4c0, false);
         boolean portrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
-        boolean compact = getResources().getConfiguration().screenWidthDp < 580;
+        boolean compact = getResources().getConfiguration().screenWidthDp < 580
+            || getResources().getConfiguration().screenHeightDp < 480;
+        boolean controlsRight = controlsOnRight();
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff0b1017); root.setPadding(dp(12), dp(8), dp(12), dp(8));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
-            view.setPadding(bars.left + dp(12), bars.top + dp(8), bars.right + dp(12), bars.bottom + dp(8));
+            view.setPadding(bars.left + dp(12), bars.top + dp(compact ? 4 : 8), bars.right + dp(12), bars.bottom + dp(compact ? 4 : 8));
             return insets;
         });
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
@@ -398,12 +400,16 @@ public final class MainActivity extends android.app.Activity {
         castStatus.setMaxLines(1); castStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
         ((android.widget.TextClock) clock).setFormat12Hour("h:mm"); clock.setTextColor(0xffaab4c0); clock.setTextSize(17);
-        header.addView(clock); root.addView(header, new LinearLayout.LayoutParams(-1, dp(56)));
+        header.addView(clock); root.addView(header, new LinearLayout.LayoutParams(-1, dp(compact ? 40 : 56)));
 
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout controls = new LinearLayout(this); controls.setOrientation(compact ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         LinearLayout music = rideCard("NOW PLAYING");
+        if (compact) {
+            music.removeAllViews(); music.setOrientation(LinearLayout.HORIZONTAL);
+            music.setGravity(Gravity.CENTER_VERTICAL); music.setPadding(dp(8), dp(4), dp(8), dp(4));
+        }
         LinearLayout details = new LinearLayout(this); details.setGravity(Gravity.CENTER_VERTICAL);
         if (!compact) {
             albumArt = new android.widget.ImageView(this); albumArt.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
@@ -412,9 +418,9 @@ public final class MainActivity extends android.app.Activity {
             details.addView(albumArt, art);
         }
         trackStatus = text("Open Spotify to start listening", compact ? 16 : 19, 0xfff4f6fa, true);
-        trackStatus.setMaxLines(3); trackStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        trackStatus.setMaxLines(compact ? 2 : 3); trackStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         details.addView(trackStatus, new LinearLayout.LayoutParams(0, -1, 1));
-        music.addView(details, new LinearLayout.LayoutParams(-1, 0, 1));
+        music.addView(details, compact ? new LinearLayout.LayoutParams(0, -1, 1) : new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout transport = new LinearLayout(this);
         previousButton = rideAction("|◀", false); previousButton.setContentDescription("Previous track");
         previousButton.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS));
@@ -423,10 +429,10 @@ public final class MainActivity extends android.app.Activity {
         nextButton = rideAction("▶|", false); nextButton.setContentDescription("Next track");
         nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
         transport.addView(previousButton, rideWeight(compact ? 56 : 72)); transport.addView(playPauseButton, rideWeight(compact ? 56 : 72));
-        transport.addView(nextButton, rideWeight(compact ? 56 : 72)); music.addView(transport);
+        transport.addView(nextButton, rideWeight(compact ? 56 : 72)); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(180), -2) : new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams musicParams = compact
-            ? new LinearLayout.LayoutParams(-1, 0, 1)
-            : new LinearLayout.LayoutParams(0, -1, RidePreferences.prefs(this).getInt("mount", 1) == 1 ? 1 : 1.3f);
+            ? new LinearLayout.LayoutParams(-1, dp(72))
+            : new LinearLayout.LayoutParams(0, -1, 0.8f);
         if (compact) musicParams.bottomMargin = dp(8); else musicParams.rightMargin = dp(10);
         controls.addView(music, musicParams);
 
@@ -435,7 +441,7 @@ public final class MainActivity extends android.app.Activity {
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
-        messagePreview.setTextSize(portrait ? 20 : 18);
+        messagePreview.setTextSize(compact ? 16 : portrait ? 20 : 18);
         messagePreview.setMaxLines(portrait ? 7 : 4); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messagePreview.setOnClickListener(v -> showFullMessage());
         messageSource.setOnClickListener(v -> showFullMessage());
@@ -450,7 +456,7 @@ public final class MainActivity extends android.app.Activity {
         messages.addView(messageActions);
         controls.addView(messages, compact ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
-        if (!compact && RidePreferences.prefs(this).getInt("mount", 1) == 2) {
+        if (!compact && controlsRight) {
             controls.removeView(music); controls.addView(music);
             musicParams.rightMargin = 0; musicParams.leftMargin = dp(10); music.setLayoutParams(musicParams);
         }
@@ -461,9 +467,9 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout dock = new LinearLayout(this);
         Button settings = rideAction("Setup", false);
         settings.setOnClickListener(v -> buildSetupScreen());
-        header.addView(settings, new LinearLayout.LayoutParams(dp(88), dp(56)));
+        header.addView(settings, new LinearLayout.LayoutParams(dp(80), dp(compact ? 40 : 56)));
         String[] labels = new String[]{"Map", "Camera", "Voice"};
-        if (RidePreferences.prefs(this).getInt("mount", 1) == 2) java.util.Collections.reverse(java.util.Arrays.asList(labels));
+        if (controlsRight) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
             action.setOnClickListener(v -> {
@@ -652,17 +658,40 @@ public final class MainActivity extends android.app.Activity {
 
     private void showPersonalization() {
         new android.app.AlertDialog.Builder(this).setTitle("Your cockpit")
-            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method"}, (dialog, which) -> {
+            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
-                    .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: balanced panels", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
+                    .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                         RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildScreen();
                     }).setNegativeButton("Cancel", null).show();
                 else if (which == 1) chooseMessageApps(); else if (which == 2) chooseMapApp();
+                else if (which == 4) showLayoutChoice();
                 else new android.app.AlertDialog.Builder(this).setTitle("Reply method")
                     .setSingleChoiceItems(new String[]{"Voice to text - confirm before sending", "Voice message - open original app"}, RidePreferences.prefs(this).getInt("reply_mode", 0), (d, choice) -> {
                         RidePreferences.prefs(this).edit().putInt("reply_mode", choice).apply(); d.dismiss();
                     }).setNegativeButton("Close", null).show();
             }).setNegativeButton("Close", null).show();
+    }
+
+    private boolean controlsOnRight() {
+        int layout = RidePreferences.prefs(this).getInt("controls_side", 0);
+        return layout == 2 || (layout == 0 && RidePreferences.prefs(this).getInt("mount", 1) == 2);
+    }
+
+    private void showLayoutChoice() {
+        new android.app.AlertDialog.Builder(this).setTitle("Controls / map placement")
+            .setSingleChoiceItems(new String[]{"Automatic: left for left/centre mount", "Controls left / map right", "Controls right / map left"},
+                RidePreferences.prefs(this).getInt("controls_side", 0), (dialog, choice) -> {
+                    RidePreferences.prefs(this).edit().putInt("controls_side", choice).apply();
+                    dialog.dismiss(); buildScreen(); showSplitPlacementGuide();
+                }).setNegativeButton("Close", null).show();
+    }
+
+    private void showSplitPlacementGuide() {
+        String arrangement = controlsOnRight() ? "Maps on the left and RideBridge on the right" : "RideBridge on the left and Maps on the right";
+        new android.app.AlertDialog.Builder(this).setTitle("Arrange split screen while parked")
+            .setMessage("Preferred landscape layout: " + arrangement + ".\n\nAndroid controls the positions of separate apps. Open split screen from Recent apps, then use your phone's swap control or choose the first app to arrange them. Rotate to landscape for side-by-side panels. In portrait Android normally stacks the apps.\n\nThis preference arranges RideBridge's own controls; it cannot move another app's window automatically.")
+            .setPositiveButton("Open map", (dialog, which) -> openMapsAdjacent())
+            .setNegativeButton("Done", null).show();
     }
 
     private void chooseMessageApps() {
