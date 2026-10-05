@@ -357,6 +357,11 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void rideMapAction() {
+        if (isInMultiWindowMode()) {
+            // End this companion task; Android manages the remaining map window.
+            finishAndRemoveTask();
+            return;
+        }
         if (YamahaCastService.active && DedicatedDisplay.ready) {
             if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
                 displayError(RidePreferences.mapName(this) + " is selected for the bike display. Set its route/job in that app before casting. RideBridge cannot accept delivery jobs or set routes inside it."); return;
@@ -474,6 +479,7 @@ public final class MainActivity extends android.app.Activity {
         if (controlsRight) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
+            if (label.equals("Map")) action.setContentDescription(compact ? "Close RideBridge split-screen pane" : "Open map beside RideBridge");
             action.setOnClickListener(v -> {
                 switch (label) {
                     case "Map": rideMapAction(); break;

@@ -152,3 +152,7 @@ Compact music strip is used only when Android reports multi-window mode. Full-sc
 ## Split-screen header (0.10.11)
 
 Split screen hides the RideBridge name, clock and Setup header to give messages more room. Return to full screen to access Setup. Full-screen header is unchanged.
+
+## Map split-screen toggle (0.10.12)
+
+Map in full screen requests the selected map alongside RideBridge through Android launch-adjacent. If the bike-only map display is active it keeps the existing bike destination action. Map in split screen finishes and removes the RideBridge activity task, leaving the map app available. Android controls expansion and split-screen support. Reopen RideBridge to return to controls; background bike casting is not stopped by this action.
