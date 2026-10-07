@@ -41,7 +41,8 @@ public final class GX12NotificationListener extends NotificationListenerService 
     }
 
     @Override public void onListenerConnected() {
-        super.onListenerConnected(); connected = this; refreshActive();
+        super.onListenerConnected(); connected = this;
+        android.util.Log.i("RideDeckListener", "Notification listener connected"); refreshActive();
     }
     public void refreshActive() {
         try {
@@ -65,7 +66,25 @@ public final class GX12NotificationListener extends NotificationListenerService 
         long now = android.os.SystemClock.elapsedRealtime();
         if (!granted || now - lastRebind < 30000) return;
         lastRebind = now;
-        try { requestRebind(component); } catch (SecurityException | IllegalStateException ignored) { }
+        try {
+            android.content.SharedPreferences state = context.getSharedPreferences("listener_recovery", 0);
+            int version = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
+            if (state.getInt("component_refresh_version", -1) != version) {
+                android.content.pm.PackageManager manager = context.getPackageManager();
+                int previous = manager.getComponentEnabledSetting(component);
+                try {
+                    manager.setComponentEnabledSetting(component, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        android.content.pm.PackageManager.DONT_KILL_APP);
+                } finally {
+                    manager.setComponentEnabledSetting(component, previous,
+                        android.content.pm.PackageManager.DONT_KILL_APP);
+                }
+                state.edit().putInt("component_refresh_version", version).apply();
+                android.util.Log.i("RideDeckListener", "Refreshed listener component after update");
+            }
+            requestRebind(component);
+            android.util.Log.i("RideDeckListener", "Requested notification listener rebind");
+        } catch (Exception error) { android.util.Log.w("RideDeckListener", "Listener recovery failed", error); }
     }
     public static void reloadSelected() { if (connected != null) connected.refreshActive(); }
     @Override public void onDestroy() { if (connected == this) connected = null; super.onDestroy(); }
