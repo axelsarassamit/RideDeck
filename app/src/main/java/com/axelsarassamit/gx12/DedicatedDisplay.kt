@@ -70,7 +70,7 @@ object DedicatedDisplay {
         check(!reading) { "A map display session is already running" }
         check(ready) { "Prepare the bike display in Setup first" }
         val session = token ?: error("No display session")
-        val spec = BikeMapRenderSpec(width, height)
+        val spec = BikeMapRenderSpec(width, height, RidePreferences.bikeMapDensity(context))
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
         val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
             ?: error("Install the selected navigation/rider app first")

@@ -4,8 +4,8 @@ import org.junit.Test
 class BikeMapRenderSpecTest {
  @Test fun xmaxMatchesLandscapeAndLogicalScale() {
   val s=BikeMapRenderSpec(480,234)
-  assertEquals(960,s.renderWidth); assertEquals(468,s.renderHeight); assertEquals(320,s.densityDpi)
-  assertEquals(480,s.renderWidth*160/s.densityDpi)
+  assertEquals(960,s.renderWidth); assertEquals(468,s.renderHeight); assertEquals(192,s.densityDpi)
+  assertEquals(800,s.renderWidth*160/s.densityDpi)
  }
  @Test fun otherSupportedDashPreservesAspect() {
   val s=BikeMapRenderSpec(480,240)

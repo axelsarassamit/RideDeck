@@ -909,7 +909,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void showPersonalization() {
-        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player"}, (dialog, which) -> {
+        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Bike map size"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                     .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                         RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
@@ -921,6 +921,15 @@ public class MainActivity extends android.app.Activity {
                         RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
                     });
                 else if (which == 6) chooseMusicPlayer();
+                else if (which == 7) {
+                    if (YamahaCastService.active) { displayError("Stop the bike display before changing map size."); return; }
+                    new android.app.AlertDialog.Builder(this).setTitle("Bike map size")
+                        .setSingleChoiceItems(RidePreferences.BIKE_MAP_SIZE_NAMES,
+                            Math.max(0, Math.min(2, RidePreferences.prefs(this).getInt("bike_map_size", 0))), (d, selected) -> {
+                            RidePreferences.prefs(this).edit().putInt("bike_map_size", selected).apply();
+                            d.dismiss(); buildSetupScreen(); showPersonalization();
+                        }).setNegativeButton("Close", null).show();
+                }
                 else new android.app.AlertDialog.Builder(this).setTitle("Reply method")
                     .setSingleChoiceItems(new String[]{"Voice to text - confirm before sending", "Voice message - open original app"}, RidePreferences.prefs(this).getInt("reply_mode", 0), (d, choice) -> {
                         RidePreferences.prefs(this).edit().putInt("reply_mode", choice).apply(); d.dismiss();
@@ -947,6 +956,7 @@ public class MainActivity extends android.app.Activity {
             final int choice = i;
             LinearLayout row = rideCard(labels[i].toUpperCase(java.util.Locale.ROOT));
             String detail = i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
+                : i == 7 ? RidePreferences.BIKE_MAP_SIZE_NAMES[Math.max(0, Math.min(2, RidePreferences.prefs(this).getInt("bike_map_size", 0)))]
                 : i == 6 ? RidePreferences.musicName(this) : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
                 : i == 0 ? new String[]{"Left", "Centre", "Right"}[RidePreferences.prefs(this).getInt("mount", 1)]
                 : i == 1 ? "Choose which apps appear in Messages" : i == 3 ? "Voice text or voice message" : "Choose the control position";
