@@ -67,6 +67,13 @@
         android:icon="@drawable/ridedeck_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
+        <activity android:name=".SharedLocationActivity" android:exported="true" android:screenOrientation="portrait" android:label="RideDeck">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity android:name=".SetupActivity" android:exported="true"
             android:screenOrientation="portrait" android:resizeableActivity="false"
             android:taskAffinity="com.axelsarassamit.gx12.setup" android:excludeFromRecents="true">
