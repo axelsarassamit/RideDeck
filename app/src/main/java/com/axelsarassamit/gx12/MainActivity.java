@@ -152,16 +152,23 @@ public final class MainActivity extends android.app.Activity {
         @Override public void run() { refreshCallPanel(); handler.postDelayed(this, 500); }
     };
     private LinearLayout callPanel;
+    private LinearLayout musicPanel;
+    private boolean compactCall;
     private GX12NotificationListener.NotificationPreview renderedCall;
     private void refreshCallPanel() {
         if (callPanel == null) return;
         GX12NotificationListener.NotificationPreview call = GX12NotificationListener.activeCall;
+        if (musicPanel != null) musicPanel.setVisibility(call == null ? View.VISIBLE : View.GONE);
         if (call == renderedCall) return;
         renderedCall = call;
         callPanel.removeAllViews();
         callPanel.setVisibility(call == null ? View.GONE : View.VISIBLE);
         if (call == null) return;
-        callPanel.addView(text(call.appName + " - " + call.title + "\n" + call.text, 20, RideTheme.accent(this), true));
+        TextView caller = text(call.appName + " - " + call.title + "\n" + call.text, compactCall ? 16 : 20, 0xff14200b, true);
+        caller.setMaxLines(compactCall ? 2 : 4);
+        caller.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        callPanel.addView(caller, compactCall ? new LinearLayout.LayoutParams(0, -2, 1)
+            : new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout actions = new LinearLayout(this);
         if (call.callActions != null) for (android.app.Notification.Action action : call.callActions) {
             if (action.actionIntent == null || action.getRemoteInputs() != null) continue;
@@ -182,7 +189,7 @@ public final class MainActivity extends android.app.Activity {
             });
             actions.addView(open, rideWeight(56));
         }
-        callPanel.addView(actions);
+        callPanel.addView(actions, compactCall ? new LinearLayout.LayoutParams(dp(200), -2) : new LinearLayout.LayoutParams(-1, -2));
     }
 
     @Override protected void onResume() {
@@ -621,12 +628,20 @@ public final class MainActivity extends android.app.Activity {
             : portrait ? new LinearLayout.LayoutParams(-1, 0, 0.9f)
             : new LinearLayout.LayoutParams(0, -1, 0.8f);
         if (stacked) musicParams.bottomMargin = dp(8); else musicParams.rightMargin = dp(10);
-        controls.addView(music, musicParams);
+        musicPanel = music;
+        android.widget.FrameLayout mediaSlot = new android.widget.FrameLayout(this);
+        mediaSlot.addView(music, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        callPanel = rideCard("");
+        callPanel.removeAllViews();
+        callPanel.setBackground(rideBackground(0xffd2ff79, 18));
+        compactCall = compact;
+        callPanel.setOrientation(compact ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        callPanel.setGravity(Gravity.CENTER_VERTICAL);
+        callPanel.setVisibility(View.GONE); renderedCall = null;
+        mediaSlot.addView(callPanel, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        controls.addView(mediaSlot, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
-        callPanel = new LinearLayout(this); callPanel.setOrientation(LinearLayout.VERTICAL);
-        callPanel.setVisibility(View.GONE); renderedCall = null;
-        messages.addView(callPanel);
         messageSource = text("LATEST MESSAGE", compact ? 13 : 20, RideTheme.accent(this), true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
@@ -647,8 +662,8 @@ public final class MainActivity extends android.app.Activity {
         controls.addView(messages, stacked ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
         if (!stacked && controlsRight) {
-            controls.removeView(music); controls.addView(music);
-            musicParams.rightMargin = 0; musicParams.leftMargin = dp(10); music.setLayoutParams(musicParams);
+            controls.removeView(mediaSlot); controls.addView(mediaSlot);
+            musicParams.rightMargin = 0; musicParams.leftMargin = dp(10); mediaSlot.setLayoutParams(musicParams);
         }
         workspace.addView(controls, new LinearLayout.LayoutParams(0, -1, 1));
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, 0, 1); wp.topMargin = dp(8);
