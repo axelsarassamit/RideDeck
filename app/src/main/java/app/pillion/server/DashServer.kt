@@ -90,6 +90,10 @@ object DashServer {
 
     @Volatile private var latestJpeg: ByteArray? = null
     @Volatile private var latestSeq = 0L
+    @Volatile private var lastCapturedAt = 0L
+    @Volatile private var lastVisualChangeAt = 0L
+    private var captureReader: ImageReader? = null
+    private var captureDisplay: android.hardware.display.VirtualDisplay? = null
     @Volatile private var failureMessage: String? = null
     private val diagnosticEvents = java.util.concurrent.ConcurrentLinkedQueue<String>()
     private fun diagnostic(event: String) {
@@ -150,6 +154,7 @@ object DashServer {
             val handler = Handler(captureThread.looper)
 
             val reader = ImageReader.newInstance(virtualWidth, virtualHeight, PixelFormat.RGBA_8888, 2)
+            captureReader = reader
             reader.setOnImageAvailableListener({ ir -> onImage(ir) }, handler)
 
             val display = createTrustedVirtualDisplay(
@@ -161,6 +166,7 @@ object DashServer {
                 reader.surface,
             )
             displayId = display.display.displayId
+            captureDisplay = display
             Log.i(
                 TAG,
                 "trusted display created id=$displayId virtual=${virtualWidth}x$virtualHeight " +
@@ -199,11 +205,17 @@ object DashServer {
             val encodeStart = System.currentTimeMillis()
             val jpeg = toJpeg(image)
             val encodeMs = System.currentTimeMillis() - encodeStart
+            val captureTime = android.os.SystemClock.elapsedRealtime()
+            if (latestJpeg?.contentEquals(jpeg) != true) lastVisualChangeAt = captureTime
             latestJpeg = jpeg
+            lastCapturedAt = captureTime
             latestSeq++
             logEncodeStats(jpeg.size, encodeMs)
-        } catch (_: Throwable) {
-            // drop this frame
+        } catch (error: Throwable) {
+            if (android.os.SystemClock.elapsedRealtime() - lastCaptureErrorAt > 10000) {
+                lastCaptureErrorAt = android.os.SystemClock.elapsedRealtime()
+                diagnostic("Capture encode failed exception=${error.javaClass.simpleName}")
+            }
         } finally {
             image.close()
         }
@@ -211,6 +223,7 @@ object DashServer {
 
     // Held in a field so the listening socket is never GC-finalized while the helper lives.
     @Volatile private var serverSocket: ServerSocket? = null
+    private var lastCaptureErrorAt = 0L
 
     /** Serve `[4-byte length][JPEG]` frames over loopback TCP — works with no network (no Wi-Fi). */
     private fun startTcpServer() {
@@ -239,7 +252,15 @@ object DashServer {
             Thread { readCommands(client, commands) }.apply { isDaemon = true; start() }
             client.tcpNoDelay = true
             val out = DataOutputStream(BufferedOutputStream(client.getOutputStream()))
+            var lastCaptureReport = 0L
             while (!client.isClosed) {
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - lastCaptureReport >= 10000) {
+                    lastCaptureReport = now
+                    val age = if (lastCapturedAt == 0L) -1L else now - lastCapturedAt
+                    val unchanged = if (lastVisualChangeAt == 0L) -1L else now - lastVisualChangeAt
+                    diagnostic("Capture sequence=$latestSeq ageMs=$age imageUnchangedMs=$unchanged capturing=$capturing displayState=${captureDisplay?.display?.state}")
+                }
                 while (true) {
                     val event = diagnosticEvents.poll() ?: break
                     val bytes = event.toByteArray(Charsets.UTF_8)
@@ -412,16 +433,18 @@ object DashServer {
         if (keepAlive != null) return
         val pm = powerService
         val m = userActivity
-        if (pm == null || m == null) {
-            Log.w(TAG, "keep-alive: userActivity unavailable — dash will black out ~10s after lock")
-            return
-        }
+        if (pm == null || m == null) diagnostic("Display userActivity unavailable; periodic display-state check enabled")
         wakeDisplay(displayId) // power-press may have dozed this display group; wake it so it can render
         keepAlive = Thread {
             Log.i(TAG, "keep-alive: started for display $displayId")
             while (capturing && displayId >= 0) {
-                runCatching { m.invoke(pm, displayId, android.os.SystemClock.uptimeMillis(), 0, 0) }
+                if (pm != null && m != null) runCatching { m.invoke(pm, displayId, android.os.SystemClock.uptimeMillis(), 0, 0) }
                     .onFailure { Log.w(TAG, "keep-alive: userActivity failed: ${it.message}") }
+                val state = captureDisplay?.display?.state
+                if (state != null && state != android.view.Display.STATE_ON) {
+                    diagnostic("Display wake requested state=$state")
+                    wakeDisplay(displayId)
+                }
                 try { Thread.sleep(KEEP_ALIVE_MS) } catch (_: InterruptedException) { break }
             }
             Log.i(TAG, "keep-alive: stopped")
@@ -676,6 +699,8 @@ object DashServer {
     private fun shutdown() {
         Log.i(TAG, "shutdown requested; releasing display and exiting")
         runCatching { demoteApp() }
+        runCatching { captureDisplay?.release() }; captureDisplay = null
+        runCatching { captureReader?.close() }; captureReader = null
         System.exit(0)
     }
 

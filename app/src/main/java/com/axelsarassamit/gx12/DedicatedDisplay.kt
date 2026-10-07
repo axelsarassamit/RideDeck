@@ -110,7 +110,7 @@ object DedicatedDisplay {
             var ownedSocket: Socket? = null
             try {
                 var connected: Socket? = null
-                repeat(20) {
+                repeat(60) {
                     if (connected == null && reading && token == session) {
                         val candidate = Socket()
                         ownedSocket = candidate
