@@ -584,16 +584,19 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         android.widget.ImageView logo = new android.widget.ImageView(this);
         logo.setImageResource(R.drawable.ridedeck_icon);
-        header.addView(logo, new LinearLayout.LayoutParams(dp(36), dp(36)));
-        TextView brand = text("RideDeck", 20, 0xfff4f6fa, true);
-        brand.setPadding(dp(8), 0, 0, 0);
-        header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
+        android.widget.FrameLayout logoSlot = new android.widget.FrameLayout(this);
+        logo.setContentDescription("RideDeck");
+        logoSlot.addView(logo, new android.widget.FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER));
+        header.addView(logoSlot, new LinearLayout.LayoutParams(dp(80), dp(64)));
         castStatus = text(YamahaCastService.status, 11, 0xff92a9be, false);
         castStatus.setMaxLines(1); castStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
-        ((android.widget.TextClock) clock).setFormat12Hour("h:mm"); clock.setTextColor(0xffaab4c0); clock.setTextSize(17);
-        header.addView(clock);
-        if (!compact) root.addView(header, new LinearLayout.LayoutParams(-1, dp(56)));
+        ((android.widget.TextClock) clock).setFormat12Hour("h:mm");
+        clock.setTextColor(0xfff4f6fa); clock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        clock.setGravity(Gravity.CENTER); clock.setIncludeFontPadding(false); clock.setSingleLine(true);
+        clock.setAutoSizeTextTypeUniformWithConfiguration(24, 52, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        header.addView(clock, new LinearLayout.LayoutParams(0, dp(64), 1));
+        if (!compact) root.addView(header, new LinearLayout.LayoutParams(-1, dp(64)));
 
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
