@@ -46,17 +46,16 @@ jobs:
           test -n "$GX12_KEYSTORE_PASSWORD" || { echo "Missing GX12_KEYSTORE_PASSWORD repository secret"; exit 1; }
           test -n "$GX12_KEY_ALIAS" || { echo "Missing GX12_KEY_ALIAS repository secret"; exit 1; }
           test -n "$GX12_KEY_PASSWORD" || { echo "Missing GX12_KEY_PASSWORD repository secret"; exit 1; }
-          ./gradlew --no-daemon assemblePhoneRelease assembleYamahaRelease
+          ./gradlew --no-daemon assembleRelease
           mkdir -p release-assets
-          cp app/build/outputs/apk/phone/release/app-phone-release.apk release-assets/ridedeck-phone-release.apk
-          cp app/build/outputs/apk/yamaha/release/app-yamaha-release.apk release-assets/ridedeck-yamaha-release.apk
+          cp app/build/outputs/apk/release/app-release.apk release-assets/ridedeck-phone-release.apk
           cd release-assets
           sha256sum *.apk > checksums.txt
 
       - name: Save signed app builds
         uses: actions/upload-artifact@v4
         with:
-          name: ridedeck-editions
+          name: ridedeck
           path: release-assets/
 
       - name: Publish GitHub release
@@ -66,7 +65,6 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             release-assets/ridedeck-phone-release.apk \
-            release-assets/ridedeck-yamaha-release.apk \
             release-assets/checksums.txt \
             --title "RideDeck $GITHUB_REF_NAME" \
             --generate-notes \

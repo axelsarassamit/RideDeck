@@ -51,7 +51,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends android.app.Activity {
-    private static final String REPOSITORY = "axelsarassamit/gearelec-gx12-companion";
+    private static final String REPOSITORY = "axelsarassamit/RideDeck";
     private static final String YAMAHA_Y_CONNECT_PACKAGE = "jp.co.yamahamotor.yamahamotorcycleconnect.sccu";
     private static final String GARMIN_STREETCROSS_PACKAGE = "com.garmin.android.apps.streetcross";
     private static final int REQUEST_BLUETOOTH = 12;
@@ -427,7 +427,7 @@ public class MainActivity extends android.app.Activity {
 
     private void showAbout() {
         String notice = BuildConfig.YAMAHA ? "MapLibre renders the map. MapTiler supplies map data and search, and GraphHopper supplies routes when configured. Provider terms and attribution apply.\n\nYamaha protocol adapted from Pillion, revision 29497f4. Required Notice: Copyright 2026 the Pillion authors. PolyForm Noncommercial 1.0.0. Personal and hobby use. Independent of Yamaha, Garmin and Pillion." : "Phone controls and split screen with your chosen navigation app. Independent of navigation and music providers.";
-        new android.app.AlertDialog.Builder(this).setTitle(BuildConfig.YAMAHA ? "RideDeck Yamaha" : "RideDeck").setMessage(notice).setPositiveButton("Close", null).show();
+        new android.app.AlertDialog.Builder(this).setTitle(BuildConfig.YAMAHA ? "RideDeck for Yamaha" : "RideDeck").setMessage(notice).setPositiveButton("Close", null).show();
     }
 
     private void displayError(String message) {

@@ -1,8 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <application>
-        <service android:name=".YamahaCastService" android:exported="false" android:foregroundServiceType="connectedDevice" />
-        <service android:name=".NativeNavigationService" android:exported="false" android:foregroundServiceType="location" />
-    </application>
-</manifest>

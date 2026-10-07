@@ -7,28 +7,14 @@ android {
     namespace = "com.axelsarassamit.gx12"
     compileSdk = 36
     buildFeatures { buildConfig = true }
-    flavorDimensions += "edition"
-    productFlavors {
-        create("phone") {
-            dimension = "edition"
-            buildConfigField("boolean", "YAMAHA", "false")
-            buildConfigField("String", "UPDATE_ASSET", "\"ridedeck-phone-release.apk\"")
-            manifestPlaceholders["appLabel"] = "RideDeck"
-        }
-        create("yamaha") {
-            dimension = "edition"
-            applicationIdSuffix = ".yamaha"
-            buildConfigField("boolean", "YAMAHA", "true")
-            buildConfigField("String", "UPDATE_ASSET", "\"ridedeck-yamaha-release.apk\"")
-            manifestPlaceholders["appLabel"] = "RideDeck Yamaha"
-        }
-    }
-
     defaultConfig {
         applicationId = "com.axelsarassamit.gx12"
+        buildConfigField("boolean", "YAMAHA", "false")
+        buildConfigField("String", "UPDATE_ASSET", "\"ridedeck-phone-release.apk\"")
+        manifestPlaceholders["appLabel"] = "RideDeck"
         minSdk = 26
         targetSdk = 35
-        val releaseVersion = (System.getenv("GX12_VERSION_NAME") ?: "0.1.0").removePrefix("v")
+        val releaseVersion = (System.getenv("GX12_VERSION_NAME") ?: "0.12.0").removePrefix("v")
         val parts = releaseVersion.split(".")
         require(parts.size >= 2 && parts.take(3).all { it.all(Char::isDigit) }) {
             "GX12_VERSION_NAME must use numeric semver such as 0.1.0"
@@ -79,6 +65,5 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("androidx.camera:camera-video:1.4.2")
     implementation("androidx.core:core:1.16.0")
-    "yamahaImplementation"("org.maplibre.gl:android-sdk:13.4.1")
     testImplementation("junit:junit:4.13.2")
 }
