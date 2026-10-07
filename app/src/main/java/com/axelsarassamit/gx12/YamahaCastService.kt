@@ -22,6 +22,7 @@ class YamahaCastService : Service() {
         @JvmField @Volatile var active = false
         @JvmField @Volatile var sessionId = ""
         @JvmField @Volatile var automaticFallbackPending = false
+        @JvmField @Volatile var autoReconnectPaused = false
         const val STOP = "ridebridge.STOP_CAST"
     }
     private val main = Handler(Looper.getMainLooper())
@@ -50,8 +51,9 @@ class YamahaCastService : Service() {
     override fun onBind(intent: Intent?) = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == STOP) { automatic = false; automaticFallbackPending = false; stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == STOP) { autoReconnectPaused = true; automatic = false; automaticFallbackPending = false; stopSelf(); return START_NOT_STICKY }
         if (running || active) return START_NOT_STICKY
+        autoReconnectPaused = false
         sessionId = intent?.getStringExtra("session") ?: "manual"
         automatic = intent?.getBooleanExtra("automatic", false) == true
         automaticFallbackPending = false

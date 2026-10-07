@@ -82,6 +82,8 @@ public class MainActivity extends android.app.Activity {
     private GX12NotificationListener.NotificationPreview newestSeen;
     private boolean setupVisible;
     private boolean cockpitVisible;
+    private long nextAutomaticBikeAttempt;
+    private boolean activityVisible;
     private Chronometer rideClock;
     private Button rideButton;
     private File downloadedApk;
@@ -141,17 +143,33 @@ public class MainActivity extends android.app.Activity {
 
     @Override protected void onStart() {
         super.onStart();
+        activityVisible = true;
         GX12NotificationListener.activityVisible(true); RideQuietMode.visibility(this, true);
         handler.post(callRefresh);
     }
     @Override protected void onStop() {
+        activityVisible = false;
         handler.removeCallbacks(callRefresh);
         GX12NotificationListener.activityVisible(false); RideQuietMode.visibility(this, false);
         super.onStop();
     }
     private final Runnable callRefresh = new Runnable() {
-        @Override public void run() { refreshCallPanel(); handler.postDelayed(this, 500); }
+        @Override public void run() { refreshCallPanel(); reconnectSavedBike(); handler.postDelayed(this, 500); }
     };
+    private void reconnectSavedBike() {
+        if (!activityVisible || setupVisible || this instanceof SetupActivity || YamahaCastService.active
+            || YamahaCastService.autoReconnectPaused || !RidePreferences.automaticMap(this)) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now < nextAutomaticBikeAttempt) return;
+        nextAutomaticBikeAttempt = now + 45000;
+        String address = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
+        boolean permitted = Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        boolean displayBike = RidePreferences.prefs(this).getInt("bike_profile", 1) != RidePreferences.BIKE_NAMES.length - 1;
+        if (!MapDisplayPolicy.tryBike(permitted, permitted && adapter != null && adapter.isEnabled(),
+            displayBike && !address.isEmpty(), DedicatedDisplay.savedPort(this) != 0)) return;
+        startAutomaticMap();
+    }
     private LinearLayout callPanel;
     private LinearLayout musicPanel;
     private boolean compactCall;
@@ -450,7 +468,7 @@ public class MainActivity extends android.app.Activity {
                 .setPositiveButton("Close", null).show(); return;
         }
         new android.app.AlertDialog.Builder(this).setTitle("Bike display • " + RidePreferences.mapName(this))
-            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideDeck debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideDeck using the port and six-digit code from Pair device with pairing code.\n2. Connect using the different port on the main Wireless debugging screen.\n3. Tap Start bike display in Setup and select the Yamaha dash.\n\nRepeat Connect after ending a session or restarting the phone. You can revoke RideDeck in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
+            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideDeck debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideDeck using the port and six-digit code from Pair device with pairing code.\n2. Tap Connect with the port field empty to find the current connection automatically.\n3. Tap Start bike display in Setup and select the Yamaha dash.\n\nRideDeck finds the current connection port automatically when reconnecting. You can revoke RideDeck in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
             .setNeutralButton("Developer options", (dialog, which) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)))
             .setNegativeButton("Pair", (dialog, which) -> displayPairDialog())
             .setPositiveButton("Connect", (dialog, which) -> displayConnectDialog()).show();
@@ -482,16 +500,15 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void displayConnectDialog() {
-        EditText port = numericField("Connection port");
-        int saved = DedicatedDisplay.savedPort(this);
-        if (saved > 0) port.setText(Integer.toString(saved));
+        EditText port = numericField("Connection port (optional)");
         new android.app.AlertDialog.Builder(this).setTitle("Prepare bike display")
-            .setMessage("Enter the port after the colon in IP address & port on the main Wireless debugging screen. This is different from the pairing port. Keep Wi-Fi and Wireless debugging on for this step.")
+            .setMessage("Leave blank to find the current port automatically. If discovery fails, enter the port from the main Wireless debugging screen. Keep Wi-Fi and Wireless debugging on for this step.")
             .setView(port).setNegativeButton("Cancel", null).setPositiveButton("Connect", (dialog, which) -> {
                 String connectionPort = port.getText().toString().trim();
                 worker.execute(() -> {
                     try {
-                        DedicatedDisplay.prepare(this, Integer.parseInt(connectionPort));
+                        if (connectionPort.isEmpty()) DedicatedDisplay.reconnect(this);
+                        else DedicatedDisplay.prepare(this, Integer.parseInt(connectionPort));
                         runOnUiThread(() -> { buildSetupScreen(); chooseDash(); });
                     } catch (Exception e) { runOnUiThread(() -> displayError("Display setup failed. " + safeMessage(e))); }
                 });
@@ -529,6 +546,8 @@ public class MainActivity extends android.app.Activity {
 
     private void startAutomaticMap() {
         if (YamahaCastService.active) return;
+        YamahaCastService.autoReconnectPaused = false;
+        nextAutomaticBikeAttempt = android.os.SystemClock.elapsedRealtime() + 45000;
         String address = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         boolean permitted = Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;

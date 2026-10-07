@@ -25,11 +25,22 @@ object DedicatedDisplay {
 
     @JvmStatic fun reconnect(context: Context) {
         val adb = PillionAdb.getInstance(context)
-        val port = savedPort(context)
-        val connected = adb.isConnected ||
-            (port in 1..65535 && runCatching { adb.connectDevice("127.0.0.1", port) }.getOrDefault(false)) ||
-            runCatching { adb.autoConnectDevice(context, 5000) }.getOrDefault(false)
-        check(connected) { "Could not reconnect. Enable Wireless debugging and enter its current connection port." }
+        var connected = adb.isConnected
+        if (!connected) {
+            status = "Finding this phone's current display connection port..."
+            val ports = runCatching { LocalAdbDiscovery.ports(context) }.getOrDefault(emptyList()) + savedPort(context)
+            adb.setTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+            try {
+                for (port in ports.distinct().filter { it in 1..65535 }.take(4)) {
+                    if (runCatching { adb.connectDevice("127.0.0.1", port) }.getOrDefault(false)) {
+                        context.getSharedPreferences("bike_display", Context.MODE_PRIVATE).edit().putInt("connection_port", port).apply()
+                        connected = true
+                        break
+                    }
+                }
+            } finally { adb.setTimeout(20, java.util.concurrent.TimeUnit.SECONDS) }
+        }
+        check(connected) { "Could not find this phone's debugging connection. Keep Wi-Fi and Wireless debugging enabled. A manual connection port is available in Advanced display options." }
         prepareSession(context)
     }
 
