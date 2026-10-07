@@ -337,12 +337,24 @@ public class MainActivity extends android.app.Activity {
         page.addView(display, buttonParams());
         Button diagnostics = button("BIKE CONNECTION DIAGNOSTICS");
         diagnostics.setOnClickListener(v -> {
-            String report;
-            try { report = new String(java.nio.file.Files.readAllBytes(new java.io.File(getFilesDir(), "bike-diagnostics.txt").toPath()), java.nio.charset.StandardCharsets.UTF_8); }
-            catch (Exception e) { report = "No bike session recorded yet."; }
+            String report = BikeDiagnostics.report(this);
             final String copy = report;
-            new android.app.AlertDialog.Builder(this).setTitle("Bike connection diagnostics").setMessage(report)
-                .setPositiveButton("Close", null).setNeutralButton("Copy", (d, w) -> {
+            new android.app.AlertDialog.Builder(this).setTitle("Bike connection diagnostics").setMessage(report.length() > 12000 ? "Showing recent entries. Share log file includes the full report.\n" + report.substring(report.length() - 12000) : report)
+                .setPositiveButton("Share log file", (d, w) -> {
+                    try {
+                        File folder = new File(getCacheDir(), "diagnostics"); folder.mkdirs();
+                        File[] prior = folder.listFiles();
+                        if (prior != null) for (File old : prior) if (old.getName().startsWith("RideDeck-diagnostics-") && old.getName().endsWith(".txt")) old.delete();
+                        File log = new File(folder, "RideDeck-diagnostics-" + System.currentTimeMillis() + ".txt");
+                        java.nio.file.Files.write(log.toPath(), copy.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        Uri file = FileProvider.getUriForFile(this, getPackageName() + ".apkprovider", log);
+                        Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_STREAM, file).putExtra(Intent.EXTRA_SUBJECT, "RideDeck diagnostic report")
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        share.setClipData(android.content.ClipData.newRawUri("RideDeck diagnostics", file));
+                        startActivity(Intent.createChooser(share, "Share log or save it to attach in this chat"));
+                    } catch (Exception error) { displayError("Could not export log. " + safeMessage(error)); }
+                }).setNegativeButton("Close", null).setNeutralButton("Copy", (d, w) -> {
                     android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("RideDeck bike diagnostics", copy));
                 }).show();

@@ -41,11 +41,7 @@ class YamahaCastService : Service() {
     private val ackQueue = ArrayBlockingQueue<Boolean>(1)
 
     private fun diagnostic(message: String) {
-        synchronized(lock) {
-            val file = File(filesDir, "bike-diagnostics.txt")
-            val previous = runCatching { file.readLines().takeLast(99) }.getOrDefault(emptyList())
-            runCatching { file.writeText((previous + "${System.currentTimeMillis()} $message").joinToString("\n")) }
-        }
+        BikeDiagnostics.record(this, message)
     }
 
     override fun onBind(intent: Intent?) = null
@@ -77,11 +73,12 @@ class YamahaCastService : Service() {
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
             else startForeground(22, notice)
             running = true; active = true
-            diagnostic("Session started; metadata only, no addresses, message text or images")
+            diagnostic("Session started automatic=$automatic map=${RidePreferences.selectedMap(this)} density=${RidePreferences.bikeMapDensity(this)} Android=${Build.VERSION.SDK_INT}")
             status = "Connecting to the selected Yamaha dash…"
             deadline = SystemClock.elapsedRealtime() + 20000
             watchdog.scheduleWithFixedDelay({
                 if (running && SystemClock.elapsedRealtime() > deadline) {
+                    diagnostic("Watchdog timeout receiving=${DedicatedDisplay.receiving()} imageRequested=$imageRequested")
                     status = "Dash connection timed out. Close StreetCross or another casting app, then try again."
                     automaticFallbackPending = automatic
                     running = false
@@ -113,7 +110,9 @@ class YamahaCastService : Service() {
                     val next = device.createInsecureRfcommSocketToServiceRecord(UUID.fromString("00007220-0000-1000-8000-00805f9b34fb"))
                     // Assign before blocking connect, so Stop and the timeout can always close it.
                     synchronized(lock) { if (!running) { next.close(); error("Stopped") }; socket = next }
+                    diagnostic("Bluetooth connect begin")
                     next.connect()
+                    diagnostic("Bluetooth socket connected")
                 }
                 override fun read(buffer: ByteArray) = socket!!.inputStream.read(buffer)
                 override fun write(bytes: ByteArray) { synchronized(lock) { socket!!.outputStream.write(bytes) } }
@@ -128,6 +127,7 @@ class YamahaCastService : Service() {
             deadline = SystemClock.elapsedRealtime() + 20000
             link.open()
             val frames = FrameReader(link)
+            diagnostic("Handshake begin")
             val size = Handshake(link, frames).perform()
             diagnostic("Authenticated; display ${size.width}x${size.height}")
             check(size.width == 480 && size.height in listOf(234, 240)) { "Unsupported NaviLite display size" }
@@ -140,7 +140,7 @@ class YamahaCastService : Service() {
                         val incoming = frames.next()
                         if (incoming.serviceType == 80) { ackQueue.offer(true); continue }
                         val action = DashContentCommand.classify(incoming)
-                        diagnostic("RX type=${incoming.frameType} service=${incoming.serviceType} dataType=${incoming.payloadDataType} bytes=${incoming.payload.size} action=$action")
+                        if (incoming.serviceType != 65) diagnostic("RX type=${incoming.frameType} service=${incoming.serviceType} dataType=${incoming.payloadDataType} bytes=${incoming.payload.size} action=$action")
                         when (action) {
                             DashContentCommand.Action.START -> {
                                 imageRequested = true
@@ -157,9 +157,11 @@ class YamahaCastService : Service() {
                         }
                     }
                 } catch (e: Exception) {
-                    if (running) receiverFailure = e.message ?: "Bike Bluetooth receiver disconnected"
+                    if (running) { diagnostic("Receiver failed exception=${e.javaClass.simpleName} message=${e.message}"); receiverFailure = e.message ?: "Bike Bluetooth receiver disconnected" }
                 }
             }, "RideDeckDashCommands").also { it.isDaemon = true; it.start() }
+            var lastSummary = SystemClock.elapsedRealtime()
+            var sentFrames = 0
             var sequence = 1
             var count = 0
             var started = SystemClock.elapsedRealtime()
@@ -184,7 +186,11 @@ class YamahaCastService : Service() {
                 while (running && imageRequested && ackQueue.poll(100, TimeUnit.MILLISECONDS) == null) {
                     receiverFailure?.let { error(it) }
                 }
-                sequence = (sequence + 1) and 65535; count++
+                sequence = (sequence + 1) and 65535; count++; sentFrames++
+                if (SystemClock.elapsedRealtime() - lastSummary >= 10000) {
+                    diagnostic("Stream frames=$sentFrames latestJpegBytes=${jpeg.size} imageRequested=$imageRequested")
+                    lastSummary = SystemClock.elapsedRealtime()
+                }
                 val now = SystemClock.elapsedRealtime()
                 if (now - started >= 1000) {
                     status = "Casting • ${size.width} × ${size.height} • $count frames/s"

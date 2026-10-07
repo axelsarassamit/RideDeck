@@ -28,13 +28,16 @@ object DedicatedDisplay {
         var connected = adb.isConnected
         if (!connected) {
             status = "Finding this phone's current display connection port..."
-            val ports = runCatching { LocalAdbDiscovery.ports(context) }.getOrDefault(emptyList()) + savedPort(context)
+            val discovered = runCatching { LocalAdbDiscovery.ports(context) }.getOrDefault(emptyList())
+            BikeDiagnostics.record(context, "ADB discovery candidates=${discovered.size} savedPortPresent=${savedPort(context) != 0}")
+            val ports = discovered + savedPort(context)
             adb.setTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
             try {
                 for (port in ports.distinct().filter { it in 1..65535 }.take(4)) {
                     if (runCatching { adb.connectDevice("127.0.0.1", port) }.getOrDefault(false)) {
                         context.getSharedPreferences("bike_display", Context.MODE_PRIVATE).edit().putInt("connection_port", port).apply()
                         connected = true
+                        BikeDiagnostics.record(context, "ADB connected source=${if (port in discovered) "discovered" else "saved"}")
                         break
                     }
                 }
@@ -82,6 +85,7 @@ object DedicatedDisplay {
         check(ready) { "Prepare the bike display in Setup first" }
         val session = token ?: error("No display session")
         val spec = BikeMapRenderSpec(width, height, RidePreferences.bikeMapDensity(context))
+        BikeDiagnostics.record(context, "Helper launch render=${spec.renderWidth}x${spec.renderHeight} density=${spec.densityDpi} output=${width}x${height}")
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
         val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
             ?: error("Install the selected navigation/rider app first")
@@ -111,6 +115,7 @@ object DedicatedDisplay {
                         .getOrDefault("Could not read helper startup log. Reconnect debugging access.")
                     error("Display helper startup failed. $launchOutput $log")
                 }
+                BikeDiagnostics.record(context, "Helper frame socket connected")
                 link.soTimeout = 30000
                 link.getOutputStream().apply { write("$session\nPROMOTE $component\n".toByteArray()); flush() }
                 val input = DataInputStream(link.getInputStream().buffered())
@@ -122,12 +127,14 @@ object DedicatedDisplay {
                     }
                     check(size in 4..1048576) { "Invalid display image" }
                     val next = ByteArray(size); input.readFully(next)
+                    if (receivedAt == 0L) BikeDiagnostics.record(context, "Helper first frame bytes=$size")
                     synchronized(this) {
                         if (token == session && reading) { jpeg = next; receivedAt = SystemClock.elapsedRealtime() }
                     }
                     status = "Separate map frames received."
                 }
             } catch (e: Exception) {
+                if (reading && token == session) BikeDiagnostics.record(context, "Helper failure exception=${e.javaClass.simpleName} message=${e.message}")
                 if (reading && token == session) status = "Bike display stopped: ${e.message ?: "connection lost"}"
             } finally {
                 synchronized(this) {
