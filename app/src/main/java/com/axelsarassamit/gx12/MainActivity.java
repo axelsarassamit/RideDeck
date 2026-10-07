@@ -82,7 +82,7 @@ public class MainActivity extends android.app.Activity {
     private GX12NotificationListener.NotificationPreview newestSeen;
     private boolean setupVisible;
     private boolean cockpitVisible;
-    private long nextAutomaticBikeAttempt;
+    private static long nextAutomaticBikeAttempt;
     private boolean activityVisible;
     private Chronometer rideClock;
     private Button rideButton;
@@ -940,7 +940,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void showPersonalization() {
-        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Bike map size"}, (dialog, which) -> {
+        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Bike map size", "Home and Work destinations"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                     .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                         RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
@@ -952,6 +952,17 @@ public class MainActivity extends android.app.Activity {
                         RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
                     });
                 else if (which == 6) chooseMusicPlayer();
+                else if (which == 8) {
+                    LinearLayout fields = new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); fields.setPadding(dp(24), dp(12), dp(24), 0);
+                    EditText home = new EditText(this); home.setHint("Home address or place"); home.setText(RidePreferences.prefs(this).getString("bike_home", ""));
+                    EditText work = new EditText(this); work.setHint("Work address or place"); work.setText(RidePreferences.prefs(this).getString("bike_work", "")); fields.addView(home); fields.addView(work);
+                    new android.app.AlertDialog.Builder(this).setTitle("Bike destinations")
+                        .setMessage("For the bike Home and Work commands with Google Maps. Saved only on this phone. Reconnect the bike after changing these.")
+                        .setView(fields).setNegativeButton("Cancel", null).setPositiveButton("Save", (d, w) -> {
+                            RidePreferences.prefs(this).edit().putString("bike_home", home.getText().toString().trim()).putString("bike_work", work.getText().toString().trim()).apply();
+                            buildSetupScreen(); showPersonalization();
+                        }).show();
+                }
                 else if (which == 7) {
                     if (YamahaCastService.active) { displayError("Stop the bike display before changing map size."); return; }
                     new android.app.AlertDialog.Builder(this).setTitle("Bike map size")
@@ -986,7 +997,7 @@ public class MainActivity extends android.app.Activity {
         for (int i = 0; i < labels.length; i++) {
             final int choice = i;
             LinearLayout row = rideCard(labels[i].toUpperCase(java.util.Locale.ROOT));
-            String detail = i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
+            String detail = i == 8 ? "Set places for the bike Home and Work commands" : i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
                 : i == 7 ? RidePreferences.BIKE_MAP_SIZE_NAMES[Math.max(0, Math.min(2, RidePreferences.prefs(this).getInt("bike_map_size", 0)))]
                 : i == 6 ? RidePreferences.musicName(this) : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
                 : i == 0 ? new String[]{"Left", "Centre", "Right"}[RidePreferences.prefs(this).getInt("mount", 1)]

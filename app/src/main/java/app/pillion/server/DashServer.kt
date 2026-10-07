@@ -113,7 +113,7 @@ object DashServer {
             try {
                 val reader = ImageReader.newInstance(960, 468, PixelFormat.RGBA_8888, 2)
                 try {
-                    val display = createTrustedVirtualDisplay(ShellContext(systemContext()), "ridedeck-check", 960, 468, 320, reader.surface)
+                    val display = createTrustedVirtualDisplay(ShellContext(systemContext()), "ridedeck-check", 960, 468, args.getOrNull(1)?.toIntOrNull()?.takeIf { it in listOf(160, 192, 240) } ?: 240, reader.surface)
                     display.release()
                 } finally { reader.close() }
                 println("RIDEDECK_DISPLAY_READY")

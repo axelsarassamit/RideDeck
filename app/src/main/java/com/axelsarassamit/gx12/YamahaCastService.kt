@@ -38,7 +38,7 @@ class YamahaCastService : Service() {
     @Volatile private var imageRequested = true
     @Volatile private var receiverFailure: String? = null
     private var receiver: Thread? = null
-    private val ackQueue = ArrayBlockingQueue<Boolean>(1)
+    private val ackQueue = ArrayBlockingQueue<Int>(8)
 
     private fun diagnostic(message: String) {
         BikeDiagnostics.record(this, message)
@@ -130,6 +130,12 @@ class YamahaCastService : Service() {
             diagnostic("Handshake begin")
             val size = Handshake(link, frames).perform()
             diagnostic("Authenticated; display ${size.width}x${size.height}")
+            val googleMaps = RidePreferences.selectedMap(this) == "com.google.android.apps.maps"
+            val places = RidePreferences.prefs(this)
+            for ((service, key) in listOf(10 to "bike_home", 11 to "bike_work")) {
+                val available = googleMaps && !places.getString(key, "").isNullOrBlank()
+                link.write(NaviLiteCodec.build(6, service, 0, byteArrayOf(if (available) 1 else 0, 0)))
+            }
             check(size.width == 480 && size.height in listOf(234, 240)) { "Unsupported NaviLite display size" }
             status = "Bike connected. Starting selected map on the bike display..."
             deadline = SystemClock.elapsedRealtime() + 30000
@@ -138,7 +144,27 @@ class YamahaCastService : Service() {
                 try {
                     while (running) {
                         val incoming = frames.next()
-                        if (incoming.serviceType == 80) { ackQueue.offer(true); continue }
+                        if (incoming.serviceType == 80) {
+                            if (incoming.frameType == 3 && incoming.payloadDataType == 0) {
+                                when (incoming.payload.size) {
+                                    2 -> ackQueue.offer((incoming.payload[0].toInt() and 255) or ((incoming.payload[1].toInt() and 255) shl 8))
+                                    1 -> ackQueue.offer(-1) // Older CCUs acknowledge without a sequence.
+                                    else -> diagnostic("Invalid image ACK bytes=${incoming.payload.size}")
+                                }
+                            }
+                            continue
+                        }
+                        if (incoming.frameType == 1 && incoming.payloadDataType == 0 && incoming.serviceType in listOf(53, 54)
+                            && incoming.payload.size in 1..2 && (incoming.payload.size == 1 || incoming.payload[1].toInt() == 0)) {
+                            val key = if (incoming.serviceType == 53) "bike_home" else "bike_work"
+                            val destination = places.getString(key, "") ?: ""
+                            if (googleMaps && destination.isNotBlank() && DedicatedDisplay.latestFrame() != null) {
+                                runCatching { DedicatedDisplay.route(destination) }
+                                    .onSuccess { diagnostic("Bike saved-place request service=${incoming.serviceType} forwarded"); status = "Starting saved destination on the bike." }
+                                    .onFailure { diagnostic("Saved-place request could not be forwarded exception=${it.javaClass.simpleName}"); status = "Map is not ready for a destination. Try again in a moment." }
+                            } else { diagnostic("Saved-place request unavailable service=${incoming.serviceType}"); status = "Set Home and Work in Customization with Google Maps selected." }
+                            continue
+                        }
                         val action = DashContentCommand.classify(incoming)
                         if (incoming.serviceType != 65) diagnostic("RX type=${incoming.frameType} service=${incoming.serviceType} dataType=${incoming.payloadDataType} bytes=${incoming.payload.size} action=$action")
                         when (action) {
@@ -183,8 +209,13 @@ class YamahaCastService : Service() {
                 val payload = byteArrayOf(3, sequence.toByte(), (sequence ushr 8).toByte()) + jpeg
                 ackQueue.clear()
                 link.write(NaviLiteCodec.build(6, 0, 1, payload))
-                while (running && imageRequested && ackQueue.poll(100, TimeUnit.MILLISECONDS) == null) {
+                val ackDeadline = SystemClock.elapsedRealtime() + 10000
+                while (running && imageRequested) {
                     receiverFailure?.let { error(it) }
+                    val ack = ackQueue.poll(100, TimeUnit.MILLISECONDS)
+                    if (ack == sequence || ack == -1) break
+                    if (ack != null) diagnostic("Ignored stale image ACK sequence=$ack expected=$sequence")
+                    check(SystemClock.elapsedRealtime() < ackDeadline) { "Bike did not acknowledge image sequence=$sequence within 10 seconds" }
                 }
                 sequence = (sequence + 1) and 65535; count++; sentFrames++
                 if (SystemClock.elapsedRealtime() - lastSummary >= 10000) {

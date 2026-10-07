@@ -74,7 +74,7 @@ object DedicatedDisplay {
 
     fun preflight(context: Context) {
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
-        val output = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' app_process / app.pillion.server.DashServer PROBE 2>&1")
+        val output = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' app_process / app.pillion.server.DashServer PROBE ${RidePreferences.bikeMapDensity(context)} 2>&1")
         check(output.lineSequence().any { it.trim() == "RIDEDECK_DISPLAY_READY" }) {
             "Separate display check failed: " + output.takeLast(3500).ifBlank { "No helper output. Reconnect Wireless debugging in Setup." }
         }
@@ -89,6 +89,18 @@ object DedicatedDisplay {
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
         val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
             ?: error("Install the selected navigation/rider app first")
+        // A stopped helper can still be closing Maps. Wait for its process to release the
+        // listening socket before starting a replacement with a different session token.
+        val helperDeadline = SystemClock.elapsedRealtime() + 6000
+        while (true) {
+            val occupied = runCatching {
+                Socket().use { probe -> probe.connect(InetSocketAddress("127.0.0.1", DashServer.PORT), 200) }
+                true
+            }.getOrDefault(false)
+            if (!occupied) break
+            check(SystemClock.elapsedRealtime() < helperDeadline) { "Previous map helper is still stopping. Wait a moment and retry." }
+            Thread.sleep(200)
+        }
         val launchOutput = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer ${spec.renderWidth} ${spec.renderHeight} ${spec.densityDpi} 45 $width $height $session ${RidePreferences.selectedMap(context)} >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
         synchronized(this) {
             check(ready && token == session) { "Map display startup was cancelled" }
