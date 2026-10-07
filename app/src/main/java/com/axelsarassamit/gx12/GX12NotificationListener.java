@@ -51,7 +51,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
     }
 
     @Override public void onListenerConnected() {
-        super.onListenerConnected(); connected = this;
+        super.onListenerConnected(); connected = this; RideQuietMode.refresh(this);
         android.util.Log.i("RideDeckListener", "Notification listener connected"); applyQuietMode(); refreshActive();
     }
     public void refreshActive() {

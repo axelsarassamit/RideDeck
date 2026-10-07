@@ -128,6 +128,7 @@ public final class MainActivity extends android.app.Activity {
         if (state != null) autoMapSession = state.getString("auto_map_session");
         if (state != null) phoneMapPending = state.getBoolean("phone_map_pending", false);
         if (state != null && state.getBoolean("setup_visible", false)) buildSetupScreen();
+        else if ("android.app.action.AUTOMATIC_ZEN_RULE".equals(getIntent().getAction())) buildSetupScreen();
         else buildScreen();
         refreshDeviceStatus();
         if (state == null && RidePreferences.automaticMap(this) && RidePreferences.prefs(this).getBoolean("map_startup", true)) {
@@ -139,12 +140,12 @@ public final class MainActivity extends android.app.Activity {
 
     @Override protected void onStart() {
         super.onStart();
-        GX12NotificationListener.activityVisible(true);
+        GX12NotificationListener.activityVisible(true); RideQuietMode.visibility(this, true);
         handler.post(callRefresh);
     }
     @Override protected void onStop() {
         handler.removeCallbacks(callRefresh);
-        GX12NotificationListener.activityVisible(false);
+        GX12NotificationListener.activityVisible(false); RideQuietMode.visibility(this, false);
         super.onStop();
     }
     private final Runnable callRefresh = new Runnable() {
@@ -187,6 +188,7 @@ public final class MainActivity extends android.app.Activity {
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
+        RideQuietMode.refresh(this);
         if (phoneMapPending && !setupVisible) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
@@ -267,6 +269,16 @@ public final class MainActivity extends android.app.Activity {
             .setSingleChoiceItems(new String[]{"Phone split-screen (any bike)", "Compatible bike display"}, RidePreferences.manualPhoneMap(this) ? 0 : 1,
                 (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_manual_phone", which == 0).apply(); dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
         if (!RidePreferences.automaticMap(this)) page.addView(manualMap, buttonParams());
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+            Button quiet = button(nm.isNotificationPolicyAccessGranted() ? "QUIET MODE ENABLED" : "ENABLE QUIET MODE");
+            quiet.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
+                .setTitle("Quiet mode while RideDeck is open")
+                .setMessage("Allow Do Not Disturb access for RideDeck. It suppresses notification sounds and pop-ups while this app is visible, including split view. Calls, music and alarms remain allowed. Messages still appear here. Leaving RideDeck disables its quiet mode.")
+                .setPositiveButton("Open settings", (dialog, which) -> startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)))
+                .setNegativeButton("Close", null).show());
+            page.addView(quiet, buttonParams());
+        }
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
         deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
@@ -1101,7 +1113,7 @@ public final class MainActivity extends android.app.Activity {
         }
         new android.app.AlertDialog.Builder(this)
         .setTitle("Music controls and selected messages")
-                .setMessage("Android Notification access is a broad, sensitive permission. If enabled, this app reads Spotify playback details and new notifications from your selected messaging apps only. Notifications may include alerts beyond chats. It ignores unselected apps' notification text, keeps the preview temporarily on this phone, and never uploads it. You can revoke access in Android Settings. On some phones, first open App info, tap ⋮, and choose Allow restricted settings.")
+                .setMessage("Android Notification access is a broad, sensitive permission. If enabled, this app reads Spotify playback details, new notifications from your selected messaging apps, and call notifications from calling apps so it can show their call controls. Notifications may include alerts beyond chats. It ignores unselected apps' notification text except call notifications, keeps the preview temporarily on this phone, and never uploads it. You can revoke access in Android Settings. On some phones, first open App info, tap ⋮, and choose Allow restricted settings.")
                 .setNegativeButton("Not now", null)
                 .setNeutralButton("App info", (dialog, which) -> {
                     Intent appInfo = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
