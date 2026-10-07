@@ -182,7 +182,7 @@ public final class MainActivity extends android.app.Activity {
             });
             actions.addView(control, rideWeight(56));
         }
-        if (call.open != null) {
+        if (call.open != null && actions.getChildCount() == 0) {
             Button open = rideAction("Open call", true);
             open.setOnClickListener(v -> {
                 try { call.open.send(); } catch (android.app.PendingIntent.CanceledException ignored) { }
@@ -635,6 +635,7 @@ public final class MainActivity extends android.app.Activity {
         callPanel.removeAllViews();
         callPanel.setBackground(rideBackground(0xffd2ff79, 18));
         compactCall = compact;
+        if (compact) callPanel.setPadding(dp(8), dp(4), dp(8), dp(4));
         callPanel.setOrientation(compact ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         callPanel.setGravity(Gravity.CENTER_VERTICAL);
         callPanel.setVisibility(View.GONE); renderedCall = null;
