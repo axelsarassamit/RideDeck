@@ -88,7 +88,6 @@ public class MainActivity extends android.app.Activity {
     private Button rideButton;
     private File downloadedApk;
     private MediaController mediaController;
-    private BluetoothDevice gx12Device;
     private BluetoothProfile a2dpProfile;
     private BluetoothProfile headsetProfile;
     private boolean a2dpRequested;
@@ -110,6 +109,7 @@ public class MainActivity extends android.app.Activity {
             GX12NotificationListener.recover(MainActivity.this);
             refreshMediaSession();
             refreshWhatsAppPreview();
+            if (setupVisible) refreshDeviceStatus();
             if (castStatus != null) castStatus.setText(YamahaCastService.status);
             if (!setupVisible && RidePreferences.automaticMap(MainActivity.this) && YamahaCastService.automaticFallbackPending && !YamahaCastService.active) {
                 YamahaCastService.automaticFallbackPending = false;
@@ -438,7 +438,7 @@ public class MainActivity extends android.app.Activity {
             String name = device.getName();
             if (name != null && (name.toUpperCase(Locale.ROOT).contains("CCU") || name.toUpperCase(Locale.ROOT).contains("YAMAHA"))) devices.add(device);
         }
-        if (devices.isEmpty()) { castStatus.setText("No paired Yamaha CCU found. Pair your dash using the bike's normal setup first. A GX12 headset is not the dash."); return; }
+        if (devices.isEmpty()) { castStatus.setText("No paired Yamaha CCU found. Pair your dash using the bike's normal setup first. A headset is not the dash."); return; }
         String savedDash = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
         devices.sort((a, b) -> Boolean.compare(b.getAddress().equals(savedDash), a.getAddress().equals(savedDash)));
         if (devices.get(0).getAddress().equals(savedDash)) {
@@ -1467,11 +1467,10 @@ public class MainActivity extends android.app.Activity {
     private void withHeadsetMicrophone(Runnable listen) {
         java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
-        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
         if (!permissions.isEmpty()) {
             pendingHeadsetVoice = listen; requestPermissions(permissions.toArray(new String[0]), 84); return;
         }
-        android.widget.Toast.makeText(this, "Connecting headset microphone…", android.widget.Toast.LENGTH_SHORT).show();
+        android.widget.Toast.makeText(this, "Starting voice input...", android.widget.Toast.LENGTH_SHORT).show();
         headsetMic.start(listen, message -> {
             finishActivity(82); finishActivity(83); voiceReplyTarget = null; showRideMessage(message);
         });
@@ -1525,34 +1524,46 @@ public class MainActivity extends android.app.Activity {
     private void refreshDeviceStatus() {
         if (deviceStatus == null) return;
         if (Build.VERSION.SDK_INT >= 31 && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            deviceStatus.setText("Allow nearby-device access to check whether GX12 is paired."); return;
+            deviceStatus.setText("Allow nearby-device access to show connected Bluetooth headsets. Voice input still works with the phone microphone."); return;
         }
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null) { deviceStatus.setText("This phone does not report Bluetooth support."); return; }
         try {
-            for (BluetoothDevice device : adapter.getBondedDevices()) {
-                String name = device.getName();
-                if (name != null && name.toUpperCase(Locale.ROOT).contains("GX12")) {
-                    gx12Device = device;
-                    deviceStatus.setText("Paired: " + name + "\nChecking audio and call connections…\nHeadset battery is not available to this app.");
-                    if (!a2dpRequested) a2dpRequested = adapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
-                    if (!headsetRequested) headsetRequested = adapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
-                    showBluetoothConnection();
-                    return;
-                }
-            }
-            gx12Device = null;
-            deviceStatus.setText("GX12 is not in this phone’s paired-device list. Use Bluetooth settings to pair it.");
+            if (!a2dpRequested) a2dpRequested = adapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
+            if (!headsetRequested) headsetRequested = adapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
+            showBluetoothConnection();
         } catch (SecurityException error) { deviceStatus.setText("Bluetooth permission is needed to read the paired-device list."); }
     }
 
     private void showBluetoothConnection() {
-        if (deviceStatus == null || gx12Device == null) return;
+        if (deviceStatus == null) return;
         try {
-            String name = gx12Device.getName();
-            String audio = a2dpProfile == null ? "checking" : connectionLabel(a2dpProfile.getConnectionState(gx12Device));
-            String calls = headsetProfile == null ? "checking" : connectionLabel(headsetProfile.getConnectionState(gx12Device));
-            deviceStatus.setText("Paired: " + (name == null ? "GX12" : name) + "\nMusic audio: " + audio + "\nCall audio: " + calls + "\nHeadset battery is not available to this app.");
+            java.util.LinkedHashSet<BluetoothDevice> connected = new java.util.LinkedHashSet<>();
+            if (headsetProfile != null) connected.addAll(headsetProfile.getConnectedDevices());
+            if (a2dpProfile != null) connected.addAll(a2dpProfile.getConnectedDevices());
+            StringBuilder status = new StringBuilder();
+            for (BluetoothDevice device : connected) {
+                String name = device.getName();
+                if (status.length() > 0) status.append("\n\n");
+                status.append("Connected: ").append(name == null || name.isEmpty() ? "Bluetooth audio device" : name);
+                status.append("\nMusic audio: ").append(a2dpProfile == null ? "checking" : connectionLabel(a2dpProfile.getConnectionState(device)));
+                status.append("\nCall audio: ").append(headsetProfile == null ? "checking" : connectionLabel(headsetProfile.getConnectionState(device)));
+            }
+            if (Build.VERSION.SDK_INT >= 31) {
+                android.media.AudioManager manager = getSystemService(android.media.AudioManager.class);
+                for (android.media.AudioDeviceInfo device : manager.getAvailableCommunicationDevices()) {
+                    if (!HeadsetMicRoute.headsetInput(device.getType(), Build.VERSION.SDK_INT)) continue;
+                    String name = device.getProductName().toString();
+                    boolean listed = false;
+                    for (BluetoothDevice item : connected) if (name.equals(item.getName())) { listed = true; break; }
+                    if (listed) continue;
+                    if (status.length() > 0) status.append("\n\n");
+                    status.append("Connected microphone: ").append(name.isEmpty() ? "Headset" : name);
+                }
+            }
+            if (status.length() == 0) status.append("No Bluetooth headset connected. Voice controls use the phone microphone or a connected wired headset.");
+            else status.append("\n\nVoice input prefers an available headset microphone and otherwise uses the phone microphone.\nHeadset battery is not available to this app.");
+            deviceStatus.setText(status.toString());
         } catch (SecurityException error) {
             deviceStatus.setText("Bluetooth permission is needed to read connection status.");
         }
@@ -1572,7 +1583,7 @@ public class MainActivity extends android.app.Activity {
             boolean granted = results.length > 0;
             for (int value : results) granted &= value == PackageManager.PERMISSION_GRANTED;
             if (granted && next != null) withHeadsetMicrophone(next);
-            else { voiceReplyTarget = null; showRideMessage("Microphone and nearby-device permissions are needed for headset voice input."); }
+            else { voiceReplyTarget = null; showRideMessage("Microphone permission is needed for voice input."); }
         }
         if (requestCode == REQUEST_BLUETOOTH) refreshDeviceStatus();
     }
