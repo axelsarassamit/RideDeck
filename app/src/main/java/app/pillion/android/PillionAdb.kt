@@ -43,6 +43,7 @@ class PillionAdb private constructor(
 
     init {
         setApi(Build.VERSION.SDK_INT)
+        setTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
     }
 
     override fun getPrivateKey(): PrivateKey = privateKey
@@ -64,6 +65,11 @@ class PillionAdb private constructor(
     /** Run a one-shot shell command and return its combined stdout/stderr. */
     fun runShell(command: String): String {
         val stream: AdbStream = openStream("shell:$command")
+        val timedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+        val timeout = shellTimeouts.schedule({
+            timedOut.set(true)
+            runCatching { stream.close() }
+        }, 20, java.util.concurrent.TimeUnit.SECONDS)
         try {
             val reader = stream.openInputStream().bufferedReader()
             val output = StringBuilder()
@@ -76,9 +82,12 @@ class PillionAdb private constructor(
                 }
                 if (read < 0) break
                 output.append(buffer, 0, read)
+                check(output.length <= 524288) { "Debugging command returned too much output" }
             }
+            check(!timedOut.get()) { "Phone debugging command timed out. Reconnect display access in Setup." }
             return output.toString()
         } finally {
+            timeout.cancel(false)
             stream.close()
         }
     }
@@ -96,6 +105,9 @@ class PillionAdb private constructor(
     fun openExecStream(command: String): AdbStream = openStream("exec:$command")
 
     companion object {
+        private val shellTimeouts = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { task ->
+            Thread(task, "RideDeckAdbTimeout").apply { isDaemon = true }
+        }
         /** Loopback adb (always up, no Wi-Fi) once [enableTcpip] has run. */
         const val LOOPBACK_HOST = "127.0.0.1"
         const val TCPIP_PORT = 5555

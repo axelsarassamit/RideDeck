@@ -1,3 +1,13 @@
+# Current RideDeck setup (v0.11.9)
+
+Setup > Map display offers Automatic and Manual. Automatic tries the saved bike display, then falls back to the selected map in phone split-screen on failure. Manual lets you choose Phone split-screen or Compatible bike display. Other bike / no compatible display needs no debugging setup. Android controls split-screen support and pane placement.
+
+For bike access use Setup > Advanced display options > Open advanced setup. Pairing identity, connection port and selected Yamaha are saved; a changed Android port may need updating. Explicit Stop ends the bike session without phone fallback. Google Maps destination entry is supported; other listed navigation apps have unverified bike behavior.
+
+The phone needs Wi-Fi for local Wireless debugging setup; the bike connection uses Bluetooth. Wi-Fi-off survival, navigation stability and readability must still be checked on the physical phone and bike. See [Pre-ride review](docs/PRE_RIDE_REVIEW.md) for current limits and the parked test sequence.
+
+The instructions below are historical. Old RideBridge labels, repeated-connect instructions and bike-only defaults are superseded by the current setup above.
+
 # Map on the bike, controls on the phone
 
 RideBridge defaults to a landscape phone cockpit: music transport, track artwork,

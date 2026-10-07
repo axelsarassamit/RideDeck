@@ -57,7 +57,6 @@ public final class MainActivity extends android.app.Activity {
     private static final int REQUEST_BLUETOOTH = 12;
     private String castDeviceAddress;
     private String autoMapSession;
-    private boolean autoMapPreparing;
     private boolean activityResumed;
     private boolean phoneMapPending;
     private TextView castStatus;
@@ -109,9 +108,13 @@ public final class MainActivity extends android.app.Activity {
             refreshMediaSession();
             refreshWhatsAppPreview();
             if (castStatus != null) castStatus.setText(YamahaCastService.status);
-            if (autoMapSession != null && autoMapSession.equals(YamahaCastService.sessionId) && !YamahaCastService.active) {
+            if (!setupVisible && RidePreferences.automaticMap(MainActivity.this) && YamahaCastService.automaticFallbackPending && !YamahaCastService.active) {
+                YamahaCastService.automaticFallbackPending = false;
                 autoMapSession = null;
-                handler.postDelayed(() -> { phoneMapPending = true; if (activityResumed) openPhoneMap(); }, 1500);
+                handler.postDelayed(() -> {
+                    if (!RidePreferences.automaticMap(MainActivity.this)) return;
+                    phoneMapPending = true; if (activityResumed) openPhoneMap();
+                }, 1500);
             }
             handler.postDelayed(this, 2500);
         }
@@ -123,7 +126,8 @@ public final class MainActivity extends android.app.Activity {
         if (state != null) castDeviceAddress = state.getString("cast_device");
         if (state != null) autoMapSession = state.getString("auto_map_session");
         if (state != null) phoneMapPending = state.getBoolean("phone_map_pending", false);
-        buildScreen();
+        if (state != null && state.getBoolean("setup_visible", false)) buildSetupScreen();
+        else buildScreen();
         refreshDeviceStatus();
         if (state == null && RidePreferences.automaticMap(this) && RidePreferences.prefs(this).getBoolean("map_startup", true)) {
             handler.postDelayed(() -> {
@@ -135,7 +139,7 @@ public final class MainActivity extends android.app.Activity {
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
-        if (phoneMapPending) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
+        if (phoneMapPending && !setupVisible) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
         refreshWhatsAppPreview();
@@ -156,6 +160,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
         if (headsetMic != null) headsetMic.release();
         pendingHeadsetVoice = null;
         if (speech != null) { speech.stop(); speech.shutdown(); }
@@ -202,7 +207,7 @@ public final class MainActivity extends android.app.Activity {
         Button mapMode = button(RidePreferences.automaticMap(this) ? "MAP DISPLAY: AUTOMATIC" : "MAP DISPLAY: MANUAL");
         mapMode.setOnClickListener(v -> new android.app.AlertDialog.Builder(this).setTitle("Map display mode")
             .setSingleChoiceItems(new String[]{"Automatic: saved bike display, otherwise phone split-screen", "Manual: choose where the map appears"}, RidePreferences.automaticMap(this) ? 0 : 1,
-                (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_auto", which == 0).apply(); autoMapSession = null; dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
+                (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_auto", which == 0).apply(); autoMapSession = null; phoneMapPending = false; YamahaCastService.automaticFallbackPending = false; dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
         page.addView(mapMode, buttonParams());
         CheckBox mapStartup = new CheckBox(this); mapStartup.setText("Open map automatically when RideDeck starts");
         mapStartup.setTextColor(0xfff4f6fa);
@@ -229,7 +234,7 @@ public final class MainActivity extends android.app.Activity {
         addCockpitCard(page, "BIKE DISPLAY - EXPERIMENTAL", castStatus);
         Button cast = button(YamahaCastService.active ? "STOP BIKE DISPLAY" : "START BIKE DISPLAY");
         cast.setOnClickListener(v -> {
-            if (YamahaCastService.active) { stopService(new Intent(this, YamahaCastService.class)); handler.postDelayed(this::buildSetupScreen, 400); }
+            if (YamahaCastService.active) { autoMapSession = null; YamahaCastService.automaticFallbackPending = false; startService(new Intent(this, YamahaCastService.class).setAction(YamahaCastService.STOP)); handler.postDelayed(this::buildSetupScreen, 400); }
             else chooseDash();
         }); page.addView(cast, buttonParams());
         Button display = button("HOW TO CAST TO THE BIKE"); display.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
@@ -333,6 +338,7 @@ public final class MainActivity extends android.app.Activity {
 
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putString("auto_map_session", autoMapSession);
+        state.putBoolean("setup_visible", setupVisible);
         state.putBoolean("phone_map_pending", phoneMapPending);
         state.putString("cast_device", castDeviceAddress); super.onSaveInstanceState(state);
     }
@@ -447,7 +453,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void startAutomaticMap() {
-        if (autoMapPreparing || autoMapSession != null) return;
+        if (YamahaCastService.active) return;
         String address = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         boolean permitted = Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
@@ -455,27 +461,19 @@ public final class MainActivity extends android.app.Activity {
         if (!MapDisplayPolicy.tryBike(permitted, permitted && adapter != null && adapter.isEnabled(), displayBike && !address.isEmpty(), DedicatedDisplay.savedPort(this) != 0)) {
             openPhoneMap(); return;
         }
-        autoMapPreparing = true;
         showRideMessage("Trying saved bike display...");
-        worker.execute(() -> {
-            try {
-                if (!DedicatedDisplay.ready) DedicatedDisplay.reconnect(this);
-                runOnUiThread(() -> {
-                    autoMapPreparing = false;
-                    if (isFinishing() || isDestroyed()) return;
-                    if (!RidePreferences.automaticMap(this)) return;
-                    autoMapSession = java.util.UUID.randomUUID().toString();
-                    startForegroundService(new Intent(this, YamahaCastService.class).putExtra("device", address).putExtra("session", autoMapSession));
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> { autoMapPreparing = false; if (!isFinishing() && !isDestroyed() && RidePreferences.automaticMap(this)) openPhoneMap(); });
-            }
-        });
+        try {
+            autoMapSession = java.util.UUID.randomUUID().toString();
+            startForegroundService(new Intent(this, YamahaCastService.class).putExtra("device", address)
+                .putExtra("session", autoMapSession).putExtra("automatic", true));
+        } catch (RuntimeException e) { autoMapSession = null; openPhoneMap(); }
     }
 
     private void openPhoneMap() {
         autoMapSession = null;
-        if (!activityResumed) { phoneMapPending = true; return; }
+        YamahaCastService.automaticFallbackPending = false;
+        if (isFinishing() || isDestroyed()) return;
+        if (!activityResumed || setupVisible) { phoneMapPending = true; return; }
         phoneMapPending = false;
         if (YamahaCastService.active) {
             stopService(new Intent(this, YamahaCastService.class));
@@ -500,6 +498,7 @@ public final class MainActivity extends android.app.Activity {
 
     private void buildScreen() {
         setupVisible = false; cockpitVisible = true;
+        if (phoneMapPending) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;
         rideClock = null; rideButton = null;
         deviceStatus = text("", 12, 0xffaab4c0, false);
@@ -874,7 +873,8 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void chooseMapApp() {
-        if (YamahaCastService.active || DedicatedDisplay.ready) { displayError("Stop casting and end the prepared display before changing its app."); return; }
+        if (YamahaCastService.active) { displayError("Stop the bike display before changing its app."); return; }
+        if (DedicatedDisplay.ready) DedicatedDisplay.stop();
         int current = java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this));
         new android.app.AlertDialog.Builder(this).setTitle("Navigation / rider app")
             .setSingleChoiceItems(RidePreferences.MAP_NAMES, current, (dialog, which) -> {
@@ -920,8 +920,16 @@ public final class MainActivity extends android.app.Activity {
                 if (speechReady) readMessageAloud(preview);
                 else android.widget.Toast.makeText(this, "Speech is unavailable on this phone", android.widget.Toast.LENGTH_SHORT).show();
             });
-        } else if (speechReady) speech.speak(preview.appName + ". " + preview.title + ". " + preview.text,
-            android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "message-preview");
+        } else if (speechReady) {
+            String content = preview.appName + ". " + preview.title + ". " + preview.text;
+            int limit = android.speech.tts.TextToSpeech.getMaxSpeechInputLength() - 1;
+            int chunkIndex = 0;
+            for (String chunk : SpeechChunks.split(content, limit)) {
+                int result = speech.speak(chunk, chunkIndex == 0 ? android.speech.tts.TextToSpeech.QUEUE_FLUSH : android.speech.tts.TextToSpeech.QUEUE_ADD,
+                    null, "message-preview-" + chunkIndex++);
+                if (result == android.speech.tts.TextToSpeech.ERROR) { showRideMessage("Could not read this message aloud. Check Android speech settings."); break; }
+            }
+        }
     }
 
     private Button dockButton(String title) {
@@ -1285,7 +1293,8 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void showRideMessage(String message) {
-        trackStatus.setText(message);
+        if (trackStatus != null) trackStatus.setText(message);
+        else android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
     }
 
     private void addSection(LinearLayout parent, String heading, TextView content) {

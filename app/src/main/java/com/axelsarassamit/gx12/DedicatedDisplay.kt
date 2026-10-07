@@ -49,7 +49,7 @@ object DedicatedDisplay {
         prepareSession(context)
     }
 
-    private fun prepareSession(context: Context) {
+    @Synchronized private fun prepareSession(context: Context) {
         check(!reading) { "Stop casting first" }
         val pkg = RidePreferences.selectedMap(context)
         require(pkg in RidePreferences.MAP_PACKAGES) { "Unsupported display app" }
@@ -67,21 +67,30 @@ object DedicatedDisplay {
     }
 
     fun start(context: Context, width: Int, height: Int) {
+        check(!reading) { "A map display session is already running" }
         check(ready) { "Prepare the bike display in Setup first" }
         val session = token ?: error("No display session")
         val spec = BikeMapRenderSpec(width, height)
         val apk = context.applicationInfo.sourceDir.replace("'", "'\\''")
-        val launchOutput = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer ${spec.renderWidth} ${spec.renderHeight} ${spec.densityDpi} 45 $width $height $session ${RidePreferences.selectedMap(context)} >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
         val component = context.packageManager.getLaunchIntentForPackage(RidePreferences.selectedMap(context))?.component?.flattenToString()
             ?: error("Install the selected navigation/rider app first")
-        reading = true
+        val launchOutput = PillionAdb.getInstance(context).runShell("CLASSPATH='$apk' nohup app_process / app.pillion.server.DashServer ${spec.renderWidth} ${spec.renderHeight} ${spec.densityDpi} 45 $width $height $session ${RidePreferences.selectedMap(context)} >/data/local/tmp/ridebridge-dash.log 2>&1 </dev/null &")
+        synchronized(this) {
+            check(ready && token == session) { "Map display startup was cancelled" }
+            jpeg = null; receivedAt = 0L; reading = true
+        }
         Thread({
+            var ownedSocket: Socket? = null
             try {
                 var connected: Socket? = null
                 repeat(20) {
-                    if (connected == null && reading) {
+                    if (connected == null && reading && token == session) {
                         val candidate = Socket()
-                        socket = candidate
+                        ownedSocket = candidate
+                        synchronized(this) {
+                            check(token == session && reading) { "Map display startup was cancelled" }
+                            socket = candidate
+                        }
                         try { candidate.connect(InetSocketAddress("127.0.0.1", DashServer.PORT), 500); connected = candidate }
                         catch (_: Exception) { candidate.close(); Thread.sleep(250) }
                     }
@@ -94,7 +103,7 @@ object DedicatedDisplay {
                 link.soTimeout = 30000
                 link.getOutputStream().apply { write("$session\nPROMOTE $component\n".toByteArray()); flush() }
                 val input = DataInputStream(link.getInputStream().buffered())
-                while (reading) {
+                while (reading && token == session) {
                     val size = input.readInt()
                     if (size in -4096..-1) {
                         val message = ByteArray(-size); input.readFully(message)
@@ -102,14 +111,18 @@ object DedicatedDisplay {
                     }
                     check(size in 4..1048576) { "Invalid display image" }
                     val next = ByteArray(size); input.readFully(next)
-                    jpeg = next; receivedAt = SystemClock.elapsedRealtime()
+                    synchronized(this) {
+                        if (token == session && reading) { jpeg = next; receivedAt = SystemClock.elapsedRealtime() }
+                    }
                     status = "Separate map frames received."
                 }
             } catch (e: Exception) {
-                if (reading) status = "Bike display stopped: ${e.message ?: "connection lost"}"
+                if (reading && token == session) status = "Bike display stopped: ${e.message ?: "connection lost"}"
             } finally {
-                reading = false; ready = false; jpeg = null
-                runCatching { socket?.close() }
+                synchronized(this) {
+                    if (token == session) { reading = false; ready = false; jpeg = null }
+                }
+                runCatching { ownedSocket?.close() }
             }
         }, "RideDeckDisplay").apply { isDaemon = true; start() }
     }
@@ -122,10 +135,10 @@ object DedicatedDisplay {
         synchronized(this) { socket!!.getOutputStream().apply { write("ROUTE $uri\n".toByteArray()); flush() } }
     }
 
-    fun stop() {
+    @JvmStatic @Synchronized fun stop() {
+        token = null
         reading = false; ready = false; jpeg = null
         runCatching { socket?.getOutputStream()?.apply { write("QUIT\n".toByteArray()); flush() } }
         runCatching { socket?.close() }; socket = null
-        token = null
     }
 }

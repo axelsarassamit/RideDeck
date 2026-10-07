@@ -1,3 +1,5 @@
+Current review: [v0.11.9 pre-ride checks and limits](docs/PRE_RIDE_REVIEW.md). Auto/Manual destination settings supersede the historical bike-only default described below.
+
 # RideBridge
 
 An independent Android motorcycle cockpit targeting the Yamaha XMAX 2024 Tech MAX. It brings together Google Maps, Spotify, Yamaha Y-Connect, Garmin StreetCross, WhatsApp and Google voice, with large controls, headset status, a timer and signed in-app updates. Previously called GX12 Companion; the package identity and release download name stay the same so existing installations can update.

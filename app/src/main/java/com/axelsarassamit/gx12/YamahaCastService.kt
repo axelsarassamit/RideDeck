@@ -21,6 +21,7 @@ class YamahaCastService : Service() {
         @JvmField @Volatile var status = "Ready to connect to a compatible Yamaha navigation dash."
         @JvmField @Volatile var active = false
         @JvmField @Volatile var sessionId = ""
+        @JvmField @Volatile var automaticFallbackPending = false
         const val STOP = "ridebridge.STOP_CAST"
     }
     private val main = Handler(Looper.getMainLooper())
@@ -31,6 +32,7 @@ class YamahaCastService : Service() {
     @Volatile private var deadline = 0L
     private var worker: Thread? = null
     private var dedicated = false
+    @Volatile private var automatic = false
     private var waitingForFrameSince = 0L
     @Volatile private var imageRequested = true
     @Volatile private var receiverFailure: String? = null
@@ -48,13 +50,16 @@ class YamahaCastService : Service() {
     override fun onBind(intent: Intent?) = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == STOP) { stopSelf(); return START_NOT_STICKY }
-        if (running) return START_NOT_STICKY
+        if (intent?.action == STOP) { automatic = false; automaticFallbackPending = false; stopSelf(); return START_NOT_STICKY }
+        if (running || active) return START_NOT_STICKY
         sessionId = intent?.getStringExtra("session") ?: "manual"
+        automatic = intent?.getBooleanExtra("automatic", false) == true
+        automaticFallbackPending = false
         val address = intent?.getStringExtra("device")
         dedicated = true
-        if (address == null || !DedicatedDisplay.ready) {
+        if (address == null || (!automatic && !DedicatedDisplay.ready)) {
             status = "Prepare bike-only maps in Setup first. Phone mirroring is disabled."
+            automaticFallbackPending = automatic
             stopSelf(); return START_NOT_STICKY
         }
         try {
@@ -76,6 +81,7 @@ class YamahaCastService : Service() {
             watchdog.scheduleWithFixedDelay({
                 if (running && SystemClock.elapsedRealtime() > deadline) {
                     status = "Dash connection timed out. Close StreetCross or another casting app, then try again."
+                    automaticFallbackPending = automatic
                     running = false
                     try { socket?.close() } catch (_: Exception) { }
                     main.post { stopSelf() }
@@ -84,6 +90,7 @@ class YamahaCastService : Service() {
             worker = Thread({ cast(address) }, "RideDeckBluetooth").also { it.start() }
         } catch (_: Exception) {
             status = "Could not start sharing. Check nearby-device access and try again."
+            automaticFallbackPending = automatic
             stopSelf()
         }
         return START_NOT_STICKY
@@ -112,7 +119,9 @@ class YamahaCastService : Service() {
             }
             status = "Checking separate map display before connecting to bike..."
             deadline = SystemClock.elapsedRealtime() + 30000
+            if (!DedicatedDisplay.ready) DedicatedDisplay.reconnect(this)
             DedicatedDisplay.preflight(this)
+            check(running) { "Stopped" }
             diagnostic("Separate display check passed")
             deadline = SystemClock.elapsedRealtime() + 20000
             link.open()
@@ -187,12 +196,13 @@ class YamahaCastService : Service() {
             if (running) status = "Casting stopped: " + (e.message ?: "Bluetooth connection lost")
         } finally {
             diagnostic(status)
+            if (running) automaticFallbackPending = automatic
             running = false
             main.post { stopSelf() }
         }
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) { stopSelf() }
+    override fun onTaskRemoved(rootIntent: Intent?) { automatic = false; automaticFallbackPending = false; stopSelf() }
 
     override fun onDestroy() {
         running = false; active = false
