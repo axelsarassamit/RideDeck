@@ -137,6 +137,53 @@ public final class MainActivity extends android.app.Activity {
         }
     }
 
+    @Override protected void onStart() {
+        super.onStart();
+        GX12NotificationListener.activityVisible(true);
+        handler.post(callRefresh);
+    }
+    @Override protected void onStop() {
+        handler.removeCallbacks(callRefresh);
+        GX12NotificationListener.activityVisible(false);
+        super.onStop();
+    }
+    private final Runnable callRefresh = new Runnable() {
+        @Override public void run() { refreshCallPanel(); handler.postDelayed(this, 500); }
+    };
+    private LinearLayout callPanel;
+    private GX12NotificationListener.NotificationPreview renderedCall;
+    private void refreshCallPanel() {
+        if (callPanel == null) return;
+        GX12NotificationListener.NotificationPreview call = GX12NotificationListener.activeCall;
+        if (call == renderedCall) return;
+        renderedCall = call;
+        callPanel.removeAllViews();
+        callPanel.setVisibility(call == null ? View.GONE : View.VISIBLE);
+        if (call == null) return;
+        callPanel.addView(text(call.appName + " - " + call.title + "\n" + call.text, 20, RideTheme.accent(this), true));
+        LinearLayout actions = new LinearLayout(this);
+        if (call.callActions != null) for (android.app.Notification.Action action : call.callActions) {
+            if (action.actionIntent == null || action.getRemoteInputs() != null) continue;
+            Button control = rideAction(action.title == null ? "Call control" : action.title.toString(), false);
+            control.setOnClickListener(v -> {
+                if (GX12NotificationListener.activeCall != call) return;
+                try { action.actionIntent.send(); }
+                catch (android.app.PendingIntent.CanceledException error) {
+                    android.widget.Toast.makeText(this, "Call control expired. Open the call screen.", android.widget.Toast.LENGTH_LONG).show();
+                }
+            });
+            actions.addView(control, rideWeight(56));
+        }
+        if (call.open != null) {
+            Button open = rideAction("Open call", true);
+            open.setOnClickListener(v -> {
+                try { call.open.send(); } catch (android.app.PendingIntent.CanceledException ignored) { }
+            });
+            actions.addView(open, rideWeight(56));
+        }
+        callPanel.addView(actions);
+    }
+
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
@@ -565,6 +612,9 @@ public final class MainActivity extends android.app.Activity {
         controls.addView(music, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
+        callPanel = new LinearLayout(this); callPanel.setOrientation(LinearLayout.VERTICAL);
+        callPanel.setVisibility(View.GONE); renderedCall = null;
+        messages.addView(callPanel);
         messageSource = text("LATEST MESSAGE", compact ? 13 : 20, RideTheme.accent(this), true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
@@ -1086,6 +1136,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void refreshWhatsAppPreview() {
+        refreshCallPanel();
         if (messagePreview == null && dockMessage == null) return;
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) {
             if (messageSource != null) messageSource.setText("ACCESS IS OFF");

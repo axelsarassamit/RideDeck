@@ -135,6 +135,7 @@ public final class QuickCameraActivity extends ComponentActivity {
             });
         }
     }
-    @Override protected void onStop() { if (recording != null) recording.stop(); super.onStop(); }
+    @Override protected void onStart() { super.onStart(); GX12NotificationListener.activityVisible(true); }
+    @Override protected void onStop() { GX12NotificationListener.activityVisible(false); if (recording != null) recording.stop(); super.onStop(); }
     @Override protected void onSaveInstanceState(Bundle state) { state.putBoolean("front", front); state.putBoolean("video", video); super.onSaveInstanceState(state); }
 }

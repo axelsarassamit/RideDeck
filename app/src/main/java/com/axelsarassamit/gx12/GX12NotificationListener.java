@@ -13,6 +13,15 @@ import android.text.TextUtils;
  */
 public final class GX12NotificationListener extends NotificationListenerService {
     public static volatile NotificationPreview latestWhatsAppPreview;
+    public static volatile NotificationPreview activeCall;
+    private static int visibleActivities;
+    public static synchronized void activityVisible(boolean visible) {
+        visibleActivities = Math.max(0, visibleActivities + (visible ? 1 : -1));
+        if (connected != null) connected.applyQuietMode();
+    }
+    private void applyQuietMode() {
+        requestListenerHints(visibleActivities > 0 ? HINT_HOST_DISABLE_NOTIFICATION_EFFECTS : 0);
+    }
     private static final MessageInbox<NotificationPreview> previews = new MessageInbox<>();
     public static synchronized java.util.List<NotificationPreview> selectedPreviews(android.content.Context context) {
         return previews.selected(RidePreferences.selectedMessages(context));
@@ -32,6 +41,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
         public final String appName;
         public final android.app.PendingIntent open;
         public volatile boolean acknowledged;
+        public Notification.Action[] callActions;
         public android.app.PendingIntent markRead;
         public android.app.PendingIntent reply;
         public android.app.RemoteInput replyInput;
@@ -42,7 +52,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
 
     @Override public void onListenerConnected() {
         super.onListenerConnected(); connected = this;
-        android.util.Log.i("RideDeckListener", "Notification listener connected"); refreshActive();
+        android.util.Log.i("RideDeckListener", "Notification listener connected"); applyQuietMode(); refreshActive();
     }
     public void refreshActive() {
         try {
@@ -90,7 +100,9 @@ public final class GX12NotificationListener extends NotificationListenerService 
     @Override public void onDestroy() { if (connected == this) connected = null; super.onDestroy(); }
 
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
-        if (sbn == null || !RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
+        if (sbn == null) return;
+        boolean call = Notification.CATEGORY_CALL.equals(sbn.getNotification().category);
+        if (!call && !RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
         Notification notification = sbn.getNotification();
         if (notification == null || (notification.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
         Bundle extras = notification.extras;
@@ -107,6 +119,11 @@ public final class GX12NotificationListener extends NotificationListenerService 
         }
         if (!TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
             NotificationPreview preview = new NotificationPreview(title == null ? "Message" : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(this, sbn.getPackageName()));
+            if (call) {
+                preview.callActions = notification.actions;
+                activeCall = preview;
+                return;
+            }
             if (notification.actions != null) for (Notification.Action action : notification.actions) {
                 if (android.os.Build.VERSION.SDK_INT >= 28 && action.getSemanticAction() == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) preview.markRead = action.actionIntent;
                 android.app.RemoteInput[] inputs = action.getRemoteInputs();
@@ -125,6 +142,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null) return;
+        if (activeCall != null && activeCall.key.equals(sbn.getKey())) activeCall = null;
         synchronized (GX12NotificationListener.class) {
             for (NotificationPreview item : previews.selected(RidePreferences.selectedMessages(this))) {
                 if (sbn.getKey().equals(item.key)) { item.reply = null; item.replyInput = null; item.markRead = null; }
@@ -133,6 +151,6 @@ public final class GX12NotificationListener extends NotificationListenerService 
     }
     @Override public void onListenerDisconnected() {
         if (connected == this) connected = null;
-        clearPreviews(); super.onListenerDisconnected(); recover(this);
+        activeCall = null; clearPreviews(); super.onListenerDisconnected(); recover(this);
     }
 }
