@@ -280,13 +280,17 @@ public class MainActivity extends android.app.Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xff151715); root.setPadding(dp(16), dp(16), dp(16), dp(16));
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text("Setup - use while parked", 24, 0xfff4f6fa, true);
+        TextView heading = text("Setup", 30, 0xfff4f6fa, true);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         Button back = rideAction("Done", false); back.setOnClickListener(v -> finish());
-        header.addView(back, new LinearLayout.LayoutParams(dp(120), dp(56))); root.addView(header);
-        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
+        header.addView(back, new LinearLayout.LayoutParams(dp(88), dp(56))); root.addView(header);
+        LinearLayout sections = new LinearLayout(this); sections.setOrientation(LinearLayout.VERTICAL);
+        sections.addView(text(BuildConfig.YAMAHA ? "RideDeck for Yamaha" : "RideDeck", 16, RideTheme.accent(this), true));
+        TextView parked = text("Make changes while parked", 14, 0xffaab4c0, false);
+        parked.setPadding(0, dp(4), 0, dp(16)); sections.addView(parked);
+        LinearLayout page = setupGroup(sections, "Navigation", BuildConfig.YAMAHA ? "Maps, destinations and display panels" : "Choose the map app for split screen", true);
         Button personalize = button("CUSTOMIZATION"); personalize.setOnClickListener(v -> showPersonalization());
-        addSection(page, "YOUR COCKPIT", personalize);
+        // Customization is presented in its own section below.
         page.addView(text(BuildConfig.YAMAHA ? "MapLibre navigation for compatible Yamaha displays" : "Phone navigation with your chosen map app", 16, 0xfff4f6fa, true));
         Button navigation = button(BuildConfig.YAMAHA ? "MAP + PANEL SETTINGS" : "CHOOSE MAP APP");
         navigation.setOnClickListener(v -> { if (BuildConfig.YAMAHA) NavigationUi.configure(this); else chooseMapApp(); });
@@ -297,6 +301,9 @@ public class MainActivity extends android.app.Activity {
             connect.setOnCheckedChangeListener((b, value) -> RidePreferences.prefs(this).edit().putBoolean("map_auto", value).apply());
             page.addView(connect);
         }
+        page = setupGroup(sections, "Cockpit appearance", "Music player, colours, messages and control placement", false);
+        page.addView(personalize, buttonParams());
+        page = setupGroup(sections, "Permissions & quiet mode", "Music and messages, notifications and interruption control", false);
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
             Button quiet = button(nm.isNotificationPolicyAccessGranted() ? "QUIET MODE ENABLED" : "ENABLE QUIET MODE");
@@ -309,7 +316,9 @@ public class MainActivity extends android.app.Activity {
         }
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
-        deviceStatus = text("Checking headset-", 14, 0xfff4f6fa, false);
+        LinearLayout permissionPage = page;
+        page = setupGroup(sections, "Bluetooth & headset", "Pair devices and check your audio connection", false);
+        deviceStatus = text("Checking headset...", 14, 0xfff4f6fa, false);
         addCockpitCard(page, "CONNECTIONS", deviceStatus);
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             Button nearby = button("ALLOW NEARBY DEVICES");
@@ -319,13 +328,15 @@ public class MainActivity extends android.app.Activity {
         Button bluetooth = button("BLUETOOTH SETTINGS"); bluetooth.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         page.addView(bluetooth, buttonParams());
         if (BuildConfig.YAMAHA) {
+            page = setupGroup(sections, "Yamaha bike display", "Connect or disconnect your saved bike", false);
             castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
             addCockpitCard(page, "BIKE DISPLAY", castStatus);
             Button cast = button(YamahaCastService.active ? "DISCONNECT BIKE" : "CONNECT BIKE");
             cast.setOnClickListener(v -> { if (YamahaCastService.active) startService(new Intent(this, YamahaCastService.class).setAction(YamahaCastService.STOP)); else chooseDash(); });
             page.addView(cast, buttonParams());
         }
-        Button diagnostics = button("BIKE CONNECTION DIAGNOSTICS");
+        page = setupGroup(sections, "Help & diagnostics", "View connection details and share a log file", false);
+        Button diagnostics = button("View and share diagnostic log");
         diagnostics.setOnClickListener(v -> {
             String report = BikeDiagnostics.report(this);
             final String copy = report;
@@ -349,16 +360,18 @@ public class MainActivity extends android.app.Activity {
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("RideDeck bike diagnostics", copy));
                 }).show();
         }); page.addView(diagnostics, buttonParams());
-        Button notifications = button("CASTING NOTIFICATION ACCESS"); notifications.setOnClickListener(v -> {
+        Button notifications = button("Allow app notifications"); notifications.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 24);
             else android.widget.Toast.makeText(this, "Available when casting starts", android.widget.Toast.LENGTH_SHORT).show();
-        }); page.addView(notifications, buttonParams());
+        }); permissionPage.addView(notifications, buttonParams());
+        page = setupGroup(sections, "App & updates", "Installed version, updates and app information", false);
         updateStatus = text("Installed " + appVersion(), 14, 0xfff4f6fa, false);
         addCockpitCard(page, "APP UPDATES", updateStatus);
         Button update = button("CHECK FOR UPDATES"); update.setOnClickListener(v -> checkForUpdate()); page.addView(update, buttonParams());
         page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
         Button about = button("ABOUT"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
-        ScrollView scroll = new ScrollView(this); scroll.addView(page);
+        styleSetupActions(sections);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(sections);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
@@ -366,6 +379,48 @@ public class MainActivity extends android.app.Activity {
         });
         setContentView(root); ScreenChrome.apply(getWindow(), false);
         androidx.core.view.ViewCompat.requestApplyInsets(root);
+    }
+
+    private LinearLayout setupGroup(LinearLayout parent, String title, String summary, boolean expanded) {
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setColor(0xff222824); background.setCornerRadius(dp(18));
+        card.setBackground(background); card.setPadding(dp(16), dp(10), dp(16), dp(12));
+        LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(-1, -2);
+        spacing.bottomMargin = dp(12); parent.addView(card, spacing);
+        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL); heading.setMinimumHeight(dp(68));
+        LinearLayout labels = new LinearLayout(this); labels.setOrientation(LinearLayout.VERTICAL);
+        labels.addView(text(title, 20, 0xfff4f6fa, true));
+        TextView detail = text(summary, 14, 0xffb4bfb8, false); detail.setPadding(0, dp(4), dp(8), 0); labels.addView(detail);
+        heading.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView toggle = text(expanded ? "−" : "+", 28, RideTheme.accent(this), true);
+        toggle.setGravity(Gravity.CENTER); heading.addView(toggle, new LinearLayout.LayoutParams(dp(40), dp(48)));
+        card.addView(heading);
+        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        content.setVisibility(expanded ? View.VISIBLE : View.GONE); card.addView(content);
+        heading.setFocusable(true); heading.setContentDescription(title + ". " + summary + (expanded ? ". Expanded" : ". Collapsed"));
+        heading.setOnClickListener(v -> {
+            boolean open = content.getVisibility() != View.VISIBLE;
+            content.setVisibility(open ? View.VISIBLE : View.GONE); toggle.setText(open ? "−" : "+");
+            heading.setContentDescription(title + ". " + summary + (open ? ". Expanded" : ". Collapsed"));
+        });
+        return content;
+    }
+
+    private void styleSetupActions(android.view.ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child instanceof Button) {
+                Button action = (Button) child; action.setAllCaps(false); action.setTextSize(16);
+                String label = action.getText().toString().toLowerCase(Locale.ROOT);
+                if (!label.isEmpty()) action.setText(Character.toUpperCase(label.charAt(0)) + label.substring(1));
+                action.setMinimumHeight(dp(52)); action.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+                action.setPadding(dp(16), dp(8), dp(16), dp(8)); action.setTextColor(0xfff4f6fa);
+                android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+                shape.setColor(0xff343e36); shape.setCornerRadius(dp(12));
+                action.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x336ee7b7), shape, null));
+            } else if (child instanceof android.view.ViewGroup) styleSetupActions((android.view.ViewGroup) child);
+        }
     }
 
     private void chooseDash() {
