@@ -528,11 +528,6 @@ public class MainActivity extends android.app.Activity {
             return;
         }
         buildScreen();
-        if (!BuildConfig.YAMAHA && Build.VERSION.SDK_INT < 32 && !isInMultiWindowMode()) {
-            new android.app.AlertDialog.Builder(this).setTitle("Phone split-screen")
-                .setMessage("On this Android version, open Recent apps and put RideDeck in split-screen, then tap Map. No bike display or debugging setup is needed.")
-                .setPositiveButton("OK", null).show(); return;
-        }
         openMapsAdjacent();
     }
 
@@ -1373,15 +1368,15 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void openMapsAdjacent() {
-        if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
-            Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
-            if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
-            try { startAdjacent(launch); } catch (Exception e) { displayError("Could not open map in split-screen. Check that this map app supports split-screen."); } return;
+        Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
+        if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
+        // Always open the selected app. Android decides whether an adjacent pane is available.
+        try { startAdjacent(launch); }
+        catch (RuntimeException adjacentError) {
+            launch.removeFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
+            try { startActivity(launch); }
+            catch (RuntimeException launchError) { displayError("Could not open " + RidePreferences.mapName(this) + "."); }
         }
-        Intent maps = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="));
-        maps.setPackage("com.google.android.apps.maps");
-        try { startAdjacent(maps); }
-        catch (Exception ignored) { displayError("Could not open Google Maps in split-screen."); }
     }
 
     private void startAdjacent(Intent intent) {
