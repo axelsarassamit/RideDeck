@@ -6,6 +6,16 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <queries>
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.apple.android.music" />
+        <package android:name="com.amazon.mp3" />
+        <package android:name="deezer.android.app" />
+        <package android:name="com.aspiro.tidal" />
+        <package android:name="org.videolan.vlc" />
+        <package android:name="com.maxmpz.audioplayer" />
+        <package android:name="com.sec.android.app.music" />
+        <package android:name="in.krosbits.musicolet" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.APP_MUSIC" /></intent>
         <intent><action android:name="android.speech.action.VOICE_SEARCH_HANDS_FREE" /></intent>
         <package android:name="com.waze" />
         <package android:name="com.grabtaxi.driver2" />

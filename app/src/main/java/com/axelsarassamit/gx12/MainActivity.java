@@ -247,7 +247,7 @@ public final class MainActivity extends android.app.Activity {
         Button back = rideAction("Done", false); back.setOnClickListener(v -> buildScreen());
         header.addView(back, new LinearLayout.LayoutParams(dp(120), dp(56))); root.addView(header);
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        Button personalize = button("LAYOUT + APP CHOICES"); personalize.setOnClickListener(v -> showPersonalization());
+        Button personalize = button("CUSTOMIZATION"); personalize.setOnClickListener(v -> showPersonalization());
         addSection(page, "YOUR COCKPIT", personalize);
         android.widget.Spinner bikes = new android.widget.Spinner(this);
         android.widget.ArrayAdapter<String> bikeOptions = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, RidePreferences.BIKE_NAMES);
@@ -613,8 +613,11 @@ public final class MainActivity extends android.app.Activity {
             LinearLayout.LayoutParams art = new LinearLayout.LayoutParams(dp(58), dp(58)); art.rightMargin = dp(12);
             details.addView(albumArt, art);
         }
-        trackStatus = text("Open Spotify to start listening", compact ? 16 : 19, 0xfff4f6fa, true);
+        trackStatus = text("Tap to open " + RidePreferences.musicName(this), compact ? 16 : 19, 0xfff4f6fa, true);
         trackStatus.setMaxLines(compact ? 2 : 3); trackStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        details.setOnClickListener(v -> openPreferredMusic());
+        trackStatus.setOnClickListener(v -> openPreferredMusic());
+        music.setOnClickListener(v -> openPreferredMusic());
         details.addView(trackStatus, new LinearLayout.LayoutParams(0, -1, 1));
         music.addView(details, compact ? new LinearLayout.LayoutParams(0, -1, 1) : new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout transport = new LinearLayout(this);
@@ -897,23 +900,92 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void showPersonalization() {
-        new android.app.AlertDialog.Builder(this).setTitle("Your cockpit")
-            .setItems(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme"}, (dialog, which) -> {
+        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                     .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
-                        RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildScreen();
+                        RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
                     }).setNegativeButton("Cancel", null).show();
                 else if (which == 1) chooseMessageApps(); else if (which == 2) chooseMapApp();
                 else if (which == 4) showLayoutChoice();
                 else if (which == 5) new android.app.AlertDialog.Builder(this).setTitle("Color theme")
                     .setSingleChoiceItems(RideTheme.NAMES, RidePreferences.prefs(this).getInt("color_theme", 0), (d, selected) -> {
-                        RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); buildScreen();
-                    }).setNegativeButton("Close", null).show();
+                        RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
+                    });
+                else if (which == 6) chooseMusicPlayer();
                 else new android.app.AlertDialog.Builder(this).setTitle("Reply method")
                     .setSingleChoiceItems(new String[]{"Voice to text - confirm before sending", "Voice message - open original app"}, RidePreferences.prefs(this).getInt("reply_mode", 0), (d, choice) -> {
                         RidePreferences.prefs(this).edit().putInt("reply_mode", choice).apply(); d.dismiss();
-                    }).setNegativeButton("Close", null).show();
-            }).setNegativeButton("Close", null).show();
+                    });
+            });
+    }
+
+    private void showCustomizationMenu(String[] labels, android.content.DialogInterface.OnClickListener choose) {
+        android.app.Dialog menu = new android.app.Dialog(this);
+        menu.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(16), dp(16), dp(16), dp(16)); page.setBackgroundColor(0xff151715);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
+            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
+        });
+        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.addView(text("Customization", 26, RideTheme.accent(this), true), new LinearLayout.LayoutParams(0, -2, 1));
+        Button back = rideAction("Done", false); back.setOnClickListener(v -> menu.dismiss());
+        heading.addView(back, new LinearLayout.LayoutParams(dp(88), dp(56))); page.addView(heading);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout items = new LinearLayout(this); items.setOrientation(LinearLayout.VERTICAL);
+        for (int i = 0; i < labels.length; i++) {
+            final int choice = i;
+            LinearLayout row = rideCard(labels[i].toUpperCase(java.util.Locale.ROOT));
+            String detail = i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
+                : i == 6 ? RidePreferences.musicName(this) : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
+                : i == 0 ? new String[]{"Left", "Centre", "Right"}[RidePreferences.prefs(this).getInt("mount", 1)]
+                : i == 1 ? "Choose which apps appear in Messages" : i == 3 ? "Voice text or voice message" : "Choose the control position";
+            row.addView(text(detail, 19, 0xfff4f6fa, true));
+            row.setMinimumHeight(dp(88)); row.setOnClickListener(v -> { menu.dismiss(); choose.onClick(menu, choice); });
+            items.addView(row, rideParams(96));
+        }
+        scroll.addView(items); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        menu.setContentView(page); menu.show(); menu.getWindow().setLayout(-1, -1);
+    }
+    private void chooseMusicPlayer() {
+        java.util.LinkedHashMap<String, String> choices = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < RidePreferences.MUSIC_PACKAGES.length; i++) {
+            String pkg = RidePreferences.MUSIC_PACKAGES[i];
+            if (getPackageManager().getLaunchIntentForPackage(pkg) != null) choices.put(pkg, RidePreferences.MUSIC_NAMES[i]);
+        }
+        Intent category = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MUSIC);
+        for (android.content.pm.ResolveInfo app : getPackageManager().queryIntentActivities(category, 0)) {
+            choices.putIfAbsent(app.activityInfo.packageName, app.loadLabel(getPackageManager()).toString());
+        }
+        if (choices.isEmpty()) { displayError("No supported music player is installed. Install your music app first."); return; }
+        java.util.List<String> packages = new java.util.ArrayList<>(choices.keySet());
+        new android.app.AlertDialog.Builder(this).setTitle("Music player")
+            .setSingleChoiceItems(choices.values().toArray(new String[0]), packages.indexOf(RidePreferences.selectedMusic(this)), (dialog, which) -> {
+                RidePreferences.prefs(this).edit().putString("music_app", packages.get(which)).apply();
+                mediaController = null; dialog.dismiss(); buildSetupScreen(); showPersonalization();
+            }).setNegativeButton("Cancel", null).show();
+    }
+    private void openPreferredMusic() {
+        refreshMediaSession();
+        if (mediaController != null) {
+            PlaybackState state = mediaController.getPlaybackState();
+            if (state != null && state.getState() != PlaybackState.STATE_PLAYING) mediaController.getTransportControls().play();
+            return;
+        }
+        Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMusic(this));
+        if (launch == null) { showRideMessage("Your selected music player is not installed. Choose a player in Setup > Customization."); return; }
+        try {
+            android.content.pm.ActivityInfo info = getPackageManager().resolveActivity(launch, 0).activityInfo;
+            if (info.launchMode == android.content.pm.ActivityInfo.LAUNCH_SINGLE_TASK || info.launchMode == android.content.pm.ActivityInfo.LAUNCH_SINGLE_INSTANCE) {
+                showRideMessage("Opening " + RidePreferences.musicName(this) + ". Start a track, then return to RideDeck.");
+                startActivity(launch);
+            } else {
+                launch.setFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+                startActivity(launch, android.app.ActivityOptions.makeTaskLaunchBehind().toBundle());
+                showRideMessage("Opened " + RidePreferences.musicName(this) + " behind RideDeck. You may need to start a track in that app first.");
+            }
+        } catch (Exception error) { showRideMessage("Could not open your music player."); }
     }
 
     private boolean controlsOnRight() {
@@ -1054,20 +1126,16 @@ public final class MainActivity extends android.app.Activity {
             List<MediaController> sessions = manager.getActiveSessions(listener);
             mediaController = null;
             for (MediaController session : sessions) {
-                if ("com.spotify.music".equals(session.getPackageName())) {
+                if (RidePreferences.selectedMusic(this).equals(session.getPackageName())) {
                     mediaController = session;
                     break;
                 }
             }
             if (mediaController == null) {
-                for (MediaController session : sessions) {
-                    PlaybackState playback = session.getPlaybackState();
-                    if (playback != null && playback.getState() == PlaybackState.STATE_PLAYING) { mediaController = session; break; }
-                }
-            }
-            if (mediaController == null && !sessions.isEmpty()) mediaController = sessions.get(0);
-            if (mediaController == null) {
-                trackStatus.setText("Open Spotify and start a track");
+                trackStatus.setText("Tap to open " + RidePreferences.musicName(this));
+                if (albumArt != null) albumArt.setImageResource(android.R.drawable.ic_media_play);
+                if (playPauseButton instanceof ControlIconButton) ((ControlIconButton) playPauseButton).setControl("▶");
+                playPauseButton.setContentDescription("Open " + RidePreferences.musicName(this));
                 updateMediaButtons(false, false, false);
                 return;
             }
@@ -1101,13 +1169,13 @@ public final class MainActivity extends android.app.Activity {
     private void updateMediaButtons(boolean active, boolean previous, boolean next) {
         if (previousButton == null) return;
         previousButton.setEnabled(active && previous);
-        playPauseButton.setEnabled(active);
+        playPauseButton.setEnabled(true);
         nextButton.setEnabled(active && next);
     }
 
     private void sendMedia(MediaAction action) {
         refreshMediaSession();
-        if (mediaController == null) return;
+        if (mediaController == null) { if (action == MediaAction.TOGGLE) openPreferredMusic(); return; }
         try {
             MediaController.TransportControls controls = mediaController.getTransportControls();
             if (action == MediaAction.PREVIOUS) controls.skipToPrevious();
