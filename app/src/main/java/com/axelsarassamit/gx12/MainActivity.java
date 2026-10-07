@@ -154,7 +154,7 @@ public class MainActivity extends android.app.Activity {
         super.onStop();
     }
     private final Runnable callRefresh = new Runnable() {
-        @Override public void run() { refreshCallPanel(); reconnectSavedBike(); handler.postDelayed(this, 500); }
+        @Override public void run() { refreshCallPanel(); reconnectSavedBike(); if (!setupVisible) PortraitSplitPlacement.check(MainActivity.this); handler.postDelayed(this, 500); }
     };
     private void reconnectSavedBike() {
         if (!activityVisible || setupVisible || this instanceof SetupActivity || YamahaCastService.active
