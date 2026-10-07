@@ -91,6 +91,10 @@ object DashServer {
     @Volatile private var latestJpeg: ByteArray? = null
     @Volatile private var latestSeq = 0L
     @Volatile private var failureMessage: String? = null
+    private val diagnosticEvents = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private fun diagnostic(event: String) {
+        if (diagnosticEvents.size < 64) diagnosticEvents.offer(event.take(300))
+    }
 
     // Battery: encode only while a foreground app is promoted (phone locked). Idle otherwise.
     @Volatile private var capturing = false
@@ -236,6 +240,11 @@ object DashServer {
             client.tcpNoDelay = true
             val out = DataOutputStream(BufferedOutputStream(client.getOutputStream()))
             while (!client.isClosed) {
+                while (true) {
+                    val event = diagnosticEvents.poll() ?: break
+                    val bytes = event.toByteArray(Charsets.UTF_8)
+                    out.writeInt(Int.MIN_VALUE); out.writeInt(bytes.size); out.write(bytes); out.flush()
+                }
                 val frame = latestJpeg
                 val failure = failureMessage
                 if (failure != null) {
@@ -271,7 +280,8 @@ object DashServer {
                     line.startsWith("ROUTE ") -> {
                         val uri = line.removePrefix("ROUTE ").trim()
                         if (selectedPackage == "com.google.android.apps.maps" && uri.startsWith("google.navigation:q=")) {
-                            exec("am", "start", "--display", displayId.toString(), "-a", "android.intent.action.VIEW", "-d", uri, "-p", "com.google.android.apps.maps")
+                            val exit = exec("am", "start", "--display", displayId.toString(), "-a", "android.intent.action.VIEW", "-d", uri, "-p", "com.google.android.apps.maps")
+                            diagnostic("Route launch exit=$exit display=$displayId navigationState=unverified")
                             lastComponent?.let { promoteApp(it) }
                         }
                     }
@@ -279,12 +289,15 @@ object DashServer {
                         val points = line.removePrefix("TAP ").split(' ').mapNotNull { it.toFloatOrNull() }
                         if (points.size == 2 && points.all { it.isFinite() && it in 0f..1f } && taskAndDisplayForPackage(selectedPackage)?.second == displayId) {
                             runCatching { DashTouch.tap(displayId, points[0] * (virtualWidth - 1), points[1] * (virtualHeight - 1)) }
+                                .onSuccess { diagnostic("Map tap injection accepted; applicationResult=unverified") }
+                                .onFailure { diagnostic("Map tap injection failed exception=${it.javaClass.simpleName}") }
                                 .onFailure { Log.w(TAG, "Map tap unavailable: ${reason(it)}") }
-                        }
+                        } else diagnostic("Map tap rejected; invalid input or map on another display")
                     }
                     line == "STOP_ROUTE" -> {
                         if (selectedPackage == "com.google.android.apps.maps" && taskAndDisplayForPackage(selectedPackage)?.second == displayId) {
-                            exec("am", "force-stop", selectedPackage)
+                            val exit = exec("am", "force-stop", selectedPackage)
+                            diagnostic("Stop route force-stop exit=$exit")
                             latestJpeg = null
                             lastComponent?.let { promoteApp(it) }
                         }
@@ -292,8 +305,10 @@ object DashServer {
                     line == "ZOOM_IN" || line == "ZOOM_OUT" -> {
                         if (taskAndDisplayForPackage(selectedPackage)?.second == displayId) {
                             runCatching { DashTouch.zoom(displayId, virtualWidth, virtualHeight, line == "ZOOM_IN") }
+                                .onSuccess { diagnostic("Zoom injection accepted direction=${if (line == "ZOOM_IN") "in" else "out"}; applicationResult=unverified") }
+                                .onFailure { diagnostic("Zoom injection failed exception=${it.javaClass.simpleName}") }
                                 .onFailure { Log.w(TAG, "Zoom gesture unavailable: ${reason(it)}") }
-                        }
+                        } else diagnostic("Zoom rejected; map on another display")
                     }
                     line == "DEMOTE" -> demoteApp()
                     line.startsWith("SIZE ") -> resizeOutput(line.removePrefix("SIZE ").trim())

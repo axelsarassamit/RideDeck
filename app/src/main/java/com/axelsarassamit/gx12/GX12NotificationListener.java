@@ -51,6 +51,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
     }
 
     @Override public void onListenerConnected() {
+        BikeDiagnostics.record(this, "Notification listener connected");
         super.onListenerConnected(); connected = this; RideQuietMode.refresh(this);
         android.util.Log.i("RideDeckListener", "Notification listener connected"); applyQuietMode(); refreshActive();
     }
@@ -120,6 +121,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
         if (!TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
             NotificationPreview preview = new NotificationPreview(title == null ? "Message" : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(this, sbn.getPackageName()));
             if (call) {
+                if (activeCall == null || !activeCall.key.equals(sbn.getKey())) BikeDiagnostics.record(this, "Call notification received actions=" + (notification.actions == null ? 0 : notification.actions.length));
                 preview.callActions = notification.actions;
                 activeCall = preview;
                 return;
@@ -142,7 +144,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null) return;
-        if (activeCall != null && activeCall.key.equals(sbn.getKey())) activeCall = null;
+        if (activeCall != null && activeCall.key.equals(sbn.getKey())) { BikeDiagnostics.record(this, "Call notification removed"); activeCall = null; }
         synchronized (GX12NotificationListener.class) {
             for (NotificationPreview item : previews.selected(RidePreferences.selectedMessages(this))) {
                 if (sbn.getKey().equals(item.key)) { item.reply = null; item.replyInput = null; item.markRead = null; }
@@ -150,6 +152,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
         }
     }
     @Override public void onListenerDisconnected() {
+        BikeDiagnostics.record(this, "Notification listener disconnected");
         if (connected == this) connected = null;
         activeCall = null; clearPreviews(); super.onListenerDisconnected(); recover(this);
     }

@@ -143,11 +143,13 @@ public class MainActivity extends android.app.Activity {
 
     @Override protected void onStart() {
         super.onStart();
+        BikeDiagnostics.record(this, "Riding UI visible split=" + isInMultiWindowMode() + " orientation=" + getResources().getConfiguration().orientation);
         activityVisible = true;
         GX12NotificationListener.activityVisible(true); RideQuietMode.visibility(this, true);
         handler.post(callRefresh);
     }
     @Override protected void onStop() {
+        BikeDiagnostics.record(this, "Riding UI hidden");
         activityVisible = false;
         handler.removeCallbacks(callRefresh);
         GX12NotificationListener.activityVisible(false); RideQuietMode.visibility(this, false);
@@ -533,6 +535,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void rideMapAction() {
+        BikeDiagnostics.record(this, "Map action bikeActive=" + YamahaCastService.active + " automatic=" + RidePreferences.automaticMap(this));
         if (!RidePreferences.automaticMap(this) && RidePreferences.manualPhoneMap(this)) { openPhoneMap(); return; }
         if (YamahaCastService.active) {
             if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
@@ -546,8 +549,8 @@ public class MainActivity extends android.app.Activity {
                     String address = destination.getText().toString().trim();
                     if (address.isEmpty()) return;
                     worker.execute(() -> {
-                        try { DedicatedDisplay.route(address); }
-                        catch (Exception e) { runOnUiThread(() -> displayError(safeMessage(e))); }
+                        try { DedicatedDisplay.route(address); BikeDiagnostics.record(this, "Typed destination forwarded"); }
+                        catch (Exception e) { BikeDiagnostics.record(this, "Typed destination failed exception=" + e.getClass().getSimpleName()); runOnUiThread(() -> displayError(safeMessage(e))); }
                     });
                 }).show();
             return;
@@ -853,6 +856,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void acknowledgeMessage(GX12NotificationListener.NotificationPreview item) {
+        BikeDiagnostics.record(this, "Message seen/next requested available=" + (item != null));
         if (item == null) return;
         GX12NotificationListener.acknowledge(item);
         if (item.markRead != null) try { item.markRead.send(); }
@@ -1317,6 +1321,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void sendMedia(MediaAction action) {
+        BikeDiagnostics.record(this, "Music control requested action=" + action);
         refreshMediaSession();
         if (mediaController == null) { if (action == MediaAction.TOGGLE) openPreferredMusic(); return; }
         try {

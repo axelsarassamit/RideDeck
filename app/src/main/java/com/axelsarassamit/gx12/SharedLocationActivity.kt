@@ -15,6 +15,7 @@ class SharedLocationActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        BikeDiagnostics.record(this, "Shared destination received")
         val text = if (intent.action == Intent.ACTION_SEND) intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() else null
         if (text.isNullOrBlank() || text.length > 12000) { fail("Share a place from Google Maps to RideDeck."); return }
         val progress = AlertDialog.Builder(this).setTitle("Shared destination").setMessage("Finding the place...").setNegativeButton("Cancel") { _, _ -> finish() }.create()
@@ -24,7 +25,7 @@ class SharedLocationActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 progress.dismiss()
-                result.onSuccess { confirm(it) }.onFailure { fail("This shared link could not be read. Share the place again, or enter its full address in RideDeck.") }
+                result.onSuccess { BikeDiagnostics.record(this, "Shared destination resolved"); confirm(it) }.onFailure { BikeDiagnostics.record(this, "Shared destination resolution failed exception=${it.javaClass.simpleName}"); fail("This shared link could not be read. Share the place again, or enter its full address in RideDeck.") }
             }
         }
     }
@@ -101,9 +102,10 @@ class SharedLocationActivity : Activity() {
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         sent.onSuccess {
+                            BikeDiagnostics.record(this, "Shared destination forwarded")
                             android.widget.Toast.makeText(this, "Destination sent to bike. Maps may still require Start.", android.widget.Toast.LENGTH_LONG).show()
                             finish()
-                        }.onFailure { field.error = "Could not send destination. Check the bike connection."; dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true }
+                        }.onFailure { BikeDiagnostics.record(this, "Shared destination forwarding failed exception=${it.javaClass.simpleName}"); field.error = "Could not send destination. Check the bike connection."; dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true }
                     }
                 }
             }

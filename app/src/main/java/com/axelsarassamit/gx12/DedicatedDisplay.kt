@@ -133,6 +133,13 @@ object DedicatedDisplay {
                 val input = DataInputStream(link.getInputStream().buffered())
                 while (reading && token == session) {
                     val size = input.readInt()
+                    if (size == Int.MIN_VALUE) {
+                        val count = input.readInt()
+                        check(count in 1..1200) { "Invalid helper diagnostic" }
+                        val event = ByteArray(count); input.readFully(event)
+                        BikeDiagnostics.record(context, "Helper control: " + String(event, Charsets.UTF_8))
+                        continue
+                    }
                     if (size in -4096..-1) {
                         val message = ByteArray(-size); input.readFully(message)
                         error(String(message, Charsets.UTF_8))

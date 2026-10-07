@@ -120,18 +120,19 @@ public final class QuickCameraActivity extends ComponentActivity {
                 recording = pending.start(ContextCompat.getMainExecutor(this), event -> {
                     if (event instanceof VideoRecordEvent.Status) status.setText("Recording " + (((VideoRecordEvent.Status)event).getRecordingStats().getRecordedDurationNanos() / 1000000000L) + "s - tap picture to stop");
                     if (event instanceof VideoRecordEvent.Finalize) {
+                        BikeDiagnostics.record(QuickCameraActivity.this, "Camera recording finished error=" + ((VideoRecordEvent.Finalize)event).getError());
                         recording = null; capture.setText("Record"); setBusy(false);
                         status.setText(((VideoRecordEvent.Finalize)event).hasError() ? "Recording ended with an error. Check your gallery." : "Video saved - tap picture to record again");
                     }
                 });
                 flip.setEnabled(false); mode.setEnabled(false); capture.setText("Stop recording"); status.setText(audio ? "Recording with sound" : "Recording without sound");
-            } catch (Exception e) { status.setText("Cannot record. Check permissions and free storage."); }
+            } catch (Exception e) { BikeDiagnostics.record(this, "Camera recording failed exception=" + e.getClass().getSimpleName()); status.setText("Cannot record. Check permissions and free storage."); }
         } else if (photo != null) {
             setBusy(true);
             ImageCapture.OutputFileOptions options = new ImageCapture.OutputFileOptions.Builder(getContentResolver(), MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values(false)).build();
             photo.takePicture(options, ContextCompat.getMainExecutor(this), new ImageCapture.OnImageSavedCallback() {
-                @Override public void onImageSaved(ImageCapture.OutputFileResults result) { status.setText("Photo saved - tap picture to take another"); setBusy(false); }
-                @Override public void onError(ImageCaptureException error) { status.setText("Photo could not be saved. Check free storage."); setBusy(false); }
+                @Override public void onImageSaved(ImageCapture.OutputFileResults result) { BikeDiagnostics.record(QuickCameraActivity.this, "Camera photo saved"); status.setText("Photo saved - tap picture to take another"); setBusy(false); }
+                @Override public void onError(ImageCaptureException error) { BikeDiagnostics.record(QuickCameraActivity.this, "Camera photo failed error=" + error.getImageCaptureError()); status.setText("Photo could not be saved. Check free storage."); setBusy(false); }
             });
         }
     }

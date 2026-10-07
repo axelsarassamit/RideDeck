@@ -74,6 +74,7 @@ class YamahaCastService : Service() {
             else startForeground(22, notice)
             running = true; active = true
             diagnostic("Session started automatic=$automatic map=${RidePreferences.selectedMap(this)} density=${RidePreferences.bikeMapDensity(this)} Android=${Build.VERSION.SDK_INT}")
+            BikeDiagnostics.snapshot(this)
             status = "Connecting to the selected Yamaha dash…"
             deadline = SystemClock.elapsedRealtime() + 20000
             watchdog.scheduleWithFixedDelay({
