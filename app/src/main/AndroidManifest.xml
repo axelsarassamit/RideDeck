@@ -65,11 +65,11 @@
     <application
         android:name=".RideDeckApplication"
         android:allowBackup="false"
-        android:label="RideDeck"
+        android:label="${appLabel}"
         android:icon="@drawable/ridedeck_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
-        <activity android:name=".SharedLocationActivity" android:exported="true" android:screenOrientation="portrait" android:label="RideDeck">
+        <activity android:name=".SharedLocationActivity" android:exported="true" android:screenOrientation="portrait" android:label="${appLabel}">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -78,7 +78,7 @@
         </activity>
         <activity android:name=".SetupActivity" android:exported="true"
             android:screenOrientation="portrait" android:resizeableActivity="false"
-            android:taskAffinity="com.axelsarassamit.gx12.setup" android:excludeFromRecents="true">
+            android:taskAffinity="${applicationId}.setup" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -106,8 +106,7 @@
             </intent-filter>
         </service>
 
-        <service android:name=".YamahaCastService" android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+
         <receiver android:name=".UpdateRecoveryReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>

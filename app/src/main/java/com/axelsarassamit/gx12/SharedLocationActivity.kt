@@ -80,7 +80,7 @@ class SharedLocationActivity : Activity() {
 
     private fun confirm(destination: String) {
         val field = EditText(this).apply { setText(destination); hint = "Confirm the place or full address" }
-        val dialog = AlertDialog.Builder(this).setTitle("Navigate on bike").setMessage("Check the destination while parked.")
+        val dialog = AlertDialog.Builder(this).setTitle("Shared destination").setMessage("Check the destination while parked.")
             .setView(field).setNegativeButton("Cancel") { _, _ -> finish() }
             .setPositiveButton("Navigate", null).create()
         dialog.setOnCancelListener { finish() }
@@ -88,26 +88,16 @@ class SharedLocationActivity : Activity() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val target = field.text.toString().trim()
                 if (target.isEmpty()) { field.error = "Enter a destination"; return@setOnClickListener }
-                if (!DedicatedDisplay.ready || !YamahaCastService.active) {
-                    field.error = "Connect the bike display in RideDeck first, then share the place again."
+                if (BuildConfig.YAMAHA) {
+                    startActivity(Intent(this, MainActivity::class.java).putExtra("shared_destination", target))
+                    finish()
                     return@setOnClickListener
                 }
-                if (RidePreferences.selectedMap(this) != "com.google.android.apps.maps") {
-                    field.error = "Shared destinations currently require Google Maps."
-                    return@setOnClickListener
-                }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                worker.execute {
-                    val sent = runCatching { DedicatedDisplay.route(target) }
-                    runOnUiThread {
-                        if (isFinishing || isDestroyed) return@runOnUiThread
-                        sent.onSuccess {
-                            BikeDiagnostics.record(this, "Shared destination forwarded")
-                            android.widget.Toast.makeText(this, "Destination sent to bike. Maps may still require Start.", android.widget.Toast.LENGTH_LONG).show()
-                            finish()
-                        }.onFailure { BikeDiagnostics.record(this, "Shared destination forwarding failed exception=${it.javaClass.simpleName}"); field.error = "Could not send destination. Check the bike connection."; dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true }
-                    }
-                }
+                val coordinate = Regex("^-?\\d+(?:\\.\\d+)?,\\s*-?\\d+(?:\\.\\d+)?$").matches(target)
+                val destinationUri = if (RidePreferences.selectedMap(this) == "com.waze" && coordinate) Uri.parse("https://waze.com/ul").buildUpon().appendQueryParameter("ll", target).appendQueryParameter("navigate", "yes").build()
+                    else Uri.parse("geo:0,0").buildUpon().appendQueryParameter("q", target).build()
+                try { startActivity(Intent(Intent.ACTION_VIEW, destinationUri).setPackage(RidePreferences.selectedMap(this))); finish() }
+                catch (_: Exception) { field.error = "The selected map app cannot open this destination." }
             }
         }
         dialog.show()

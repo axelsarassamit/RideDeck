@@ -11,3 +11,5 @@ signing/
 *.apk
 *.aab
 release-key.properties
+
+legacy-adb/

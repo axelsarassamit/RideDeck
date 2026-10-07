@@ -32,3 +32,9 @@ Upstream source retains the authors' notices and is available at the link above.
 Bouncy Castle 1.81: https://www.bouncycastle.org/licence.html
 Conscrypt Android 2.5.3: https://github.com/google/conscrypt (Apache-2.0).
 Dependency META-INF license and notice resources are merged into the package.
+
+## Edition transition
+
+The phone edition excludes Pillion source and ADB dependencies. The Yamaha edition retains Pillion core/protocol under the notice above. DashServer, DashTouch, PillionAdb and LocalAdbDiscovery are retired and are not built into either edition. Their historical notices above describe the earlier distribution.
+
+MapLibre Native Android 13.4.1 renders the Yamaha map under BSD-2-Clause. Source: https://github.com/maplibre/maplibre-native . Provider content is licensed separately by MapTiler, OpenStreetMap and GraphHopper. The exact MapTiler logo from https://api.maptiler.com/resources/logo.svg is retained as a required provider attribution asset and converted to an Android vector without changing its paths. It is not RideDeck branding.

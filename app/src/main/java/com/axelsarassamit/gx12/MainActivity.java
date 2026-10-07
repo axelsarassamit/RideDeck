@@ -136,7 +136,7 @@ public class MainActivity extends android.app.Activity {
         refreshDeviceStatus();
         if (state == null && RidePreferences.automaticMap(this) && RidePreferences.prefs(this).getBoolean("map_startup", true)) {
             handler.postDelayed(() -> {
-                if (activityResumed && !setupVisible && !YamahaCastService.active && autoMapSession == null) rideMapAction();
+                if (activityResumed && !setupVisible && !YamahaCastService.active && autoMapSession == null) startAutomaticMap();
             }, 1000);
         }
     }
@@ -147,6 +147,11 @@ public class MainActivity extends android.app.Activity {
         activityVisible = true;
         GX12NotificationListener.activityVisible(true); RideQuietMode.visibility(this, true);
         handler.post(callRefresh);
+        String shared = getIntent().getStringExtra("shared_destination");
+        if (BuildConfig.YAMAHA && shared != null && !setupVisible) {
+            getIntent().removeExtra("shared_destination");
+            handler.postDelayed(() -> NavigationUi.search(this, shared), 400);
+        }
     }
     @Override protected void onStop() {
         BikeDiagnostics.record(this, "Riding UI hidden");
@@ -156,10 +161,14 @@ public class MainActivity extends android.app.Activity {
         super.onStop();
     }
     private final Runnable callRefresh = new Runnable() {
-        @Override public void run() { refreshCallPanel(); reconnectSavedBike(); if (!setupVisible) PortraitSplitPlacement.check(MainActivity.this); handler.postDelayed(this, 500); }
+        @Override public void run() {
+            if (BuildConfig.YAMAHA && !setupVisible && !RidePreferences.prefs(MainActivity.this).getString("phone_panel", "map").equals(renderedPanel)) buildScreen();
+            refreshCallPanel(); reconnectSavedBike(); handler.postDelayed(this, 500);
+        }
     };
+    private String renderedPanel = "map";
     private void reconnectSavedBike() {
-        if (!activityVisible || setupVisible || this instanceof SetupActivity || YamahaCastService.active
+        if (!BuildConfig.YAMAHA || !activityVisible || setupVisible || this instanceof SetupActivity || YamahaCastService.active
             || YamahaCastService.autoReconnectPaused || !RidePreferences.automaticMap(this)) return;
         long now = android.os.SystemClock.elapsedRealtime();
         if (now < nextAutomaticBikeAttempt) return;
@@ -169,17 +178,18 @@ public class MainActivity extends android.app.Activity {
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         boolean displayBike = RidePreferences.prefs(this).getInt("bike_profile", 1) != RidePreferences.BIKE_NAMES.length - 1;
         if (!MapDisplayPolicy.tryBike(permitted, permitted && adapter != null && adapter.isEnabled(),
-            displayBike && !address.isEmpty(), DedicatedDisplay.savedPort(this) != 0)) return;
+            displayBike && !address.isEmpty(), true)) return;
         startAutomaticMap();
     }
     private LinearLayout callPanel;
     private LinearLayout musicPanel;
+    private LinearLayout messagePanel;
     private boolean compactCall;
     private GX12NotificationListener.NotificationPreview renderedCall;
     private void refreshCallPanel() {
         if (callPanel == null) return;
         GX12NotificationListener.NotificationPreview call = GX12NotificationListener.activeCall;
-        if (musicPanel != null) musicPanel.setVisibility(call == null ? View.VISIBLE : View.GONE);
+        if (messagePanel != null) messagePanel.setVisibility(call == null ? View.VISIBLE : View.GONE);
         if (call == renderedCall) return;
         renderedCall = call;
         callPanel.removeAllViews();
@@ -277,33 +287,16 @@ public class MainActivity extends android.app.Activity {
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         Button personalize = button("CUSTOMIZATION"); personalize.setOnClickListener(v -> showPersonalization());
         addSection(page, "YOUR COCKPIT", personalize);
-        android.widget.Spinner bikes = new android.widget.Spinner(this);
-        android.widget.ArrayAdapter<String> bikeOptions = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, RidePreferences.BIKE_NAMES);
-        bikes.setAdapter(bikeOptions); bikes.setBackgroundColor(0xffdce5ee); bikes.setMinimumHeight(dp(64));
-        bikes.setSelection(Math.max(0, Math.min(RidePreferences.prefs(this).getInt("bike_profile", 1), RidePreferences.BIKE_NAMES.length - 1)));
-        bikes.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
-                RidePreferences.prefs(MainActivity.this).edit().putInt("bike_profile", position).apply();
-            }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
-        });
-        page.addView(text("YOUR BIKE", 16, 0xfff4f6fa, true)); page.addView(bikes, new LinearLayout.LayoutParams(-1, dp(64)));
-        page.addView(text("Phone split-screen works without a bike display. Bike casting currently supports compatible Yamaha/StreetCross navigation dashboards only.", 14, 0xffaab4c0, false));
-        Button mapMode = button(RidePreferences.automaticMap(this) ? "MAP DISPLAY: AUTOMATIC" : "MAP DISPLAY: MANUAL");
-        mapMode.setOnClickListener(v -> new android.app.AlertDialog.Builder(this).setTitle("Map display mode")
-            .setSingleChoiceItems(new String[]{"Automatic: saved bike display, otherwise phone split-screen", "Manual: choose where the map appears"}, RidePreferences.automaticMap(this) ? 0 : 1,
-                (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_auto", which == 0).apply(); autoMapSession = null; phoneMapPending = false; YamahaCastService.automaticFallbackPending = false; dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
-        page.addView(mapMode, buttonParams());
-        CheckBox mapStartup = new CheckBox(this); mapStartup.setText("Open map automatically when RideDeck starts");
-        mapStartup.setTextColor(0xfff4f6fa);
-        mapStartup.setChecked(RidePreferences.prefs(this).getBoolean("map_startup", true));
-        mapStartup.setOnCheckedChangeListener((b, checked) -> RidePreferences.prefs(this).edit().putBoolean("map_startup", checked).apply());
-        if (RidePreferences.automaticMap(this)) page.addView(mapStartup);
-        Button manualMap = button(RidePreferences.manualPhoneMap(this) ? "MANUAL MAP: PHONE SPLIT-SCREEN" : "MANUAL MAP: BIKE DISPLAY");
-        manualMap.setOnClickListener(v -> new android.app.AlertDialog.Builder(this).setTitle("Manual map destination")
-            .setSingleChoiceItems(new String[]{"Phone split-screen (any bike)", "Compatible bike display"}, RidePreferences.manualPhoneMap(this) ? 0 : 1,
-                (dialog, which) -> { RidePreferences.prefs(this).edit().putBoolean("map_manual_phone", which == 0).apply(); dialog.dismiss(); buildSetupScreen(); }).setNegativeButton("Close", null).show());
-        if (!RidePreferences.automaticMap(this)) page.addView(manualMap, buttonParams());
+        page.addView(text(BuildConfig.YAMAHA ? "MapLibre navigation for compatible Yamaha displays" : "Phone navigation with your chosen map app", 16, 0xfff4f6fa, true));
+        Button navigation = button(BuildConfig.YAMAHA ? "MAP + PANEL SETTINGS" : "CHOOSE MAP APP");
+        navigation.setOnClickListener(v -> { if (BuildConfig.YAMAHA) NavigationUi.configure(this); else chooseMapApp(); });
+        page.addView(navigation, buttonParams());
+        if (BuildConfig.YAMAHA) {
+            CheckBox connect = new CheckBox(this); connect.setText("Connect to saved bike automatically"); connect.setTextColor(0xfff4f6fa);
+            connect.setChecked(RidePreferences.automaticMap(this));
+            connect.setOnCheckedChangeListener((b, value) -> RidePreferences.prefs(this).edit().putBoolean("map_auto", value).apply());
+            page.addView(connect);
+        }
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
             Button quiet = button(nm.isNotificationPolicyAccessGranted() ? "QUIET MODE ENABLED" : "ENABLE QUIET MODE");
@@ -325,18 +318,13 @@ public class MainActivity extends android.app.Activity {
         }
         Button bluetooth = button("BLUETOOTH SETTINGS"); bluetooth.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         page.addView(bluetooth, buttonParams());
-        castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
-        addCockpitCard(page, "BIKE DISPLAY - EXPERIMENTAL", castStatus);
-        Button cast = button(YamahaCastService.active ? "STOP BIKE DISPLAY" : "START BIKE DISPLAY");
-        cast.setOnClickListener(v -> {
-            if (YamahaCastService.active) { autoMapSession = null; YamahaCastService.automaticFallbackPending = false; startService(new Intent(this, YamahaCastService.class).setAction(YamahaCastService.STOP)); handler.postDelayed(this::buildSetupScreen, 400); }
-            else chooseDash();
-        }); page.addView(cast, buttonParams());
-        Button display = button("HOW TO CAST TO THE BIKE"); display.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
-            .setTitle("Bluetooth map sharing")
-            .setMessage("Pair the Yamaha in Bluetooth settings. Prepare separate-display access in Advanced display options while parked. Tap Start bike display or Map to send the selected map to the saved bike. Open navigation on the bike. Use Map on the phone to enter a Google Maps destination. The map stays on the bike. Phone Wi-Fi is needed for Wireless debugging setup; the bike receives images over Bluetooth. Operation after disconnecting Wi-Fi still needs verification on your phone.")
-            .setPositiveButton("Got it", null).show());
-        page.addView(display, buttonParams());
+        if (BuildConfig.YAMAHA) {
+            castStatus = text(YamahaCastService.status, 14, 0xfff4f6fa, false);
+            addCockpitCard(page, "BIKE DISPLAY", castStatus);
+            Button cast = button(YamahaCastService.active ? "DISCONNECT BIKE" : "CONNECT BIKE");
+            cast.setOnClickListener(v -> { if (YamahaCastService.active) startService(new Intent(this, YamahaCastService.class).setAction(YamahaCastService.STOP)); else chooseDash(); });
+            page.addView(cast, buttonParams());
+        }
         Button diagnostics = button("BIKE CONNECTION DIAGNOSTICS");
         diagnostics.setOnClickListener(v -> {
             String report = BikeDiagnostics.report(this);
@@ -369,12 +357,7 @@ public class MainActivity extends android.app.Activity {
         addCockpitCard(page, "APP UPDATES", updateStatus);
         Button update = button("CHECK FOR UPDATES"); update.setOnClickListener(v -> checkForUpdate()); page.addView(update, buttonParams());
         page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
-        Button advanced = button("ADVANCED DISPLAY OPTIONS"); advanced.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
-            .setTitle("Separate map screen - experimental")
-            .setMessage("Uses Wireless debugging to put the map on a separate display while keeping phone controls visible. Pairing and the connection port are saved. Start bike display attempts reconnection automatically. Wi-Fi disconnection behavior still needs verification on your phone. Phone screen mirroring is disabled.")
-            .setNegativeButton("Close", null).setPositiveButton("Open advanced setup", (dialog, which) -> showDisplaySetup()).show());
-        page.addView(advanced, buttonParams());
-        Button about = button("ABOUT + DISPLAY HELP"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
+        Button about = button("ABOUT"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
         ScrollView scroll = new ScrollView(this); scroll.addView(page);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
@@ -385,30 +368,9 @@ public class MainActivity extends android.app.Activity {
         androidx.core.view.ViewCompat.requestApplyInsets(root);
     }
 
-    private void addCastControls(LinearLayout page) {
-        castStatus = text(YamahaCastService.status, 15, 0xfff4f6fa, false);
-        addCockpitCard(page, "YAMAHA DASH • EXPERIMENTAL", castStatus);
-        Button start = button("CAST MAP TO YAMAHA DASH"); start.setMinHeight(dp(80));
-        start.setOnClickListener(v -> chooseDash()); page.addView(start, buttonParams());
-        Button stop = button("STOP CASTING"); stop.setMinHeight(dp(72));
-        stop.setOnClickListener(v -> {
-            stopService(new Intent(this, YamahaCastService.class));
-            handler.postDelayed(() -> castStatus.setText(YamahaCastService.status), 300);
-        }); page.addView(stop, buttonParams());
-        Button about = button("CAST SETUP + ABOUT"); about.setOnClickListener(v -> showAbout());
-        page.addView(about, buttonParams());
-    }
-
     private void chooseDash() {
-        if (!DedicatedDisplay.ready && !YamahaCastService.active) {
-            if (DedicatedDisplay.savedPort(this) == 0) { showDisplaySetup(); return; }
-            castStatus.setText("Reconnecting saved bike display access...");
-            worker.execute(() -> {
-                try { DedicatedDisplay.reconnect(this); runOnUiThread(this::chooseDash); }
-                catch (Exception e) { runOnUiThread(() -> { castStatus.setText(safeMessage(e)); displayConnectDialog(); }); }
-            });
-            return;
-        }
+        if (!BuildConfig.YAMAHA) return;
+        NativeNavigation.start(this);
         if (YamahaCastService.active) { castStatus.setText("Already sharing. Stop before starting another session."); return; }
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_BLUETOOTH);
@@ -433,7 +395,7 @@ public class MainActivity extends android.app.Activity {
             .setItems(names, (dialog, which) -> {
                 castDeviceAddress = devices.get(which).getAddress();
                 getSharedPreferences("bike_display", MODE_PRIVATE).edit().putString("dash_address", castDeviceAddress).apply();
-                if (DedicatedDisplay.ready) {
+                if (BuildConfig.YAMAHA) {
                     Intent dedicated = new Intent(this, YamahaCastService.class)
                         .putExtra("device", castDeviceAddress).putExtra("dedicated", true);
                     startForegroundService(dedicated); castDeviceAddress = null; buildScreen(); return;
@@ -464,137 +426,30 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void showAbout() {
-        String license;
-        try (InputStream stream = getAssets().open("PILLION_LICENSE.md")) {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder content = new StringBuilder(); String line;
-            while ((line = reader.readLine()) != null) content.append(line).append('\n');
-            license = content.toString();
-        } catch (Exception e) { license = "https://polyformproject.org/licenses/noncommercial/1.0.0/"; }
-        new android.app.AlertDialog.Builder(this).setTitle("RideDeck - " + RidePreferences.bikeName(this))
-            .setMessage("Dash casting is experimental. Select your paired Yamaha CCU, prepare bike-only maps and use the dash navigation view. Compatible NaviLite CCUs use their detected display size. Model selection alone does not establish compatibility.\n\nRequired Notice: Copyright 2026 the Pillion authors\nProtocol adapted from github.com/alexandrevega/pillion, revision 29497f4. Noncommercial personal and hobby use. Independent of Yamaha and Pillion.\n\n" + license)
-            .setPositiveButton("Close", null).show();
-    }
-
-    private void showDisplaySetup() {
-        if (Build.VERSION.SDK_INT < 30) {
-            new android.app.AlertDialog.Builder(this).setMessage("Bike-only Maps requires Android 11 or newer. Phone mirroring is disabled.")
-                .setPositiveButton("Close", null).show(); return;
-        }
-        new android.app.AlertDialog.Builder(this).setTitle("Bike display • " + RidePreferences.mapName(this))
-            .setMessage("Park the bike. Connect the phone to Wi-Fi for setup. In Developer options, enable Wireless debugging. This grants RideDeck debugging access to this phone so it can create a separate map display. No computer or paid Maps API is needed.\n\n1. Pair RideDeck using the port and six-digit code from Pair device with pairing code.\n2. Tap Connect with the port field empty to find the current connection automatically.\n3. Tap Start bike display in Setup and select the Yamaha dash.\n\nRideDeck finds the current connection port automatically when reconnecting. You can revoke RideDeck in Wireless debugging > Paired devices. Phone brands may block the separate display. We do not enable legacy TCP debugging or change phone power settings.")
-            .setNeutralButton("Developer options", (dialog, which) -> startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)))
-            .setNegativeButton("Pair", (dialog, which) -> displayPairDialog())
-            .setPositiveButton("Connect", (dialog, which) -> displayConnectDialog()).show();
-    }
-
-    private EditText numericField(String hint) {
-        EditText field = new EditText(this); field.setHint(hint);
-        field.setInputType(InputType.TYPE_CLASS_NUMBER); return field;
-    }
-
-    private void displayPairDialog() {
-        LinearLayout inputs = new LinearLayout(this); inputs.setOrientation(LinearLayout.VERTICAL);
-        inputs.setPadding(dp(24), dp(12), dp(24), 0);
-        EditText port = numericField("Pairing port"); EditText code = numericField("6-digit pairing code");
-        code.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        inputs.addView(port); inputs.addView(code);
-        new android.app.AlertDialog.Builder(this).setTitle("Pair with this phone")
-            .setMessage("Use the values in Wireless debugging > Pair device with pairing code. Keep its code dialog open in split-screen if your phone closes pairing when switching apps. We connect locally to this phone only.")
-            .setView(inputs).setNegativeButton("Cancel", null).setPositiveButton("Pair", (dialog, which) -> {
-                String pairingPort = port.getText().toString().trim(), pairingCode = code.getText().toString().trim();
-                worker.execute(() -> {
-                    try {
-                        DedicatedDisplay.pair(this, Integer.parseInt(pairingPort), pairingCode);
-                        runOnUiThread(() -> new android.app.AlertDialog.Builder(this).setMessage(DedicatedDisplay.status)
-                            .setPositiveButton("Connect", (d, w) -> displayConnectDialog()).show());
-                    } catch (Exception e) { runOnUiThread(() -> displayError("Pairing failed. " + safeMessage(e))); }
-                });
-            }).show();
-    }
-
-    private void displayConnectDialog() {
-        EditText port = numericField("Connection port (optional)");
-        new android.app.AlertDialog.Builder(this).setTitle("Prepare bike display")
-            .setMessage("Leave blank to find the current port automatically. If discovery fails, enter the port from the main Wireless debugging screen. Keep Wi-Fi and Wireless debugging on for this step.")
-            .setView(port).setNegativeButton("Cancel", null).setPositiveButton("Connect", (dialog, which) -> {
-                String connectionPort = port.getText().toString().trim();
-                worker.execute(() -> {
-                    try {
-                        if (connectionPort.isEmpty()) DedicatedDisplay.reconnect(this);
-                        else DedicatedDisplay.prepare(this, Integer.parseInt(connectionPort));
-                        runOnUiThread(() -> { buildSetupScreen(); chooseDash(); });
-                    } catch (Exception e) { runOnUiThread(() -> displayError("Display setup failed. " + safeMessage(e))); }
-                });
-            }).show();
+        String notice = BuildConfig.YAMAHA ? "MapLibre renders the map. MapTiler supplies map data and search, and GraphHopper supplies routes when configured. Provider terms and attribution apply.\n\nYamaha protocol adapted from Pillion, revision 29497f4. Required Notice: Copyright 2026 the Pillion authors. PolyForm Noncommercial 1.0.0. Personal and hobby use. Independent of Yamaha, Garmin and Pillion." : "Phone controls and split screen with your chosen navigation app. Independent of navigation and music providers.";
+        new android.app.AlertDialog.Builder(this).setTitle(BuildConfig.YAMAHA ? "RideDeck Yamaha" : "RideDeck").setMessage(notice).setPositiveButton("Close", null).show();
     }
 
     private void displayError(String message) {
-        new android.app.AlertDialog.Builder(this).setTitle("Bike display setup")
+        new android.app.AlertDialog.Builder(this).setTitle("RideDeck")
             .setMessage(message).setPositiveButton("Close", null).show();
     }
 
     private void rideMapAction() {
-        BikeDiagnostics.record(this, "Map action bikeActive=" + YamahaCastService.active + " automatic=" + RidePreferences.automaticMap(this));
-        if (!RidePreferences.automaticMap(this) && RidePreferences.manualPhoneMap(this)) { openPhoneMap(); return; }
-        if (YamahaCastService.active) {
-            if (!RidePreferences.selectedMap(this).equals("com.google.android.apps.maps")) {
-                showRideMessage("The selected map is on the bike. Address entry currently supports Google Maps."); return;
-            }
-            EditText destination = new EditText(this);
-            destination.setHint("Address or place name");
-            new android.app.AlertDialog.Builder(this).setTitle("Navigate on bike")
-                .setView(destination).setNegativeButton("Cancel", null).setNeutralButton("Map controls", (d, w) -> showMapControls())
-                .setPositiveButton("Navigate", (dialog, which) -> {
-                    String address = destination.getText().toString().trim();
-                    if (address.isEmpty()) return;
-                    worker.execute(() -> {
-                        try { DedicatedDisplay.route(address); BikeDiagnostics.record(this, "Typed destination forwarded"); }
-                        catch (Exception e) { BikeDiagnostics.record(this, "Typed destination failed exception=" + e.getClass().getSimpleName()); runOnUiThread(() -> displayError(safeMessage(e))); }
-                    });
-                }).show();
-            return;
-        }
-        if (RidePreferences.automaticMap(this)) startAutomaticMap();
-        else chooseDash();
-    }
-
-    private void showMapControls() {
-        android.widget.ImageView preview = new android.widget.ImageView(this);
-        preview.setAdjustViewBounds(true); preview.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        preview.setContentDescription("Live map controls. Tap the map while parked.");
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Map controls - use while parked")
-            .setMessage("Tap Start or other map controls here. Maps stays on the bike.").setView(preview).setPositiveButton("Close", null).create();
-        preview.setOnTouchListener((view, event) -> {
-            if (event.getAction() != android.view.MotionEvent.ACTION_UP) return true;
-            android.graphics.drawable.Drawable drawable = preview.getDrawable(); if (drawable == null) return true;
-            android.graphics.Matrix inverse = new android.graphics.Matrix();
-            if (!preview.getImageMatrix().invert(inverse)) return true;
-            float[] point = {event.getX() - preview.getPaddingLeft(), event.getY() - preview.getPaddingTop()}; inverse.mapPoints(point);
-            float x = point[0] / drawable.getIntrinsicWidth(), y = point[1] / drawable.getIntrinsicHeight();
-            if (x >= 0 && x <= 1 && y >= 0 && y <= 1) worker.execute(() -> {
-                try { DedicatedDisplay.tap(x, y); } catch (Exception e) { runOnUiThread(() -> displayError("Map control unavailable. " + safeMessage(e))); }
-            });
-            return true;
-        });
-        Runnable update = new Runnable() { @Override public void run() {
-            if (!dialog.isShowing()) return;
-            byte[] frame = DedicatedDisplay.latestFrame();
-            if (frame != null) preview.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(frame, 0, frame.length));
-            handler.postDelayed(this, 500);
-        } };
-        dialog.setOnDismissListener(d -> handler.removeCallbacks(update)); dialog.show(); handler.post(update);
+        if (!BuildConfig.YAMAHA) { openPhoneMap(); return; }
+        NativeNavigation.start(this);
+        NavigationUi.search(this, null);
     }
 
     private void startAutomaticMap() {
-        if (YamahaCastService.active) return;
+        if (!BuildConfig.YAMAHA || YamahaCastService.active) return;
         YamahaCastService.autoReconnectPaused = false;
         nextAutomaticBikeAttempt = android.os.SystemClock.elapsedRealtime() + 45000;
         String address = getSharedPreferences("bike_display", MODE_PRIVATE).getString("dash_address", "");
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         boolean permitted = Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
         boolean displayBike = RidePreferences.prefs(this).getInt("bike_profile", 1) != RidePreferences.BIKE_NAMES.length - 1;
-        if (!MapDisplayPolicy.tryBike(permitted, permitted && adapter != null && adapter.isEnabled(), displayBike && !address.isEmpty(), DedicatedDisplay.savedPort(this) != 0)) {
+        if (!MapDisplayPolicy.tryBike(permitted, permitted && adapter != null && adapter.isEnabled(), displayBike && !address.isEmpty(), true)) {
             openPhoneMap(); return;
         }
         showRideMessage("Trying saved bike display...");
@@ -606,6 +461,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void openPhoneMap() {
+        if (BuildConfig.YAMAHA) { NativeNavigation.start(this); buildScreen(); return; }
         autoMapSession = null;
         YamahaCastService.automaticFallbackPending = false;
         if (isFinishing() || isDestroyed()) return;
@@ -617,7 +473,7 @@ public class MainActivity extends android.app.Activity {
             return;
         }
         buildScreen();
-        if (Build.VERSION.SDK_INT < 32 && !isInMultiWindowMode()) {
+        if (!BuildConfig.YAMAHA && Build.VERSION.SDK_INT < 32 && !isInMultiWindowMode()) {
             new android.app.AlertDialog.Builder(this).setTitle("Phone split-screen")
                 .setMessage("On this Android version, open Recent apps and put RideDeck in split-screen, then tap Map. No bike display or debugging setup is needed.")
                 .setPositiveButton("OK", null).show(); return;
@@ -635,6 +491,7 @@ public class MainActivity extends android.app.Activity {
     private void buildScreen() {
         if (this instanceof SetupActivity) { buildSetupScreen(); return; }
         setupVisible = false; cockpitVisible = true;
+        renderedPanel = RidePreferences.prefs(this).getString("phone_panel", "map");
         if (phoneMapPending) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;
         rideClock = null; rideButton = null;
@@ -715,7 +572,10 @@ public class MainActivity extends android.app.Activity {
         callPanel.setOrientation(compact ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         callPanel.setGravity(Gravity.CENTER_VERTICAL);
         callPanel.setVisibility(View.GONE); renderedCall = null;
-        mediaSlot.addView(callPanel, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        if (BuildConfig.YAMAHA && !"music".equals(RidePreferences.prefs(this).getString("phone_panel", "map"))) {
+            mediaSlot.removeView(music);
+            mediaSlot.addView(NavigationUi.panel(this), new android.widget.FrameLayout.LayoutParams(-1, -1));
+        }
         controls.addView(mediaSlot, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
@@ -736,7 +596,11 @@ public class MainActivity extends android.app.Activity {
         seenNext.setOnClickListener(v -> acknowledgeMessage(displayedMessage()));
         messageActions.addView(seenNext, rideWeight(56));
         messages.addView(messageActions);
-        controls.addView(messages, stacked ? new LinearLayout.LayoutParams(-1, 0, 1)
+        messagePanel = messages;
+        android.widget.FrameLayout messageSlot = new android.widget.FrameLayout(this);
+        messageSlot.addView(messages, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        messageSlot.addView(callPanel, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        controls.addView(messageSlot, stacked ? new LinearLayout.LayoutParams(-1, 0, 1)
             : new LinearLayout.LayoutParams(0, -1, 1));
         if (!stacked && controlsRight) {
             controls.removeView(mediaSlot); controls.addView(mediaSlot);
@@ -990,7 +854,7 @@ public class MainActivity extends android.app.Activity {
                     EditText home = new EditText(this); home.setHint("Home address or place"); home.setText(RidePreferences.prefs(this).getString("bike_home", ""));
                     EditText work = new EditText(this); work.setHint("Work address or place"); work.setText(RidePreferences.prefs(this).getString("bike_work", "")); fields.addView(home); fields.addView(work);
                     new android.app.AlertDialog.Builder(this).setTitle("Bike destinations")
-                        .setMessage("For the bike Home and Work commands with Google Maps. Saved only on this phone. Reconnect the bike after changing these.")
+                        .setMessage("Enter latitude,longitude for the bike Home and Work commands. Use Search to find and save other destinations. Saved only on this phone. Reconnect the bike after changes.")
                         .setView(fields).setNegativeButton("Cancel", null).setPositiveButton("Save", (d, w) -> {
                             RidePreferences.prefs(this).edit().putString("bike_home", home.getText().toString().trim()).putString("bike_work", work.getText().toString().trim()).apply();
                             buildSetupScreen(); showPersonalization();
@@ -1081,6 +945,8 @@ public class MainActivity extends android.app.Activity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout items = new LinearLayout(this); items.setOrientation(LinearLayout.VERTICAL);
         for (int i = 0; i < labels.length; i++) {
+            if (!BuildConfig.YAMAHA && i >= 7) continue;
+            if (BuildConfig.YAMAHA && i == 7) continue;
             final int choice = i;
             LinearLayout row = rideCard(labels[i].toUpperCase(java.util.Locale.ROOT));
             String detail = i == 10 ? "OpenStreetMap fuel search; location required" : i == 9 ? "Save up to 20 destinations for the bike" : i == 8 ? "Set places for the bike Home and Work commands" : i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
@@ -1174,6 +1040,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void chooseMapApp() {
+        if (BuildConfig.YAMAHA) { NavigationUi.configure(this); return; }
         if (YamahaCastService.active) { displayError("Stop the bike display before changing its app."); return; }
         if (DedicatedDisplay.ready) DedicatedDisplay.stop();
         int current = java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this));
@@ -1181,11 +1048,12 @@ public class MainActivity extends android.app.Activity {
             .setSingleChoiceItems(RidePreferences.MAP_NAMES, current, (dialog, which) -> {
                 RidePreferences.prefs(this).edit().putString("map_app", RidePreferences.MAP_PACKAGES[which]).apply();
                 dialog.dismiss(); buildScreen();
-                android.widget.Toast.makeText(this, "Selected " + RidePreferences.MAP_NAMES[which] + ". Bike display support is experimental.", android.widget.Toast.LENGTH_LONG).show();
+                android.widget.Toast.makeText(this, "Selected " + RidePreferences.MAP_NAMES[which], android.widget.Toast.LENGTH_LONG).show();
             }).setNegativeButton("Cancel", null).show();
     }
 
     private void launchChosenApp(String pkg) {
+        if (BuildConfig.YAMAHA && pkg.equals("maplibre")) { rideMapAction(); return; }
         Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
         if (launch == null) { displayError("This app is not installed or does not expose a launch screen."); return; }
         try { startActivity(launch); } catch (Exception e) { displayError("Could not open the selected app."); }
@@ -1200,7 +1068,7 @@ public class MainActivity extends android.app.Activity {
         for (int i = 0; i < chatPackages.length; i++) if (RidePreferences.selectedMessages(this).contains(chatPackages[i])) {
             labels.add(RidePreferences.MESSAGE_NAMES[i]); packages.add(chatPackages[i]);
         }
-        labels.add("Yamaha Y-Connect"); packages.add(YAMAHA_Y_CONNECT_PACKAGE);
+
         labels.add("Layout + apps"); packages.add("");
         new android.app.AlertDialog.Builder(this).setTitle("Ride apps")
             .setItems(labels.toArray(new String[0]), (dialog, which) -> {
@@ -1664,15 +1532,16 @@ public class MainActivity extends android.app.Activity {
         worker.execute(() -> {
             try {
                 JSONObject release = getJson("https://api.github.com/repos/" + REPOSITORY + "/releases/latest");
-                JSONArray assets = release.getJSONArray("assets"); String apkUrl = null, sumsUrl = null;
-                for (int i = 0; i < assets.length(); i++) { JSONObject asset = assets.getJSONObject(i); if ("gx12-companion-release.apk".equals(asset.getString("name"))) apkUrl = asset.getString("browser_download_url"); if ("checksums.txt".equals(asset.getString("name"))) sumsUrl = asset.getString("browser_download_url"); }
-                if (apkUrl == null || sumsUrl == null) throw new IllegalStateException("The latest release is missing its APK or checksum file.");
-                String expectedHash = findHash(downloadText(sumsUrl), "gx12-companion-release.apk");
-                File updateDir = new File(getCacheDir(), "updates"); if (!updateDir.exists() && !updateDir.mkdirs()) throw new IllegalStateException("Could not prepare the update folder.");
-                File apk = new File(updateDir, "gx12-companion-release.apk"); downloadFile(apkUrl, apk);
-                String actualHash = sha256(apk); if (!actualHash.equalsIgnoreCase(expectedHash)) { apk.delete(); throw new SecurityException("The downloaded APK failed its SHA-256 check."); }
                 String tag = release.getString("tag_name"); int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; int releaseCode = parseVersionCode(tag);
-                if (releaseCode <= localCode) { apk.delete(); showUpdateMessage("You have the latest version (" + appVersion() + ")."); return; }
+                if (releaseCode <= localCode) { showUpdateMessage("No newer stable version is available."); return; }
+                JSONArray assets = release.getJSONArray("assets"); String apkUrl = null, sumsUrl = null;
+                for (int i = 0; i < assets.length(); i++) { JSONObject asset = assets.getJSONObject(i); if (BuildConfig.UPDATE_ASSET.equals(asset.getString("name"))) apkUrl = asset.getString("browser_download_url"); if ("checksums.txt".equals(asset.getString("name"))) sumsUrl = asset.getString("browser_download_url"); }
+                if (apkUrl == null || sumsUrl == null) throw new IllegalStateException("The latest release is missing its APK or checksum file.");
+                String expectedHash = findHash(downloadText(sumsUrl), BuildConfig.UPDATE_ASSET);
+                File updateDir = new File(getCacheDir(), "updates"); if (!updateDir.exists() && !updateDir.mkdirs()) throw new IllegalStateException("Could not prepare the update folder.");
+                File apk = new File(updateDir, BuildConfig.UPDATE_ASSET); downloadFile(apkUrl, apk);
+                String actualHash = sha256(apk); if (!actualHash.equalsIgnoreCase(expectedHash)) { apk.delete(); throw new SecurityException("The downloaded APK failed its SHA-256 check."); }
+
                 downloadedApk = apk; showUpdateMessage("Version " + tag + " is ready. Android will ask you to approve installation.");
                 runOnUiThread(() -> { if (canInstallPackages()) openInstaller(apk); else startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))); });
             } catch (Exception error) { showUpdateMessage("Update check failed: " + safeMessage(error)); }

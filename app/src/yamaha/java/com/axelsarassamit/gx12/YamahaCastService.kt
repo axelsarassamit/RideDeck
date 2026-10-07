@@ -55,8 +55,8 @@ class YamahaCastService : Service() {
         automaticFallbackPending = false
         val address = intent?.getStringExtra("device")
         dedicated = true
-        if (address == null || (!automatic && !DedicatedDisplay.ready)) {
-            status = "Prepare bike-only maps in Setup first. Phone mirroring is disabled."
+        if (address == null) {
+            status = "Choose a paired Yamaha dash in Setup."
             automaticFallbackPending = automatic
             stopSelf(); return START_NOT_STICKY
         }
@@ -119,19 +119,16 @@ class YamahaCastService : Service() {
                 override fun write(bytes: ByteArray) { synchronized(lock) { socket!!.outputStream.write(bytes) } }
                 override fun close() { socket?.close() }
             }
-            status = "Checking separate map display before connecting to bike..."
-            deadline = SystemClock.elapsedRealtime() + 30000
-            if (!DedicatedDisplay.ready) DedicatedDisplay.reconnect(this)
-            DedicatedDisplay.preflight(this)
+            status = "Connecting directly through Bluetooth..."
             check(running) { "Stopped" }
-            diagnostic("Separate display check passed")
+            diagnostic("Native frame source selected; no debugging connection")
             deadline = SystemClock.elapsedRealtime() + 20000
             link.open()
             val frames = FrameReader(link)
             diagnostic("Handshake begin")
             val size = Handshake(link, frames).perform()
             diagnostic("Authenticated; display ${size.width}x${size.height}")
-            val googleMaps = RidePreferences.selectedMap(this) == "com.google.android.apps.maps"
+            val googleMaps = true // Native MapLibre route destination commands.
             val places = RidePreferences.prefs(this)
             for ((service, key) in listOf(10 to "bike_home", 11 to "bike_work")) {
                 val available = googleMaps && !places.getString(key, "").isNullOrBlank()
@@ -140,7 +137,7 @@ class YamahaCastService : Service() {
             check(size.width == 480 && size.height in listOf(234, 240)) { "Unsupported NaviLite display size" }
             status = "Bike connected. Starting selected map on the bike display..."
             deadline = SystemClock.elapsedRealtime() + 30000
-            DedicatedDisplay.start(this, size.width, size.height)
+            NativeNavigation.resize(size.width, size.height)
             var activeList: List<BikePlace> = emptyList()
             receiver = Thread({
                 try {
@@ -175,7 +172,7 @@ class YamahaCastService : Service() {
                                 runCatching { DedicatedDisplay.route(activeList[item].destination) }
                                     .onSuccess { diagnostic("Bike list destination forwarded index=$item"); imageRequested = true }
                                     .onFailure { diagnostic("Bike list route failure exception=${it.javaClass.simpleName}") }
-                            } else { diagnostic("Unsupported bike list request list=$list item=$item routeOption=${incoming.payload[4]}"); status = "Use Start new route with Google Maps. Adding stops is not supported." }
+                            } else { diagnostic("Unsupported bike list request list=$list item=$item routeOption=${incoming.payload[4]}"); status = "Use Start new route. Adding stops is not supported." }
                             continue
                         }
                         if (incoming.frameType == 1 && incoming.payloadDataType == 0 && incoming.serviceType in listOf(53, 54)
@@ -186,7 +183,7 @@ class YamahaCastService : Service() {
                                 runCatching { DedicatedDisplay.route(destination) }
                                     .onSuccess { diagnostic("Bike saved-place request service=${incoming.serviceType} forwarded"); status = "Starting saved destination on the bike." }
                                     .onFailure { diagnostic("Saved-place request could not be forwarded exception=${it.javaClass.simpleName}"); status = "Map is not ready for a destination. Try again in a moment." }
-                            } else { diagnostic("Saved-place request unavailable service=${incoming.serviceType}"); status = "Set Home and Work in Customization with Google Maps selected." }
+                            } else { diagnostic("Saved-place request unavailable service=${incoming.serviceType}"); status = "Set Home and Work coordinates in Customization." }
                             continue
                         }
                         if (incoming.frameType == 1 && incoming.payloadDataType == 0 && incoming.payload.isEmpty() && incoming.serviceType in listOf(51, 52)) {
@@ -231,7 +228,7 @@ class YamahaCastService : Service() {
                 receiverFailure?.let { error(it) }
                 deadline = SystemClock.elapsedRealtime() + 15000
                 if (!imageRequested) { Thread.sleep(100); continue }
-                val sourceJpeg = DedicatedDisplay.latestFrame()
+                val sourceJpeg = NativeNavigation.frame(RidePreferences.prefs(this).getString("dash_panel", "map") ?: "map")
                 if (sourceJpeg == null) {
                     check(DedicatedDisplay.receiving()) { DedicatedDisplay.status }
                     if (waitingForFrameSince == 0L) waitingForFrameSince = SystemClock.elapsedRealtime()
@@ -287,7 +284,7 @@ class YamahaCastService : Service() {
         socket = null
         worker?.interrupt()
         receiver?.interrupt()
-        if (dedicated) DedicatedDisplay.stop()
+        // The phone's navigation session can continue after the dashboard disconnects.
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }

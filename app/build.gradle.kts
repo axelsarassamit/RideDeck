@@ -6,6 +6,23 @@ plugins {
 android {
     namespace = "com.axelsarassamit.gx12"
     compileSdk = 36
+    buildFeatures { buildConfig = true }
+    flavorDimensions += "edition"
+    productFlavors {
+        create("phone") {
+            dimension = "edition"
+            buildConfigField("boolean", "YAMAHA", "false")
+            buildConfigField("String", "UPDATE_ASSET", "\"ridedeck-phone-release.apk\"")
+            manifestPlaceholders["appLabel"] = "RideDeck"
+        }
+        create("yamaha") {
+            dimension = "edition"
+            applicationIdSuffix = ".yamaha"
+            buildConfigField("boolean", "YAMAHA", "true")
+            buildConfigField("String", "UPDATE_ASSET", "\"ridedeck-yamaha-release.apk\"")
+            manifestPlaceholders["appLabel"] = "RideDeck Yamaha"
+        }
+    }
 
     defaultConfig {
         applicationId = "com.axelsarassamit.gx12"
@@ -62,8 +79,6 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("androidx.camera:camera-video:1.4.2")
     implementation("androidx.core:core:1.16.0")
-    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
-    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
-    implementation("org.conscrypt:conscrypt-android:2.5.3")
+    "yamahaImplementation"("org.maplibre.gl:android-sdk:13.4.1")
     testImplementation("junit:junit:4.13.2")
 }

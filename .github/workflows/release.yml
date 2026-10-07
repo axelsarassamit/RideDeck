@@ -1,6 +1,12 @@
 name: Signed Android release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version for the signed build
+        required: true
+        default: "0.12.0"
   push:
     tags:
       - "v*"
@@ -35,24 +41,33 @@ jobs:
           GX12_KEYSTORE_PASSWORD: ${{ secrets.GX12_KEYSTORE_PASSWORD }}
           GX12_KEY_ALIAS: ${{ secrets.GX12_KEY_ALIAS }}
           GX12_KEY_PASSWORD: ${{ secrets.GX12_KEY_PASSWORD }}
-          GX12_VERSION_NAME: ${{ github.ref_name }}
+          GX12_VERSION_NAME: ${{ inputs.version || github.ref_name }}
         run: |
           test -n "$GX12_KEYSTORE_PASSWORD" || { echo "Missing GX12_KEYSTORE_PASSWORD repository secret"; exit 1; }
           test -n "$GX12_KEY_ALIAS" || { echo "Missing GX12_KEY_ALIAS repository secret"; exit 1; }
           test -n "$GX12_KEY_PASSWORD" || { echo "Missing GX12_KEY_PASSWORD repository secret"; exit 1; }
-          ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
+          ./gradlew --no-daemon assemblePhoneRelease assembleYamahaRelease
           mkdir -p release-assets
-          cp app/build/outputs/apk/release/app-release.apk release-assets/gx12-companion-release.apk
+          cp app/build/outputs/apk/phone/release/app-phone-release.apk release-assets/ridedeck-phone-release.apk
+          cp app/build/outputs/apk/yamaha/release/app-yamaha-release.apk release-assets/ridedeck-yamaha-release.apk
           cd release-assets
-          sha256sum gx12-companion-release.apk > checksums.txt
+          sha256sum *.apk > checksums.txt
+
+      - name: Save signed app builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: ridedeck-editions
+          path: release-assets/
 
       - name: Publish GitHub release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            release-assets/gx12-companion-release.apk \
+            release-assets/ridedeck-phone-release.apk \
+            release-assets/ridedeck-yamaha-release.apk \
             release-assets/checksums.txt \
             --title "RideDeck $GITHUB_REF_NAME" \
             --generate-notes \
-            --latest
+            --prerelease
