@@ -50,7 +50,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public final class MainActivity extends android.app.Activity {
+public class MainActivity extends android.app.Activity {
     private static final String REPOSITORY = "axelsarassamit/gearelec-gx12-companion";
     private static final String YAMAHA_Y_CONNECT_PACKAGE = "jp.co.yamahamotor.yamahamotorcycleconnect.sccu";
     private static final String GARMIN_STREETCROSS_PACKAGE = "com.garmin.android.apps.streetcross";
@@ -127,7 +127,8 @@ public final class MainActivity extends android.app.Activity {
         if (state != null) castDeviceAddress = state.getString("cast_device");
         if (state != null) autoMapSession = state.getString("auto_map_session");
         if (state != null) phoneMapPending = state.getBoolean("phone_map_pending", false);
-        if (state != null && state.getBoolean("setup_visible", false)) buildSetupScreen();
+        if (this instanceof SetupActivity) buildSetupScreen();
+        else if (state != null && state.getBoolean("setup_visible", false)) buildSetupScreen();
         else if ("android.app.action.AUTOMATIC_ZEN_RULE".equals(getIntent().getAction())) buildSetupScreen();
         else buildScreen();
         refreshDeviceStatus();
@@ -195,6 +196,7 @@ public final class MainActivity extends android.app.Activity {
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
+        if (refreshAfterSetup && !(this instanceof SetupActivity)) { refreshAfterSetup = false; buildScreen(); }
         RideQuietMode.refresh(this);
         if (phoneMapPending && !setupVisible) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
@@ -235,7 +237,13 @@ public final class MainActivity extends android.app.Activity {
         if (focused) ScreenChrome.apply(getWindow(), !setupVisible);
     }
 
+    private boolean refreshAfterSetup;
     private void buildSetupScreen() {
+        if (!(this instanceof SetupActivity)) {
+            refreshAfterSetup = true;
+            startActivity(new Intent(this, SetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+        }
         setupVisible = true; cockpitVisible = false;
         albumArt = null; messagePreview = null; messageSource = null; dockMessage = null;
         trackStatus = null; previousButton = null; playPauseButton = null; nextButton = null;
@@ -244,7 +252,7 @@ public final class MainActivity extends android.app.Activity {
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         TextView heading = text("Setup - use while parked", 24, 0xfff4f6fa, true);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        Button back = rideAction("Done", false); back.setOnClickListener(v -> buildScreen());
+        Button back = rideAction("Done", false); back.setOnClickListener(v -> finish());
         header.addView(back, new LinearLayout.LayoutParams(dp(120), dp(56))); root.addView(header);
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         Button personalize = button("CUSTOMIZATION"); personalize.setOnClickListener(v -> showPersonalization());
@@ -564,6 +572,7 @@ public final class MainActivity extends android.app.Activity {
     private void buildAppDock() { buildScreen(); }
 
     private void buildScreen() {
+        if (this instanceof SetupActivity) { buildSetupScreen(); return; }
         setupVisible = false; cockpitVisible = true;
         if (phoneMapPending) { phoneMapPending = false; handler.postDelayed(this::openPhoneMap, 400); }
         messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;

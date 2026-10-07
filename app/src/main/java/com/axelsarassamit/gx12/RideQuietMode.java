@@ -30,7 +30,7 @@ public final class RideQuietMode {
                     .allowCalls(ZenPolicy.PEOPLE_TYPE_ANYONE).allowAlarms(true).allowMedia(true)
                     .hideAllVisualEffects().build();
                 rule = new AutomaticZenRule("RideDeck while open", null,
-                    new ComponentName(context, MainActivity.class), CONDITION, policy,
+                    new ComponentName(context, SetupActivity.class), CONDITION, policy,
                     NotificationManager.INTERRUPTION_FILTER_PRIORITY, true);
                 id = manager.addAutomaticZenRule(rule);
                 prefs.edit().putString("rule", id).apply();

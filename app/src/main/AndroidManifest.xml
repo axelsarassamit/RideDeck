@@ -66,6 +66,14 @@
         android:icon="@drawable/ridedeck_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
+        <activity android:name=".SetupActivity" android:exported="true"
+            android:screenOrientation="portrait" android:resizeableActivity="false"
+            android:taskAffinity="com.axelsarassamit.gx12.setup" android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <activity android:name=".QuickCameraActivity" android:exported="false" android:screenOrientation="user" />
         <activity
             android:name=".MainActivity"
@@ -75,10 +83,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />
-                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
