@@ -41,7 +41,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
     }
 
     @Override public void onListenerConnected() {
-        super.onListenerConnected(); refreshActive();
+        super.onListenerConnected(); connected = this; refreshActive();
     }
     public void refreshActive() {
         try {
@@ -53,7 +53,20 @@ public final class GX12NotificationListener extends NotificationListenerService 
         } catch (SecurityException ignored) { }
     }
     private static volatile GX12NotificationListener connected;
-    @Override public void onCreate() { super.onCreate(); connected = this; }
+    private static long lastRebind = -30000;
+    public static synchronized void recover(android.content.Context context) {
+        if (connected != null) return;
+        android.content.ComponentName component = new android.content.ComponentName(context, GX12NotificationListener.class);
+        String enabled = android.provider.Settings.Secure.getString(context.getContentResolver(), "enabled_notification_listeners");
+        boolean granted = false;
+        if (enabled != null) for (String entry : enabled.split(":")) {
+            if (component.equals(android.content.ComponentName.unflattenFromString(entry))) { granted = true; break; }
+        }
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (!granted || now - lastRebind < 30000) return;
+        lastRebind = now;
+        try { requestRebind(component); } catch (SecurityException | IllegalStateException ignored) { }
+    }
     public static void reloadSelected() { if (connected != null) connected.refreshActive(); }
     @Override public void onDestroy() { if (connected == this) connected = null; super.onDestroy(); }
 
@@ -99,5 +112,8 @@ public final class GX12NotificationListener extends NotificationListenerService 
             }
         }
     }
-    @Override public void onListenerDisconnected() { clearPreviews(); super.onListenerDisconnected(); }
+    @Override public void onListenerDisconnected() {
+        if (connected == this) connected = null;
+        clearPreviews(); super.onListenerDisconnected(); recover(this);
+    }
 }

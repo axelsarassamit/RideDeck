@@ -105,6 +105,7 @@ public final class MainActivity extends android.app.Activity {
     };
     private final Runnable trackRefresh = new Runnable() {
         @Override public void run() {
+            GX12NotificationListener.recover(MainActivity.this);
             refreshMediaSession();
             refreshWhatsAppPreview();
             if (castStatus != null) castStatus.setText(YamahaCastService.status);
