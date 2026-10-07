@@ -157,8 +157,21 @@ object DedicatedDisplay {
         }, "RideDeckDisplay").apply { isDaemon = true; start() }
     }
 
-    fun latestFrame(): ByteArray? = if (reading && SystemClock.elapsedRealtime() - receivedAt < 1500) jpeg else null
+    @JvmStatic fun latestFrame(): ByteArray? = if (reading && SystemClock.elapsedRealtime() - receivedAt < 1500) jpeg else null
 
+    @JvmStatic fun tap(x: Float, y: Float) {
+        require(x.isFinite() && y.isFinite() && x in 0f..1f && y in 0f..1f)
+        check(reading && socket?.isConnected == true) { "Map display is not ready" }
+        synchronized(this) { socket!!.getOutputStream().apply { write("TAP $x $y\n".toByteArray()); flush() } }
+    }
+    fun stopRoute() {
+        check(reading && socket?.isConnected == true) { "Map display is not ready" }
+        synchronized(this) { socket!!.getOutputStream().apply { write("STOP_ROUTE\n".toByteArray()); flush() } }
+    }
+    fun zoom(zoomIn: Boolean) {
+        check(reading && socket?.isConnected == true) { "Map display is not ready" }
+        synchronized(this) { socket!!.getOutputStream().apply { write((if (zoomIn) "ZOOM_IN\n" else "ZOOM_OUT\n").toByteArray()); flush() } }
+    }
     @JvmStatic fun route(destination: String) {
         check(reading) { "Start bike-only casting first" }
         val uri = "google.navigation:q=" + android.net.Uri.encode(destination) + "&mode=d"

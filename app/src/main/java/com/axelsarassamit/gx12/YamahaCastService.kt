@@ -140,6 +140,7 @@ class YamahaCastService : Service() {
             status = "Bike connected. Starting selected map on the bike display..."
             deadline = SystemClock.elapsedRealtime() + 30000
             DedicatedDisplay.start(this, size.width, size.height)
+            var activeList: List<BikePlace> = emptyList()
             receiver = Thread({
                 try {
                     while (running) {
@@ -154,15 +155,49 @@ class YamahaCastService : Service() {
                             }
                             continue
                         }
+                        if (incoming.frameType == 1 && incoming.payloadDataType == 0 && incoming.serviceType == 55
+                            && incoming.payload.size == 2 && incoming.payload[1].toInt() == 0 && incoming.payload[0].toInt() in listOf(3, 4)) {
+                            imageRequested = false
+                            val stations = incoming.payload[0].toInt() == 4
+                            activeList = if (!googleMaps) emptyList() else if (stations) BikePlaces.freshStations() else BikePlaces.favorites(this)
+                            val metadata = if (stations) 8 else 7
+                            link.write(NaviLiteCodec.build(6, metadata, 1, byteArrayOf(activeList.size.toByte(), 0, 0)))
+                            activeList.forEachIndexed { index, place -> link.write(NaviLiteCodec.build(6, if (stations) 99 else 98, 1, BikePlaces.listItem(index, place, stations))) }
+                            diagnostic("Bike list sent kind=${if (stations) "stations" else "favorites"} items=${activeList.size}")
+                            status = if (stations && activeList.isEmpty()) "Find stations in Customization first." else "Bike destination list ready."
+                            continue
+                        }
+                        if (incoming.frameType == 1 && incoming.serviceType == 48 && incoming.payloadDataType == 1 && incoming.payload.size == 5) {
+                            val item = (incoming.payload[0].toInt() and 255) or ((incoming.payload[1].toInt() and 255) shl 8)
+                            val list = (incoming.payload[2].toInt() and 255) or ((incoming.payload[3].toInt() and 255) shl 8)
+                            if (googleMaps && list == 0 && incoming.payload[4].toInt() == 1 && item in activeList.indices) {
+                                runCatching { DedicatedDisplay.route(activeList[item].destination) }
+                                    .onSuccess { diagnostic("Bike list destination forwarded index=$item"); imageRequested = true }
+                                    .onFailure { diagnostic("Bike list route failure exception=${it.javaClass.simpleName}") }
+                            } else { diagnostic("Unsupported bike list request list=$list item=$item routeOption=${incoming.payload[4]}"); status = "Use Start new route with Google Maps. Adding stops is not supported." }
+                            continue
+                        }
                         if (incoming.frameType == 1 && incoming.payloadDataType == 0 && incoming.serviceType in listOf(53, 54)
                             && incoming.payload.size in 1..2 && (incoming.payload.size == 1 || incoming.payload[1].toInt() == 0)) {
                             val key = if (incoming.serviceType == 53) "bike_home" else "bike_work"
                             val destination = places.getString(key, "") ?: ""
-                            if (googleMaps && destination.isNotBlank() && DedicatedDisplay.latestFrame() != null) {
+                            if (incoming.payload[0].toInt() == 1 && googleMaps && destination.isNotBlank() && DedicatedDisplay.latestFrame() != null) {
                                 runCatching { DedicatedDisplay.route(destination) }
                                     .onSuccess { diagnostic("Bike saved-place request service=${incoming.serviceType} forwarded"); status = "Starting saved destination on the bike." }
                                     .onFailure { diagnostic("Saved-place request could not be forwarded exception=${it.javaClass.simpleName}"); status = "Map is not ready for a destination. Try again in a moment." }
                             } else { diagnostic("Saved-place request unavailable service=${incoming.serviceType}"); status = "Set Home and Work in Customization with Google Maps selected." }
+                            continue
+                        }
+                        if (incoming.frameType == 1 && incoming.payloadDataType == 0 && incoming.payload.isEmpty() && incoming.serviceType in listOf(51, 52)) {
+                            runCatching { DedicatedDisplay.zoom(incoming.serviceType == 51) }
+                                .onSuccess { diagnostic("Bike zoom gesture forwarded service=${incoming.serviceType}") }
+                                .onFailure { diagnostic("Bike zoom unavailable exception=${it.javaClass.simpleName}") }
+                            continue
+                        }
+                        if (googleMaps && incoming.frameType == 1 && incoming.serviceType == 49 && incoming.payloadDataType == 0 && incoming.payload.isEmpty()) {
+                            runCatching { DedicatedDisplay.stopRoute() }
+                                .onSuccess { link.write(NaviLiteCodec.build(6, 2, 0, byteArrayOf(0, 0))); diagnostic("Bike stop navigation forwarded") }
+                                .onFailure { diagnostic("Bike stop navigation unavailable exception=${it.javaClass.simpleName}") }
                             continue
                         }
                         val action = DashContentCommand.classify(incoming)

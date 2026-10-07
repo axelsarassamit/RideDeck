@@ -275,6 +275,26 @@ object DashServer {
                             lastComponent?.let { promoteApp(it) }
                         }
                     }
+                    line.startsWith("TAP ") -> {
+                        val points = line.removePrefix("TAP ").split(' ').mapNotNull { it.toFloatOrNull() }
+                        if (points.size == 2 && points.all { it.isFinite() && it in 0f..1f } && taskAndDisplayForPackage(selectedPackage)?.second == displayId) {
+                            runCatching { DashTouch.tap(displayId, points[0] * (virtualWidth - 1), points[1] * (virtualHeight - 1)) }
+                                .onFailure { Log.w(TAG, "Map tap unavailable: ${reason(it)}") }
+                        }
+                    }
+                    line == "STOP_ROUTE" -> {
+                        if (selectedPackage == "com.google.android.apps.maps" && taskAndDisplayForPackage(selectedPackage)?.second == displayId) {
+                            exec("am", "force-stop", selectedPackage)
+                            latestJpeg = null
+                            lastComponent?.let { promoteApp(it) }
+                        }
+                    }
+                    line == "ZOOM_IN" || line == "ZOOM_OUT" -> {
+                        if (taskAndDisplayForPackage(selectedPackage)?.second == displayId) {
+                            runCatching { DashTouch.zoom(displayId, virtualWidth, virtualHeight, line == "ZOOM_IN") }
+                                .onFailure { Log.w(TAG, "Zoom gesture unavailable: ${reason(it)}") }
+                        }
+                    }
                     line == "DEMOTE" -> demoteApp()
                     line.startsWith("SIZE ") -> resizeOutput(line.removePrefix("SIZE ").trim())
                     line == "QUIT" -> shutdown()

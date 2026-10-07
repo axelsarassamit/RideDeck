@@ -541,7 +541,7 @@ public class MainActivity extends android.app.Activity {
             EditText destination = new EditText(this);
             destination.setHint("Address or place name");
             new android.app.AlertDialog.Builder(this).setTitle("Navigate on bike")
-                .setView(destination).setNegativeButton("Cancel", null)
+                .setView(destination).setNegativeButton("Cancel", null).setNeutralButton("Map controls", (d, w) -> showMapControls())
                 .setPositiveButton("Navigate", (dialog, which) -> {
                     String address = destination.getText().toString().trim();
                     if (address.isEmpty()) return;
@@ -554,6 +554,33 @@ public class MainActivity extends android.app.Activity {
         }
         if (RidePreferences.automaticMap(this)) startAutomaticMap();
         else chooseDash();
+    }
+
+    private void showMapControls() {
+        android.widget.ImageView preview = new android.widget.ImageView(this);
+        preview.setAdjustViewBounds(true); preview.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        preview.setContentDescription("Live map controls. Tap the map while parked.");
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this).setTitle("Map controls - use while parked")
+            .setMessage("Tap Start or other map controls here. Maps stays on the bike.").setView(preview).setPositiveButton("Close", null).create();
+        preview.setOnTouchListener((view, event) -> {
+            if (event.getAction() != android.view.MotionEvent.ACTION_UP) return true;
+            android.graphics.drawable.Drawable drawable = preview.getDrawable(); if (drawable == null) return true;
+            android.graphics.Matrix inverse = new android.graphics.Matrix();
+            if (!preview.getImageMatrix().invert(inverse)) return true;
+            float[] point = {event.getX() - preview.getPaddingLeft(), event.getY() - preview.getPaddingTop()}; inverse.mapPoints(point);
+            float x = point[0] / drawable.getIntrinsicWidth(), y = point[1] / drawable.getIntrinsicHeight();
+            if (x >= 0 && x <= 1 && y >= 0 && y <= 1) worker.execute(() -> {
+                try { DedicatedDisplay.tap(x, y); } catch (Exception e) { runOnUiThread(() -> displayError("Map control unavailable. " + safeMessage(e))); }
+            });
+            return true;
+        });
+        Runnable update = new Runnable() { @Override public void run() {
+            if (!dialog.isShowing()) return;
+            byte[] frame = DedicatedDisplay.latestFrame();
+            if (frame != null) preview.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(frame, 0, frame.length));
+            handler.postDelayed(this, 500);
+        } };
+        dialog.setOnDismissListener(d -> handler.removeCallbacks(update)); dialog.show(); handler.post(update);
     }
 
     private void startAutomaticMap() {
@@ -940,7 +967,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void showPersonalization() {
-        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Bike map size", "Home and Work destinations"}, (dialog, which) -> {
+        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Bike map size", "Home and Work destinations", "Favorites", "Nearby fuel stations"}, (dialog, which) -> {
                 if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                     .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                         RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
@@ -952,6 +979,8 @@ public class MainActivity extends android.app.Activity {
                         RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
                     });
                 else if (which == 6) chooseMusicPlayer();
+                else if (which == 9) showBikeFavorites();
+                else if (which == 10) prepareFuelStations();
                 else if (which == 8) {
                     LinearLayout fields = new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); fields.setPadding(dp(24), dp(12), dp(24), 0);
                     EditText home = new EditText(this); home.setHint("Home address or place"); home.setText(RidePreferences.prefs(this).getString("bike_home", ""));
@@ -979,6 +1008,59 @@ public class MainActivity extends android.app.Activity {
             });
     }
 
+    private void showBikeFavorites() {
+        java.util.List<BikePlace> places = BikePlaces.favorites(this);
+        String[] names = new String[places.size() + 1];
+        for (int i = 0; i < places.size(); i++) names[i] = places.get(i).getName();
+        names[places.size()] = "Add favorite";
+        new android.app.AlertDialog.Builder(this).setTitle("Bike favorites")
+            .setItems(names, (dialog, which) -> {
+                if (which < places.size()) {
+                    new android.app.AlertDialog.Builder(this).setTitle(places.get(which).getName())
+                        .setMessage(places.get(which).getDestination()).setNegativeButton("Close", null)
+                        .setPositiveButton("Remove", (d, w) -> { BikePlaces.remove(this, which); showBikeFavorites(); }).show();
+                    return;
+                }
+                LinearLayout fields = new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); fields.setPadding(dp(24), dp(12), dp(24), 0);
+                EditText name = new EditText(this); name.setHint("Name");
+                EditText destination = new EditText(this); destination.setHint("Address, place or coordinates");
+                fields.addView(name); fields.addView(destination);
+                new android.app.AlertDialog.Builder(this).setTitle("Add bike favorite").setView(fields)
+                    .setNegativeButton("Cancel", null).setPositiveButton("Save", (d, w) -> {
+                        try { BikePlaces.add(this, name.getText().toString().trim(), destination.getText().toString().trim()); showBikeFavorites(); }
+                        catch (Exception e) { displayError(safeMessage(e)); }
+                    }).show();
+            }).setNegativeButton("Close", null).show();
+    }
+    private void prepareFuelStations() {
+        new android.app.AlertDialog.Builder(this).setTitle("Nearby fuel stations")
+            .setMessage("Find up to 20 stations within 10 km. This sends your current location to the OpenStreetMap Overpass service. Station data can be incomplete; distances are straight-line distances. Results are prepared for the bike's stations menu. Data: OpenStreetMap contributors, ODbL.")
+            .setNegativeButton("Cancel", null).setPositiveButton("Find stations", (d, w) -> {
+                if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 73);
+                    android.widget.Toast.makeText(this, "After allowing location, tap Find stations again.", android.widget.Toast.LENGTH_LONG).show(); return;
+                }
+                android.location.LocationManager locations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+                android.location.Location best = null;
+                try { for (String provider : locations.getProviders(true)) {
+                    android.location.Location candidate;
+                    try { candidate = locations.getLastKnownLocation(provider); } catch (SecurityException denied) { continue; }
+                    if (candidate != null && (best == null || candidate.getElapsedRealtimeNanos() > best.getElapsedRealtimeNanos())) best = candidate;
+                } } catch (SecurityException ignored) { }
+                if (best == null || android.os.SystemClock.elapsedRealtimeNanos() - best.getElapsedRealtimeNanos() > 300000000000L) {
+                    displayError("A recent location is needed. Enable phone location, open Maps to update your position, then try again."); return;
+                }
+                final android.location.Location origin = best;
+                android.widget.Toast.makeText(this, "Finding nearby stations...", android.widget.Toast.LENGTH_SHORT).show();
+                worker.execute(() -> {
+                    try {
+                        int count = BikePlaces.findStations(this, origin.getLatitude(), origin.getLongitude());
+                        runOnUiThread(() -> new android.app.AlertDialog.Builder(this).setMessage(count + " stations prepared. Open Nearby Gas Stations on the bike.").setPositiveButton("Close", null).show());
+                    } catch (Exception error) { runOnUiThread(() -> displayError("Fuel search failed. " + safeMessage(error))); }
+                });
+            }).show();
+    }
+
     private void showCustomizationMenu(String[] labels, android.content.DialogInterface.OnClickListener choose) {
         android.app.Dialog menu = new android.app.Dialog(this);
         menu.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
@@ -997,7 +1079,7 @@ public class MainActivity extends android.app.Activity {
         for (int i = 0; i < labels.length; i++) {
             final int choice = i;
             LinearLayout row = rideCard(labels[i].toUpperCase(java.util.Locale.ROOT));
-            String detail = i == 8 ? "Set places for the bike Home and Work commands" : i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
+            String detail = i == 10 ? "OpenStreetMap fuel search; location required" : i == 9 ? "Save up to 20 destinations for the bike" : i == 8 ? "Set places for the bike Home and Work commands" : i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
                 : i == 7 ? RidePreferences.BIKE_MAP_SIZE_NAMES[Math.max(0, Math.min(2, RidePreferences.prefs(this).getInt("bike_map_size", 0)))]
                 : i == 6 ? RidePreferences.musicName(this) : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
                 : i == 0 ? new String[]{"Left", "Centre", "Right"}[RidePreferences.prefs(this).getInt("mount", 1)]
