@@ -11,4 +11,16 @@ public class MapDisplayPolicyTest {
         assertFalse(MapDisplayPolicy.tryBike(true, false, true, true));
         assertFalse(MapDisplayPolicy.tryBike(false, true, true, true));
     }
+
+
+    @Test public void xiaomiFamilyUsesNormalPhoneMapLaunch() {
+        assertFalse(MapDisplayPolicy.useAdjacentPhoneMap("Xiaomi", "Xiaomi"));
+        assertFalse(MapDisplayPolicy.useAdjacentPhoneMap("Xiaomi", "Redmi"));
+        assertFalse(MapDisplayPolicy.useAdjacentPhoneMap("POCO", "POCO"));
+    }
+
+    @Test public void otherManufacturersKeepAdjacentPhoneMapLaunch() {
+        assertTrue(MapDisplayPolicy.useAdjacentPhoneMap("Google", "Pixel"));
+        assertTrue(MapDisplayPolicy.useAdjacentPhoneMap("Samsung", "Samsung"));
+    }
 }

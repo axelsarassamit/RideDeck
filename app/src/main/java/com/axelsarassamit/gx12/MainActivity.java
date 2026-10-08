@@ -1370,6 +1370,11 @@ public class MainActivity extends android.app.Activity {
     private void openMapsAdjacent() {
         Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
         if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
+        if (!MapDisplayPolicy.useAdjacentPhoneMap(Build.MANUFACTURER, Build.BRAND)) {
+            try { startActivity(launch); }
+            catch (RuntimeException launchError) { displayError("Could not open " + RidePreferences.mapName(this) + "."); }
+            return;
+        }
         // Always open the selected app. Android decides whether an adjacent pane is available.
         try { startAdjacent(launch); }
         catch (RuntimeException adjacentError) {
