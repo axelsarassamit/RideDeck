@@ -1127,42 +1127,20 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void openMapsAdjacent() {
-        String selectedMap = RidePreferences.selectedMap(this);
-        Intent launch;
-        if ("com.google.android.apps.maps".equals(selectedMap)) {
-            launch = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="));
-            launch.setPackage(selectedMap);
-        } else {
-            launch = getPackageManager().getLaunchIntentForPackage(selectedMap);
-            if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
-        }
-        if (!MapDisplayPolicy.useAdjacentPhoneMap(Build.MANUFACTURER, Build.BRAND)) {
-            try { startActivity(launch); }
-            catch (RuntimeException launchError) { displayError("Could not open " + RidePreferences.mapName(this) + "."); }
-            return;
-        }
-        try { startMapAdjacent(launch); }
+        Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
+        if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
+        // Ask Android to place the selected map beside RideDeck when split screen is available.
+        try { startAdjacent(launch); }
         catch (RuntimeException adjacentError) {
-            launch.removeFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+            launch.removeFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
             try { startActivity(launch); }
             catch (RuntimeException launchError) { displayError("Could not open " + RidePreferences.mapName(this) + "."); }
         }
-    }
-
-    private void startMapAdjacent(Intent intent) {
-        // A previous map task may be stranded on a hidden secondary display. Create a
-        // fresh adjacent task on the phone display instead of reusing that task.
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-        android.app.ActivityOptions options = android.app.ActivityOptions.makeBasic();
-        options.setLaunchDisplayId(android.view.Display.DEFAULT_DISPLAY);
-        startActivity(intent, options.toBundle());
     }
 
     private void startAdjacent(Intent intent) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
-        android.app.ActivityOptions options = android.app.ActivityOptions.makeBasic();
-        options.setLaunchDisplayId(android.view.Display.DEFAULT_DISPLAY);
-        startActivity(intent, options.toBundle());
+        startActivity(intent);
     }
 
     private void openSpotifyAdjacent() {
