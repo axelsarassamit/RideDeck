@@ -1387,7 +1387,9 @@ public class MainActivity extends android.app.Activity {
 
     private void startAdjacent(Intent intent) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
-        startActivity(intent);
+        android.app.ActivityOptions options = android.app.ActivityOptions.makeBasic();
+        options.setLaunchDisplayId(android.view.Display.DEFAULT_DISPLAY);
+        startActivity(intent, options.toBundle());
     }
 
     private void openSpotifyAdjacent() {
