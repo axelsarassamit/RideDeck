@@ -15,7 +15,7 @@ class SharedLocationActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        BikeDiagnostics.record(this, "Shared destination received")
+        RideDeckDiagnostics.record(this, "Shared destination received")
         val text = if (intent.action == Intent.ACTION_SEND) intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() else null
         if (text.isNullOrBlank() || text.length > 12000) { fail("Share a place from Google Maps to RideDeck."); return }
         val progress = AlertDialog.Builder(this).setTitle("Shared destination").setMessage("Finding the place...").setNegativeButton("Cancel") { _, _ -> finish() }.create()
@@ -25,7 +25,7 @@ class SharedLocationActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 progress.dismiss()
-                result.onSuccess { BikeDiagnostics.record(this, "Shared destination resolved"); confirm(it) }.onFailure { BikeDiagnostics.record(this, "Shared destination resolution failed exception=${it.javaClass.simpleName}"); fail("This shared link could not be read. Share the place again, or enter its full address in RideDeck.") }
+                result.onSuccess { RideDeckDiagnostics.record(this, "Shared destination resolved"); confirm(it) }.onFailure { RideDeckDiagnostics.record(this, "Shared destination resolution failed exception=${it.javaClass.simpleName}"); fail("This shared link could not be read. Share the place again, or enter its full address in RideDeck.") }
             }
         }
     }

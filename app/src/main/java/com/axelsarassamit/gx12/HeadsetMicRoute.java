@@ -28,7 +28,7 @@ public final class HeadsetMicRoute {
     private Consumer<String> failed;
     public HeadsetMicRoute(Context context) { this.context = context; audio = context.getSystemService(AudioManager.class); }
     public void start(Runnable ready, Consumer<String> failed) {
-        BikeDiagnostics.record(context, "Headset microphone requested");
+        RideDeckDiagnostics.record(context, "Headset microphone requested");
         release(); this.ready = ready; this.failed = failed;
         try {
             previousMode = audio.getMode();
@@ -78,7 +78,7 @@ public final class HeadsetMicRoute {
             if (!active) return;
             try {
                 if (connected()) {
-                    if (ready != null) { BikeDiagnostics.record(context, "Headset microphone route connected"); Runnable next = ready; ready = null; next.run(); }
+                    if (ready != null) { RideDeckDiagnostics.record(context, "Headset microphone route connected"); Runnable next = ready; ready = null; next.run(); }
                 } else if (ready == null) {
                     // Recognition has already started. Do not start a second voice session.
                     release(); return;
@@ -93,13 +93,13 @@ public final class HeadsetMicRoute {
         Runnable next = ready;
         release();
         if (next != null) {
-            BikeDiagnostics.record(context, "Using phone microphone for voice input");
+            RideDeckDiagnostics.record(context, "Using phone microphone for voice input");
             active = true;
             next.run();
         }
     }
     private void fail(String message) {
-        BikeDiagnostics.record(context, "Headset microphone failed: " + message);
+        RideDeckDiagnostics.record(context, "Headset microphone failed: " + message);
         Consumer<String> callback = failed; release(); if (callback != null) callback.accept(message);
     }
     public boolean listening() { return active && ready == null; }
