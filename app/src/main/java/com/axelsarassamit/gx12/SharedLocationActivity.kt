@@ -88,11 +88,6 @@ class SharedLocationActivity : Activity() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val target = field.text.toString().trim()
                 if (target.isEmpty()) { field.error = "Enter a destination"; return@setOnClickListener }
-                if (BuildConfig.YAMAHA) {
-                    startActivity(Intent(this, MainActivity::class.java).putExtra("shared_destination", target))
-                    finish()
-                    return@setOnClickListener
-                }
                 val coordinate = Regex("^-?\\d+(?:\\.\\d+)?,\\s*-?\\d+(?:\\.\\d+)?$").matches(target)
                 val destinationUri = if (RidePreferences.selectedMap(this) == "com.waze" && coordinate) Uri.parse("https://waze.com/ul").buildUpon().appendQueryParameter("ll", target).appendQueryParameter("navigate", "yes").build()
                     else Uri.parse("geo:0,0").buildUpon().appendQueryParameter("q", target).build()
