@@ -5,6 +5,7 @@ import android.app.Application
 class RideDeckApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        clearLegacyBikeDisplaySettings()
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             // Exception messages can contain addresses or message text. Store types and code frames only.
@@ -14,5 +15,18 @@ class RideDeckApplication : Application() {
             else { android.os.Process.killProcess(android.os.Process.myPid()); kotlin.system.exitProcess(10) }
         }
         BikeDiagnostics.record(this, "App process started version=${packageManager.getPackageInfo(packageName, 0).versionName} Android=${android.os.Build.VERSION.SDK_INT}")
+    }
+
+    private fun clearLegacyBikeDisplaySettings() {
+        getSharedPreferences("bike_display", MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("ride_config", MODE_PRIVATE).edit()
+            .remove("bike_profile")
+            .remove("bike_map_size")
+            .remove("bike_home")
+            .remove("bike_work")
+            .remove("bike_favorites")
+            .remove("map_auto")
+            .remove("map_startup")
+            .apply()
     }
 }
