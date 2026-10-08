@@ -1136,6 +1136,11 @@ public class MainActivity extends android.app.Activity {
             launch = getPackageManager().getLaunchIntentForPackage(selectedMap);
             if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
         }
+        if (!MapDisplayPolicy.useAdjacentPhoneMap(Build.MANUFACTURER, Build.BRAND)) {
+            try { startActivity(launch); }
+            catch (RuntimeException launchError) { displayError("Could not open " + RidePreferences.mapName(this) + "."); }
+            return;
+        }
         try { startMapAdjacent(launch); }
         catch (RuntimeException adjacentError) {
             launch.removeFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
