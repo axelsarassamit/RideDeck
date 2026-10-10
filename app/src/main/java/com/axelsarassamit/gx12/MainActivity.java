@@ -52,8 +52,8 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends android.app.Activity {
     private static final String REPOSITORY = "axelsarassamit/RideDeck";
-    private static final String DASH_PACKAGE = "com.axelsarassamit.ridedeck.dash";
-    private static final Uri DASH_PROVIDER_URI = Uri.parse("content://com.axelsarassamit.ridedeck.dash.bridge");
+    private static final String DASH_PACKAGE = DashPackageVerifier.PACKAGE_NAME;
+    private static final Uri DASH_PROVIDER_URI = DashPackageVerifier.PROVIDER_URI;
     private static final int REQUEST_BLUETOOTH = 12;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -79,6 +79,8 @@ public class MainActivity extends android.app.Activity {
     private boolean cockpitVisible;
     private Chronometer rideClock;
     private TextView rideButton;
+    private Button dashButton;
+    private boolean dashInstalled;
     private File downloadedApk;
     private MediaController mediaController;
     private BluetoothProfile a2dpProfile;
@@ -180,6 +182,7 @@ public class MainActivity extends android.app.Activity {
         super.onResume();
         if (refreshAfterSetup && !(this instanceof SetupActivity)) { refreshAfterSetup = false; buildScreen(); }
         RideQuietMode.refresh(this);
+        refreshDashInstallation();
         refreshRideSessionUi();
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
@@ -404,7 +407,7 @@ public class MainActivity extends android.app.Activity {
         if (this instanceof SetupActivity) { buildSetupScreen(); return; }
         setupVisible = false; cockpitVisible = true;
         messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;
-        rideClock = null; rideButton = null;
+        rideClock = null; rideButton = null; dashButton = null;
         deviceStatus = text("", 12, 0xffaab4c0, false);
         updateStatus = text("", 12, 0xffaab4c0, false);
         boolean portrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
@@ -546,6 +549,7 @@ public class MainActivity extends android.app.Activity {
         setContentView(root);
         ScreenChrome.apply(getWindow(), true);
         androidx.core.view.ViewCompat.requestApplyInsets(root);
+        refreshDashInstallation();
         restoreRide();
         refreshMediaSession(); refreshWhatsAppPreview();
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -1086,6 +1090,11 @@ public class MainActivity extends android.app.Activity {
         if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " - " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
 
+    private void refreshDashInstallation() {
+        dashInstalled = DashPackageVerifier.isInstalledAndSigned(this);
+        if (dashButton != null) dashButton.setVisibility(dashInstalled ? View.VISIBLE : View.GONE);
+    }
+
     private void refreshRideSessionUi() {
         if (rideClock == null || rideButton == null) return;
         SharedPreferences prefs = getPreferences(0);
@@ -1211,16 +1220,23 @@ public class MainActivity extends android.app.Activity {
         rideControl.addView(rideButton, new LinearLayout.LayoutParams(-1, 0, 1));
         dock.addView(rideControl, rideWeight(compact ? 56 : 64));
 
-        Button dash = rideAction("Dash", false);
-        dash.setContentDescription("Open RideDeck Dash. Start recording in Dash.");
-        dash.setOnClickListener(v -> openDash());
-        dock.addView(dash, rideWeight(compact ? 56 : 64));
+        dashButton = rideAction("Dash", false);
+        dashButton.setContentDescription("Open RideDeck Dash. Start recording in Dash.");
+        dashButton.setVisibility(View.GONE);
+        dashButton.setOnClickListener(v -> openDash());
+        dock.addView(dashButton, rideWeight(compact ? 56 : 64));
     }
 
     private void openDash() {
+        refreshDashInstallation();
+        if (!dashInstalled) {
+            showDashMessage("Install the signed RideDeck Dash app to use this entry.");
+            return;
+        }
         Intent launch = getPackageManager().getLaunchIntentForPackage(DASH_PACKAGE);
         if (launch == null) {
-            showDashMessage("Install RideDeck Dash to use this entry.");
+            refreshDashInstallation();
+            showDashMessage("RideDeck Dash is installed but cannot be opened.");
             return;
         }
         String notice = null;

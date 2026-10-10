@@ -23,8 +23,7 @@ public final class RideDashLeaseService extends Service {
     public static final String ACTION_START = "com.axelsarassamit.gx12.action.START_RIDE";
     public static final String ACTION_PAUSE = "com.axelsarassamit.gx12.action.PAUSE_RIDE";
     private static final String EXTRA_STOP_WHEN_DONE = "stop_when_done";
-    private static final String DASH_AUTHORITY = "com.axelsarassamit.ridedeck.dash.bridge";
-    private static final Uri DASH_PROVIDER_URI = Uri.parse("content://" + DASH_AUTHORITY);
+    private static final Uri DASH_PROVIDER_URI = DashPackageVerifier.PROVIDER_URI;
     private static final int PROTOCOL_VERSION = 1;
     private static final long RENEW_INTERVAL_MS = 5_000L;
     private static final int NOTIFICATION_ID = 4812;
@@ -106,7 +105,7 @@ public final class RideDashLeaseService extends Service {
         try {
             int foregroundType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
                 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC : 0;
-            ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification("Ride session active. Open Dash to start recording."),
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification("Ride session active."),
                 foregroundType);
         } catch (RuntimeException error) {
             serviceRequested = false;
@@ -202,6 +201,10 @@ public final class RideDashLeaseService extends Service {
     }
 
     private void callProvider(String method, boolean isStop) {
+        if (!isStop && !DashPackageVerifier.isInstalledAndSigned(this)) {
+            updateNotification("Ride session active. Signed RideDeck Dash is not installed.");
+            return;
+        }
         try {
             Bundle request = new Bundle(); request.putInt("protocolVersion", PROTOCOL_VERSION);
             Bundle response = getContentResolver().call(DASH_PROVIDER_URI, method, null, request);
