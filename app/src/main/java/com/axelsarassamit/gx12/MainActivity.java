@@ -52,6 +52,8 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends android.app.Activity {
     private static final String REPOSITORY = "axelsarassamit/RideDeck";
+    private static final String DASH_PACKAGE = "com.axelsarassamit.ridedeck.dash";
+    private static final Uri DASH_PROVIDER_URI = Uri.parse("content://com.axelsarassamit.ridedeck.dash.bridge");
     private static final int REQUEST_BLUETOOTH = 12;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -76,7 +78,7 @@ public class MainActivity extends android.app.Activity {
     private boolean setupVisible;
     private boolean cockpitVisible;
     private Chronometer rideClock;
-    private Button rideButton;
+    private TextView rideButton;
     private File downloadedApk;
     private MediaController mediaController;
     private BluetoothProfile a2dpProfile;
@@ -101,6 +103,7 @@ public class MainActivity extends android.app.Activity {
             refreshMediaSession();
             refreshWhatsAppPreview();
             if (setupVisible) refreshDeviceStatus();
+            refreshRideSessionUi();
             handler.postDelayed(this, 2500);
         }
     };
@@ -177,6 +180,7 @@ public class MainActivity extends android.app.Activity {
         super.onResume();
         if (refreshAfterSetup && !(this instanceof SetupActivity)) { refreshAfterSetup = false; buildScreen(); }
         RideQuietMode.refresh(this);
+        refreshRideSessionUi();
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
         refreshWhatsAppPreview();
@@ -189,8 +193,11 @@ public class MainActivity extends android.app.Activity {
         if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
         handler.removeCallbacks(trackRefresh);
         SharedPreferences prefs = getPreferences(0);
-        if (prefs.getBoolean("ride_running", false) && rideClock != null) {
-            prefs.edit().putLong("ride_elapsed", android.os.SystemClock.elapsedRealtime() - rideClock.getBase()).apply();
+        if (prefs.getBoolean(RideSessionState.PREF_RUNNING, false)) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            long base = prefs.getLong(RideSessionState.PREF_BASE_ELAPSED, prefs.getLong(RideSessionState.PREF_ELAPSED, 0));
+            long started = prefs.getLong(RideSessionState.PREF_STARTED_ELAPSED, now);
+            prefs.edit().putLong(RideSessionState.PREF_ELAPSED, RideSessionState.elapsed(base, started, now)).apply();
         }
         super.onPause();
     }
@@ -527,6 +534,7 @@ public class MainActivity extends android.app.Activity {
                 }
             }); dock.addView(action, rideWeight(compact ? 56 : 64));
         }
+        addRideAndDashControls(dock, compact);
         if (compact) {
             settings.setContentDescription("Setup - use while parked");
             LinearLayout.LayoutParams gear = new LinearLayout.LayoutParams(dp(56), dp(56));
@@ -538,6 +546,7 @@ public class MainActivity extends android.app.Activity {
         setContentView(root);
         ScreenChrome.apply(getWindow(), true);
         androidx.core.view.ViewCompat.requestApplyInsets(root);
+        restoreRide();
         refreshMediaSession(); refreshWhatsAppPreview();
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
@@ -1077,47 +1086,167 @@ public class MainActivity extends android.app.Activity {
         if (dockMessage != null) dockMessage.setText("Messages\n" + (preview == null ? "No new preview" : preview.appName + " - " + preview.title + (preview.text.isEmpty() ? "" : "\n" + preview.text)));
     }
 
-    private void toggleRide() {
+    private void refreshRideSessionUi() {
+        if (rideClock == null || rideButton == null) return;
         SharedPreferences prefs = getPreferences(0);
-        boolean running = prefs.getBoolean("ride_running", false);
-        if (running) {
-            rideClock.stop();
-            rideButton.setText("Resume ride");
-            prefs.edit().putBoolean("ride_running", false).putLong("ride_elapsed", android.os.SystemClock.elapsedRealtime() - rideClock.getBase()).apply();
+        boolean storedRunning = prefs.getBoolean(RideSessionState.PREF_RUNNING, false);
+        boolean serviceRunning = RideDashLeaseService.isRunning();
+        boolean uiRunning = "Pause".contentEquals(rideButton.getText());
+        if ((storedRunning && !serviceRunning) || storedRunning != uiRunning) restoreRide();
+    }
+
+    private void toggleRide() {
+        if (rideClock == null || rideButton == null) return;
+        SharedPreferences prefs = getPreferences(0);
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (prefs.getBoolean(RideSessionState.PREF_RUNNING, false)) {
+            long elapsed = currentRideElapsed(prefs, now);
+            prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
+                .putLong(RideSessionState.PREF_ELAPSED, elapsed)
+                .remove(RideSessionState.PREF_BASE_ELAPSED)
+                .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
+            RideDashLeaseService.stop(this);
+            rideClock.stop(); rideClock.setBase(now - elapsed); rideClock.setText(formatElapsed(elapsed));
+            setRideButtonState("Resume");
         } else {
-            long elapsed = prefs.getLong("ride_elapsed", 0);
-            rideClock.setBase(android.os.SystemClock.elapsedRealtime() - elapsed);
-            rideClock.start();
-            rideButton.setText("Pause ride");
-            prefs.edit().putBoolean("ride_running", true).apply();
+            long elapsed = prefs.getLong(RideSessionState.PREF_ELAPSED, 0);
+            prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, true)
+                .putLong(RideSessionState.PREF_ELAPSED, elapsed)
+                .putLong(RideSessionState.PREF_BASE_ELAPSED, elapsed)
+                .putLong(RideSessionState.PREF_STARTED_ELAPSED, now).apply();
+            try { RideDashLeaseService.start(this); }
+            catch (RuntimeException error) {
+                prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
+                    .remove(RideSessionState.PREF_BASE_ELAPSED)
+                    .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
+                showDashMessage("Ride session could not start. Check RideDeck notifications and try again.");
+                restoreRide();
+                return;
+            }
+            rideClock.setBase(now - elapsed); rideClock.start();
+            setRideButtonState("Pause");
         }
+    }
+
+    private long currentRideElapsed(SharedPreferences prefs, long now) {
+        long base = prefs.getLong(RideSessionState.PREF_BASE_ELAPSED, prefs.getLong(RideSessionState.PREF_ELAPSED, 0));
+        long started = prefs.getLong(RideSessionState.PREF_STARTED_ELAPSED, now);
+        return RideSessionState.elapsed(base, started, now);
     }
 
     private void restoreRide() {
         if (rideClock == null || rideButton == null) return;
         SharedPreferences prefs = getPreferences(0);
-        boolean running = prefs.getBoolean("ride_running", false);
-        long elapsed = prefs.getLong("ride_elapsed", 0);
-        if (running) {
-            rideClock.setBase(android.os.SystemClock.elapsedRealtime() - elapsed);
-            rideClock.start(); rideButton.setText("Pause ride");
-        } else if (elapsed > 0) {
-            rideClock.setBase(android.os.SystemClock.elapsedRealtime() - elapsed);
-            rideClock.setText(formatElapsed(elapsed));
-            rideButton.setText("Resume ride");
+        boolean storedRunning = prefs.getBoolean(RideSessionState.PREF_RUNNING, false);
+        long elapsed = prefs.getLong(RideSessionState.PREF_ELAPSED, 0);
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (RideSessionState.shouldResume(storedRunning, RideDashLeaseService.isRunning())) {
+            elapsed = currentRideElapsed(prefs, now);
+            rideClock.setBase(now - elapsed); rideClock.start();
+            setRideButtonState("Pause");
         } else {
-            rideButton.setText("Start ride");
+            if (storedRunning) {
+                // If the lease service did not survive, retain its checkpoint and never restart it from this Activity.
+                prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
+                    .remove(RideSessionState.PREF_BASE_ELAPSED)
+                    .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
+            }
+            rideClock.stop(); rideClock.setBase(now - elapsed); rideClock.setText(formatElapsed(elapsed));
+            setRideButtonState(elapsed > 0 ? "Resume" : "Start");
         }
     }
 
+    private void setRideButtonState(String label) {
+        if (rideButton == null) return;
+        rideButton.setText(label);
+        String action = "Pause".equals(label) ? "Pause the active RideDeck ride session"
+            : "Resume".equals(label) ? "Resume the RideDeck ride session" : "Start a RideDeck ride session";
+        rideButton.setContentDescription(action + ". Long press to end and reset the ride.");
+    }
+
     private String formatElapsed(long elapsed) {
-        long seconds = elapsed / 1000, hours = seconds / 3600, minutes = (seconds % 3600) / 60;
+        long seconds = Math.max(0, elapsed / 1000), hours = seconds / 3600, minutes = (seconds % 3600) / 60;
         return String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds % 60);
     }
 
+    private void confirmResetRide() {
+        new android.app.AlertDialog.Builder(this).setTitle("End ride")
+            .setMessage("End the current RideDeck session and reset the ride timer?")
+            .setPositiveButton("End ride", (dialog, which) -> resetRide())
+            .setNegativeButton("Keep ride", null).show();
+    }
+
     private void resetRide() {
-        getPreferences(0).edit().putBoolean("ride_running", false).putLong("ride_elapsed", 0).apply();
-        rideClock.stop(); rideClock.setBase(android.os.SystemClock.elapsedRealtime()); rideClock.setText("00:00"); rideButton.setText("Start ride");
+        SharedPreferences prefs = getPreferences(0);
+        prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
+            .putLong(RideSessionState.PREF_ELAPSED, 0)
+            .remove(RideSessionState.PREF_BASE_ELAPSED)
+            .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
+        RideDashLeaseService.stop(this);
+        if (rideClock != null) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            rideClock.stop(); rideClock.setBase(now); rideClock.setText("00:00");
+        }
+        setRideButtonState("Start");
+    }
+
+    private void addRideAndDashControls(LinearLayout dock, boolean compact) {
+        LinearLayout rideControl = new LinearLayout(this);
+        rideControl.setOrientation(LinearLayout.VERTICAL); rideControl.setGravity(Gravity.CENTER);
+        rideControl.setPadding(dp(2), dp(2), dp(2), dp(2));
+        rideControl.setBackground(rideBackground(0xff202820, 12));
+        rideClock = new Chronometer(this); rideClock.setFormat("%s");
+        rideClock.setTextColor(0xffc8d3df); rideClock.setTextSize(compact ? 10 : 12);
+        rideClock.setTypeface(Typeface.DEFAULT, Typeface.BOLD); rideClock.setGravity(Gravity.CENTER);
+        rideClock.setContentDescription("Ride session timer");
+        rideClock.setBase(android.os.SystemClock.elapsedRealtime());
+        rideControl.addView(rideClock, new LinearLayout.LayoutParams(-1, dp(compact ? 21 : 24)));
+        rideButton = text("Start", compact ? 11 : 12, 0xfff4f6fa, true);
+        rideButton.setGravity(Gravity.CENTER); rideButton.setSingleLine(true);
+        rideButton.setPadding(dp(2), 0, dp(2), 0);
+        rideButton.setBackground(rideBackground(0xff343d34, 9));
+        rideButton.setClickable(true); rideButton.setFocusable(true);
+        rideButton.setOnClickListener(v -> toggleRide());
+        rideButton.setOnLongClickListener(v -> { confirmResetRide(); return true; });
+        rideControl.addView(rideButton, new LinearLayout.LayoutParams(-1, 0, 1));
+        dock.addView(rideControl, rideWeight(compact ? 56 : 64));
+
+        Button dash = rideAction("Dash", false);
+        dash.setContentDescription("Open RideDeck Dash. Start recording in Dash.");
+        dash.setOnClickListener(v -> openDash());
+        dock.addView(dash, rideWeight(compact ? 56 : 64));
+    }
+
+    private void openDash() {
+        Intent launch = getPackageManager().getLaunchIntentForPackage(DASH_PACKAGE);
+        if (launch == null) {
+            showDashMessage("Install RideDeck Dash to use this entry.");
+            return;
+        }
+        String notice = null;
+        if (!RideDashLeaseService.isRunning()) {
+            notice = "Start a RideDeck session first, then start recording in Dash.";
+        } else {
+            try {
+                Bundle request = new Bundle(); request.putInt("protocolVersion", 1);
+                Bundle status = getContentResolver().call(DASH_PROVIDER_URI, "status", null, request);
+                if (status == null || status.getInt("protocolVersion", -1) != 1) {
+                    notice = "RideDeck Dash is installed but its connection needs an update.";
+                }
+            } catch (RuntimeException unavailable) {
+                notice = "RideDeck Dash connection is unavailable. Opening the app so you can check it.";
+            }
+        }
+        try { startActivity(launch); }
+        catch (RuntimeException error) {
+            showDashMessage("RideDeck Dash could not be opened.");
+            return;
+        }
+        if (notice != null) showDashMessage(notice);
+    }
+
+    private void showDashMessage(String message) {
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
     }
 
     private void openMaps() {
