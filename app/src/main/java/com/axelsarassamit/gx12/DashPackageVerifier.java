@@ -38,6 +38,23 @@ public final class DashPackageVerifier {
         }
     }
 
+    public static boolean supportsPendingIntentRecording(Context context) {
+        if (!isInstalledAndSigned(context)) return false;
+        try {
+            String version = context.getPackageManager().getPackageInfo(PACKAGE_NAME, 0).versionName;
+            if (version == null) return false;
+            String[] current = version.replaceFirst("^[vV]", "").split("\\.");
+            int[] required = {0, 5, 3};
+            for (int i = 0; i < required.length; i++) {
+                int value = i < current.length ? Integer.parseInt(current[i]) : 0;
+                if (value != required[i]) return value > required[i];
+            }
+            return true;
+        } catch (Exception unavailableOrInvalidVersion) {
+            return false;
+        }
+    }
+
     private static byte[] decodeHex(String value) {
         byte[] decoded = new byte[value.length() / 2];
         for (int i = 0; i < decoded.length; i++) {
