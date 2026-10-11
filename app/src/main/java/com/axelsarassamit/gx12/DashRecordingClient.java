@@ -78,7 +78,8 @@ public final class DashRecordingClient {
     };
 
     private static void clearStartGesture() {
-        clearStartGesture();
+        startGesturePending = false;
+        startGestureActivity.clear();
     }
 
     private static boolean hasVisibleStartGesture() {
