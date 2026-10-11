@@ -1296,8 +1296,10 @@ public class MainActivity extends android.app.Activity {
             }
             @Override public void onRecordWithDashChanged(boolean enabled) {
                 RidePreferences.setAutoOpenDashOnRide(MainActivity.this, enabled);
-                if (!enabled) cancelDashAutoOpen();
-                else if (getPreferences(0).getBoolean(RideSessionState.PREF_RUNNING, false)
+                if (!enabled) {
+                    cancelDashAutoOpen();
+                    DashRecordingClient.cancelPendingStart();
+                } else if (getPreferences(0).getBoolean(RideSessionState.PREF_RUNNING, false)
                         && RideDashLeaseService.isRunning() && dashRecordingRequestedAt == 0L) {
                     if (getPreferences(0).getBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false))
                         startDashRecordingAfterRideStart();
