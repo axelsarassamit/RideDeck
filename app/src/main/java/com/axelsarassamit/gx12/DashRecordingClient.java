@@ -370,6 +370,11 @@ public final class DashRecordingClient {
 
     private static Bitmap decode(byte[] bytes) {
         if (bytes == null || bytes.length == 0 || bytes.length > MAX_FRAME_BYTES) return null;
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        if (bounds.outWidth < 1 || bounds.outWidth > 1280
+                || bounds.outHeight < 1 || bounds.outHeight > 1280) return null;
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
     }
 
@@ -427,6 +432,15 @@ public final class DashRecordingClient {
     public static synchronized void clearStatusListener() {
         statusListener.clear();
         MAIN.removeCallbacks(statusPoll);
+    }
+
+    public static synchronized void cancelPendingStart() {
+        if (pendingWhat != MSG_START || recordingStartSent) return;
+        clearPendingRequest();
+        startSent = false;
+        accepted = false;
+        clearStartGesture();
+        notifyListener(false, false, false, "Dash recording request cancelled.", null, null);
     }
 
     public static synchronized boolean attachPreview(Activity activity, Listener target) {
