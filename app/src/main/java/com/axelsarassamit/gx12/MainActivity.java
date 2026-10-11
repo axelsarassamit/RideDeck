@@ -191,6 +191,7 @@ public class MainActivity extends android.app.Activity {
         refreshDashInstallation();
         if (this instanceof SetupActivity && previouslyDashInstalled != dashInstalled) buildSetupScreen();
         activityResumed = true;
+        DashRecordingClient.refreshPreview();
         refreshRideSessionUi();
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
@@ -1201,7 +1202,7 @@ public class MainActivity extends android.app.Activity {
         }
         DashRecordingClient.start(this, new DashRecordingClient.Listener() {
             @Override public boolean previewVisible() {
-                return dialog.isShowing() && !isFinishing() && !isDestroyed();
+                return dialog.isShowing() && activityResumed && !isFinishing() && !isDestroyed();
             }
             @Override public void onUpdate(boolean accepted, boolean recording, String message,
                     android.graphics.Bitmap rearFrame, android.graphics.Bitmap frontFrame) {

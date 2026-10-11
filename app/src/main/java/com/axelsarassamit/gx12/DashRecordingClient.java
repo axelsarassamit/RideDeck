@@ -55,18 +55,10 @@ public final class DashRecordingClient {
             request.replyTo = reply;
             previewPending = true;
             remote.send(request);
-            MAIN.postDelayed(pollTimeout, 2500L);
         } catch (RuntimeException | RemoteException error) {
             previewPending = false;
             notifyListener(false, false, "Dash preview connection was lost.", null, null);
         }
-    };
-
-    private static final Runnable pollTimeout = () -> {
-        if (!previewPending) return;
-        previewPending = false;
-        Listener target = listener;
-        if (accepted && target != null && target.previewVisible()) MAIN.postDelayed(poll, 1000L);
     };
 
     private DashRecordingClient() { }
@@ -104,6 +96,8 @@ public final class DashRecordingClient {
         Activity pending = permissionActivity.get();
         permissionActivity.clear();
         if (pending != activity || activity.isFinishing() || activity.isDestroyed()) return true;
+        Listener target = listener;
+        if (target == null || !target.previewVisible()) return true;
         boolean granted = results != null && results.length > 0;
         if (granted) for (int result : results) granted &= result == PackageManager.PERMISSION_GRANTED;
         if (!granted) {
@@ -115,6 +109,8 @@ public final class DashRecordingClient {
     }
 
     private static void bindFromVisibleHost(Activity activity) {
+        Listener target = listener;
+        if (target == null || !target.previewVisible()) return;
         if (remote != null) {
             sendStart();
             return;
@@ -134,7 +130,6 @@ public final class DashRecordingClient {
                 synchronized (DashRecordingClient.class) {
                     remote = null; startSent = false; accepted = false; previewPending = false;
                     MAIN.removeCallbacks(poll);
-                    MAIN.removeCallbacks(pollTimeout);
                     notifyListener(false, false, "Dash recording connection ended.", null, null);
                 }
             }
@@ -179,7 +174,6 @@ public final class DashRecordingClient {
                     notifyListener(ok, recording, text, null, null);
                     if (ok) MAIN.post(poll);
                 } else if (message.what == MSG_PREVIEW) {
-                    MAIN.removeCallbacks(pollTimeout);
                     previewPending = false;
                     accepted = ok;
                     byte[] rearBytes = data.getByteArray("rearJpeg");
@@ -225,11 +219,15 @@ public final class DashRecordingClient {
         });
     }
 
+    public static synchronized void refreshPreview() {
+        Listener target = listener;
+        if (accepted && target != null && target.previewVisible()) MAIN.post(poll);
+    }
+
     public static synchronized void finishPreview() {
         listener = null;
         previewPending = false;
         MAIN.removeCallbacks(poll);
-        MAIN.removeCallbacks(pollTimeout);
     }
 
     public static synchronized void end(Context context) {
