@@ -429,6 +429,19 @@ public final class DashRecordingClient {
         MAIN.removeCallbacks(statusPoll);
     }
 
+    public static synchronized boolean attachPreview(Activity activity, Listener target) {
+        if (activity == null || target == null || activity.isFinishing() || activity.isDestroyed()
+                || !accepted || !recordingStartSent || remote == null || !bound) return false;
+        listener = target;
+        scheduleNextPoll();
+        return true;
+    }
+
+    public static synchronized void openPreview(Activity activity, Listener target) {
+        if (attachPreview(activity, target)) return;
+        start(activity, target);
+    }
+
     public static synchronized void refreshPreview() {
         scheduleNextPoll();
     }
