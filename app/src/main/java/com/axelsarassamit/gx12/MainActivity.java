@@ -1204,23 +1204,21 @@ public class MainActivity extends android.app.Activity {
         }
         dashRecordingStatus.setVisibility(View.VISIBLE);
         String value = message == null ? "" : message.trim();
-        String lower = value.toLowerCase(Locale.ROOT);
         String label;
         int color;
         if (recording) {
             dashRecordingConfirmed = true;
             label = "● REC";
             color = 0xffff4d4d;
-        } else if (!accepted) {
-            label = lower.contains("stopped") || lower.contains("ended") || lower.contains("paused")
-                ? "DASH STOPPED" : "DASH ERROR";
-            color = 0xffffb14a;
         } else if (starting || (!dashRecordingConfirmed
                 && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L)) {
             label = "DASH STARTING";
             color = 0xffffc247;
-        } else if (dashRecordingConfirmed || lower.contains("stopped") || lower.contains("error")) {
-            label = lower.contains("error") ? "DASH ERROR" : "DASH STOPPED";
+        } else if (!accepted) {
+            label = "DASH UNAVAILABLE";
+            color = 0xffffb14a;
+        } else if (dashRecordingConfirmed) {
+            label = "DASH STOPPED";
             color = 0xffffb14a;
         } else {
             label = "DASH NOT RECORDING";

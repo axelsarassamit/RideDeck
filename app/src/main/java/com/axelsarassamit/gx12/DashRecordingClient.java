@@ -64,7 +64,8 @@ public final class DashRecordingClient {
             remote.send(request);
         } catch (RuntimeException | RemoteException error) {
             requestPending = false;
-            notifyListener(false, false, "Dash preview connection was lost.", null, null);
+            notifyListener(false, false, false, "Dash preview connection was lost.", null, null);
+            MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
         }
     };
 
@@ -82,6 +83,7 @@ public final class DashRecordingClient {
         } catch (RuntimeException | RemoteException error) {
             requestPending = false;
             notifyStatus(false, false, false, "Dash recording status is unavailable.");
+            MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
         }
     };
 
@@ -101,7 +103,7 @@ public final class DashRecordingClient {
     public static synchronized void start(Activity activity, Listener target) {
         if (activity == null || target == null || activity.isFinishing() || activity.isDestroyed()) return;
         if (!DashPackageVerifier.isInstalledAndSigned(activity)) {
-            target.onUpdate(false, false, "Signed RideDeck Dash is not available.", null, null);
+            target.onUpdate(false, false, false, "Signed RideDeck Dash is not available.", null, null);
             return;
         }
         app = activity.getApplicationContext();
@@ -119,7 +121,7 @@ public final class DashRecordingClient {
             permissionActivity = new WeakReference<>(activity);
             try { activity.requestPermissions(missing.toArray(new String[0]), REQUEST_PERMISSIONS); }
             catch (RuntimeException error) {
-                notifyListener(false, false, "Grant Camera and Microphone permissions to RideDeck, then try again.", null, null);
+                notifyListener(false, false, false, "Grant Camera and Microphone permissions to RideDeck, then try again.", null, null);
             }
             return;
         }
@@ -136,7 +138,7 @@ public final class DashRecordingClient {
         boolean granted = results != null && results.length > 0;
         if (granted) for (int result : results) granted &= result == PackageManager.PERMISSION_GRANTED;
         if (!granted) {
-            notifyListener(false, false, "Camera and Microphone access are required for Dash recording. Enable them for RideDeck and try again.", null, null);
+            notifyListener(false, false, false, "Camera and Microphone access are required for Dash recording. Enable them for RideDeck and try again.", null, null);
             return true;
         }
         bindFromVisibleHost(activity);
@@ -166,7 +168,7 @@ public final class DashRecordingClient {
                     remote = null; startSent = false; accepted = false; requestPending = false;
                     MAIN.removeCallbacks(poll);
                     MAIN.removeCallbacks(statusPoll);
-                    notifyListener(false, false, "Dash recording connection ended.", null, null);
+                    notifyListener(false, false, false, "Dash recording connection ended.", null, null);
                 }
             }
             @Override public void onBindingDied(ComponentName name) {
@@ -181,12 +183,12 @@ public final class DashRecordingClient {
         try {
             // Called only from the visible host Activity after an explicit recording choice.
             bound = app.bindService(intent, connection, flags);
-            if (!bound) notifyListener(false, false, Build.VERSION.SDK_INT < 30
+            if (!bound) notifyListener(false, false, false, Build.VERSION.SDK_INT < 30
                     ? "Dash background camera access is unavailable on this Android version."
                     : "Dash recording service is unavailable. Update Dash and try again.", null, null);
         } catch (RuntimeException error) {
             bound = false;
-            notifyListener(false, false, Build.VERSION.SDK_INT < 30
+            notifyListener(false, false, false, Build.VERSION.SDK_INT < 30
                     ? "Dash background camera access is unavailable on this Android version."
                     : "Dash recording service could not be reached.", null, null);
         }
@@ -205,7 +207,7 @@ public final class DashRecordingClient {
                 if (message.what == MSG_STATUS) {
                     requestPending = false;
                     notifyStatus(ok, starting, recording, text);
-                    scheduleNextPoll();
+                    MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
                     return;
                 }
                 if (!ok && (data == null || data.getInt("protocolVersion", 0) != PROTOCOL_VERSION)) {
@@ -229,8 +231,7 @@ public final class DashRecordingClient {
                     Bitmap front = total <= MAX_TOTAL_FRAME_BYTES ? decode(frontBytes) : null;
                     notifyListener(ok, starting, recording, text, rear, front);
                     notifyStatus(ok, starting, recording, text);
-                    if (accepted) MAIN.postDelayed(poll, 1000L);
-                    else scheduleNextPoll();
+                    MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
                 }
             }
         });
@@ -253,7 +254,7 @@ public final class DashRecordingClient {
             remote.send(request);
         } catch (RuntimeException | RemoteException error) {
             startSent = false;
-            notifyListener(false, false, "Dash could not accept the recording request.", null, null);
+            notifyListener(false, false, false, "Dash could not accept the recording request.", null, null);
         }
     }
 
@@ -264,6 +265,7 @@ public final class DashRecordingClient {
             Listener current = listener;
             if (current != null && current.previewVisible()) current.onUpdate(ok, starting, recording, text, rear, front);
         });
+        notifyStatus(ok, starting, recording, text);
     }
 
     private static void notifyStatus(boolean ok, boolean starting, boolean recording, String text) {
