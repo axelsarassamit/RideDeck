@@ -199,6 +199,15 @@ public class MainActivity extends android.app.Activity {
         ensureDashRecordingStatusMonitor();
         DashRecordingClient.refreshPreview();
         refreshRideSessionUi();
+        if (dashControls != null && dashControls.isShowing()) {
+            dashControls.show();
+            SharedPreferences rideState = getPreferences(0);
+            if (dashRecordingRequestedAt > 0L
+                    && rideState.getBoolean(RideSessionState.PREF_RUNNING, false)
+                    && RideDashLeaseService.isRunning()) {
+                DashRecordingClient.attachPreview(this, dashPreviewListener());
+            }
+        }
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
         refreshWhatsAppPreview();
@@ -1348,8 +1357,14 @@ public class MainActivity extends android.app.Activity {
                 .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
             cancelDashAutoOpen();
             updateDashRecordingIndicator(false, false, false, "Ride session paused.");
+            dashRecordingRequestedAt = 0L;
+            dashRecordingConfirmed = false;
+            dashRecordingAccepted = false;
+            dashRecordingStarting = false;
+            dashRecordingMessage = "Ride session paused.";
             RideDashLeaseService.stop(this);
             rideClock.stop(); rideClock.setBase(now - elapsed); rideClock.setText(formatElapsed(elapsed));
+            if (dashControls != null) dashControls.refresh();
             setRideButtonState("Resume");
         } else {
             long elapsed = prefs.getLong(RideSessionState.PREF_ELAPSED, 0);
@@ -1422,7 +1437,12 @@ public class MainActivity extends android.app.Activity {
 
     private void resetRide() {
         cancelDashAutoOpen();
-        updateDashRecordingIndicator(false, false, false, "Ride session ended.");
+        dashRecordingRequestedAt = 0L;
+        dashRecordingConfirmed = false;
+        dashRecordingAccepted = false;
+        dashRecordingStarting = false;
+        dashRecordingMessage = "Ride session ended.";
+        updateDashRecordingIndicator(false, false, false, dashRecordingMessage);
         SharedPreferences prefs = getPreferences(0);
         prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
             .putLong(RideSessionState.PREF_ELAPSED, 0)
