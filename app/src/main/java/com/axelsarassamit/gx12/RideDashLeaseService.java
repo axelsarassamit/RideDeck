@@ -84,6 +84,7 @@ public final class RideDashLeaseService extends Service {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
         if (ACTION_PAUSE.equals(action)) {
+            DashRecordingClient.end(this);
             serviceRequested = false;
             pausePersistedRide();
             boolean stopWhenDone = intent.getBooleanExtra(EXTRA_STOP_WHEN_DONE, false);
@@ -129,17 +130,20 @@ public final class RideDashLeaseService extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public void onTaskRemoved(Intent rootIntent) {
+        DashRecordingClient.end(this);
         pausePersistedRide();
         requestStop();
         super.onTaskRemoved(rootIntent);
     }
 
     @Override public void onTimeout(int startId, int foregroundServiceType) {
+        DashRecordingClient.end(this);
         pausePersistedRide();
         requestStop();
     }
 
     @Override public void onDestroy() {
+        DashRecordingClient.end(this);
         serviceRequested = false;
         ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         if (worker != null) {
