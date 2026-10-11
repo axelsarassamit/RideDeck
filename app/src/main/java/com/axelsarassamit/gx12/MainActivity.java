@@ -85,6 +85,7 @@ public class MainActivity extends android.app.Activity {
     private boolean dashRecordingConfirmed;
     private boolean dashRecordingAccepted;
     private boolean dashRecordingStarting;
+    private String dashRecordingMessage = "";
     private boolean dashInstalled;
     private boolean activityResumed;
     private boolean pendingDashAutoOpen;
