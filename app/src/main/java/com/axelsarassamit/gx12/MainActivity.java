@@ -1215,7 +1215,7 @@ public class MainActivity extends android.app.Activity {
     private void updateDashRecordingIndicator(boolean accepted, boolean starting, boolean recording, String message) {
         dashRecordingAccepted = accepted;
         dashRecordingStarting = starting;
-        if (recording) dashRecordingConfirmed = true;
+        dashRecordingConfirmed = recording;
         if (message != null && !message.trim().isEmpty()) dashRecordingMessage = message.trim();
         boolean startingNow = starting || (dashRecordingRequestedAt > 0L && !dashRecordingConfirmed
             && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L);
