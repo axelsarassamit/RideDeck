@@ -83,6 +83,7 @@ public class MainActivity extends android.app.Activity {
     private DashRecordingClient.StatusListener dashStatusListener;
     private long dashRecordingRequestedAt;
     private boolean dashRecordingConfirmed;
+    private boolean dashRecordingStatusFresh;
     private boolean dashRecordingAccepted;
     private boolean dashRecordingStarting;
     private String dashRecordingMessage = "";
@@ -122,6 +123,8 @@ public class MainActivity extends android.app.Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state != null && state.getBoolean("dash_recording_requested", false))
+            dashRecordingRequestedAt = android.os.SystemClock.elapsedRealtime();
         headsetMic = new HeadsetMicRoute(this);
         dashInstalled = DashPackageVerifier.isInstalledAndSigned(this);
         if (this instanceof SetupActivity) buildSetupScreen();
@@ -197,7 +200,11 @@ public class MainActivity extends android.app.Activity {
         refreshDashInstallation();
         if (this instanceof SetupActivity && previouslyDashInstalled != dashInstalled) buildSetupScreen();
         activityResumed = true;
+        dashRecordingStatusFresh = false;
+        dashRecordingConfirmed = false;
+        updateDashRecordingIndicator(dashRecordingAccepted, false, false, "Checking Dash camera status.");
         ensureDashRecordingStatusMonitor();
+        DashRecordingClient.refreshStatus(this, dashRecordingRequestedAt > 0L);
         DashRecordingClient.refreshPreview();
         refreshRideSessionUi();
         if (dashControls != null && dashControls.isShowing()) {
@@ -221,6 +228,8 @@ public class MainActivity extends android.app.Activity {
         activityResumed = false;
         cancelDashAutoOpen();
         if (dashControls != null) dashControls.pause();
+        dashRecordingStatusFresh = false;
+        dashRecordingConfirmed = false;
         if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
         handler.removeCallbacks(trackRefresh);
         SharedPreferences prefs = getPreferences(0);
@@ -415,6 +424,7 @@ public class MainActivity extends android.app.Activity {
 
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putBoolean("setup_visible", setupVisible);
+        state.putBoolean("dash_recording_requested", dashRecordingRequestedAt > 0L);
         super.onSaveInstanceState(state);
     }
 
@@ -624,7 +634,8 @@ public class MainActivity extends android.app.Activity {
         android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
         states.addState(new int[]{-android.R.attr.state_enabled}, rideBackground(0xff252a25, 12));
         states.addState(new int[]{android.R.attr.state_pressed}, rideBackground(0xff4b554b, 12));
-        states.addState(new int[]{}, rideBackground(primary ? RideTheme.accent(this) : 0xff2c322c, 12));
+        states.addState(new int[]{}, rideBackground(primary ? RideTheme.accent(this) : DashDockPresentation.DOCK_BUTTON_COLOR,
+            DashDockPresentation.DOCK_BUTTON_CORNER_DP));
         action.setBackground(states);
         if (label.equals("Read aloud") || label.equals("Seen / next")) {
             android.graphics.drawable.Drawable mark = getDrawable(label.equals("Read aloud") ? R.drawable.control_speaker : R.drawable.control_seen);
@@ -1138,7 +1149,8 @@ public class MainActivity extends android.app.Activity {
 
     private void refreshDashInstallation() {
         dashInstalled = DashPackageVerifier.isInstalledAndSigned(this);
-        if (dashButton != null) dashButton.setVisibility(View.VISIBLE);
+        if (dashButton != null) dashButton.setVisibility(dashInstalled ? View.VISIBLE : View.GONE);
+        if (!dashInstalled) dashRecordingStatusFresh = false;
         updateDashRecordingIndicator(dashRecordingAccepted, dashRecordingStarting,
             dashRecordingConfirmed, dashRecordingMessage);
     }
@@ -1186,6 +1198,7 @@ public class MainActivity extends android.app.Activity {
         refreshDashInstallation();
         if (!dashInstalled || !activityResumed) return;
         dashRecordingRequestedAt = android.os.SystemClock.elapsedRealtime();
+        dashRecordingStatusFresh = false;
         dashRecordingConfirmed = false;
         dashRecordingAccepted = false;
         dashRecordingStarting = true;
@@ -1205,7 +1218,9 @@ public class MainActivity extends android.app.Activity {
                         && getPreferences(0).getBoolean(RideSessionState.PREF_RUNNING, false)
                         && RideDashLeaseService.isRunning();
                 }
-                @Override public void onStatus(boolean accepted, boolean starting, boolean recording, String message) {
+                @Override public void onStatus(boolean accepted, boolean starting, boolean recording,
+                        String message, boolean freshStatus) {
+                    dashRecordingStatusFresh = freshStatus;
                     updateDashRecordingIndicator(accepted, starting, recording, message);
                 }
             };
@@ -1218,14 +1233,17 @@ public class MainActivity extends android.app.Activity {
         dashRecordingStarting = starting;
         dashRecordingConfirmed = recording;
         if (message != null && !message.trim().isEmpty()) dashRecordingMessage = message.trim();
-        boolean startingNow = starting || (dashRecordingRequestedAt > 0L && !dashRecordingConfirmed
-            && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L);
+        boolean fresh = dashRecordingStatusFresh;
+        boolean actualRecording = fresh && recording;
+        boolean actualStarting = fresh && starting;
         if (dashButton != null) {
-            String label = DashDockPresentation.label(dashInstalled, recording, startingNow,
-                dashRecordingRequestedAt > 0L, accepted);
+            String label = DashDockPresentation.label(dashInstalled, actualRecording, actualStarting,
+                dashRecordingRequestedAt > 0L, fresh && accepted, fresh);
             dashButton.setText(label);
-            dashButton.setTextColor(recording ? 0xffff4c4c : 0xfff4f6fa);
-            dashButton.setContentDescription("RideDeck Dash. " + label.replace("\n", ". ") + ". Open ride controls.");
+            dashButton.setTextColor(actualRecording ? 0xffff4c4c : 0xfff4f6fa);
+            dashButton.setContentDescription("RideDeck Dash. "
+                + (actualRecording ? "Recording. " : label.replace("\n", ". ") + ". ")
+                + "Open ride controls.");
         }
         if (dashControls != null && activityResumed) dashControls.refresh();
     }
@@ -1241,10 +1259,10 @@ public class MainActivity extends android.app.Activity {
             : prefs.getLong(RideSessionState.PREF_ELAPSED, 0L);
         state.rideHasElapsed = state.elapsedMillis > 0L;
         state.recordingRequested = dashRecordingRequestedAt > 0L;
-        state.recording = dashRecordingConfirmed;
-        state.starting = dashRecordingStarting || (dashRecordingRequestedAt > 0L && !dashRecordingConfirmed
-            && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L);
-        state.accepted = dashRecordingAccepted;
+        state.recordingStatusFresh = dashRecordingStatusFresh;
+        state.recording = dashRecordingStatusFresh && dashRecordingConfirmed;
+        state.starting = dashRecordingStatusFresh && dashRecordingStarting;
+        state.accepted = dashRecordingStatusFresh && dashRecordingAccepted;
         state.autoRecord = RidePreferences.autoOpenDashOnRide(this);
         state.detail = dashControlsMessage(state);
         return state;
@@ -1254,9 +1272,10 @@ public class MainActivity extends android.app.Activity {
         if (!state.dashAvailable) return "Install signed RideDeck Dash to add camera recording.";
         if (!state.rideActive) return "Start or resume a ride to record with Dash and check both camera angles here.";
         if (state.recording) return "Recording with Dash. Pause or End stops the background session.";
-        if (state.starting || (state.recordingRequested && !state.accepted
-                && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L))
-            return "Dash is starting. Keep this screen open while the cameras connect.";
+        if (state.recordingRequested && !state.recordingStatusFresh)
+            return "Checking Dash camera status.";
+        if (state.starting)
+            return "Dash is starting. Waiting for live camera status.";
         if (state.recordingRequested && !state.accepted)
             return "Dash is unavailable. Check its settings and try again.";
         if (state.accepted) return "Dash is ready. Start recording with the Record with Dash switch.";
@@ -1334,14 +1353,16 @@ public class MainActivity extends android.app.Activity {
                     && activityResumed && !isFinishing() && !isDestroyed();
             }
             @Override public void onUpdate(boolean accepted, boolean starting, boolean recording, String message,
-                    android.graphics.Bitmap rearFrame, android.graphics.Bitmap frontFrame) {
+                    android.graphics.Bitmap rearFrame, android.graphics.Bitmap frontFrame, boolean freshStatus) {
+                dashRecordingStatusFresh = freshStatus;
                 updateDashRecordingIndicator(accepted, starting, recording, message);
                 if (dashControls == null) return;
-                String previewMessage = recording ? "Recording · check the camera angles"
-                    : starting ? "Dash is starting. Waiting for live images."
+                String previewMessage = recording && freshStatus ? "● REC"
+                    : starting && freshStatus ? "Dash is starting. Waiting for live images."
+                    : !freshStatus ? "Checking Dash camera status."
                     : !accepted ? "Dash is unavailable. Check settings and try again."
                     : "Waiting for live camera preview.";
-                dashControls.setPreviewStatus(previewMessage);
+                dashControls.setPreviewStatus(previewMessage, recording && freshStatus);
                 dashControls.setPreviewFrames(rearFrame, frontFrame);
                 dashControls.refresh();
             }
@@ -1497,10 +1518,15 @@ public class MainActivity extends android.app.Activity {
         dock.addView(rideControl, rideWeight(compact ? 56 : 64));
 
         dashButton = rideAction("Dash", false);
+        dashButton.setTextSize(DashDockPresentation.DOCK_BUTTON_TEXT_SIZE_SP);
+        dashButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        dashButton.setSingleLine(true);
+        // rideAction supplies the shared rounded charcoal shape and dock margins.
         dashButton.setContentDescription("RideDeck Dash. Open ride controls.");
-        dashButton.setVisibility(View.VISIBLE);
+        dashButton.setVisibility(dashInstalled ? View.VISIBLE : View.GONE);
         dashButton.setOnClickListener(v -> handleDashButton());
-        dock.addView(dashButton, rideWeight(compact ? 56 : 64));
+        dock.addView(dashButton, rideWeight(compact ? DashDockPresentation.DOCK_COMPACT_HEIGHT_DP
+            : DashDockPresentation.DOCK_HEIGHT_DP));
     }
 
     private void openDashSettings() {

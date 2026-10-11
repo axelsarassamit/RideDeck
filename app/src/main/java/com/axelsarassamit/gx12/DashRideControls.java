@@ -39,6 +39,7 @@ final class DashRideControls {
         boolean rideHasElapsed;
         boolean recordingRequested;
         boolean recording;
+        boolean recordingStatusFresh;
         boolean starting;
         boolean accepted;
         boolean autoRecord;
@@ -258,13 +259,21 @@ final class DashRideControls {
         refresh.start();
     }
 
+    boolean isFocused() {
+        return dialog.isShowing() && dialogFocused();
+    }
+
     boolean previewVisible() {
-        return dialog.isShowing() && dialogFocused()
-            && previewArea.getVisibility() == View.VISIBLE;
+        return isFocused() && previewArea.getVisibility() == View.VISIBLE;
     }
 
     void setPreviewStatus(String message) {
+        setPreviewStatus(message, false);
+    }
+
+    void setPreviewStatus(String message, boolean recording) {
         previewState.setText(message == null ? "" : message);
+        previewState.setTextColor(recording ? 0xffff4c4c : Color.WHITE);
     }
 
     void setPreviewFrames(Bitmap rearFrame, Bitmap frontFrame) {
@@ -283,8 +292,9 @@ final class DashRideControls {
 
     private void update(State state) {
         boolean available = state.dashAvailable;
-        boolean recording = available && state.rideActive && state.recording;
-        title.setText(recording ? "● REC · RideDeck Dash" : available ? "RideDeck Dash" : "Ride session");
+        boolean recording = available && state.rideActive && state.recording && state.recordingStatusFresh;
+        boolean starting = state.recordingStatusFresh && state.starting;
+        title.setText(recording ? "● REC\nRecording" : available ? "RideDeck Dash" : "Ride session");
         title.setTextColor(recording ? 0xffff4c4c : Color.WHITE);
         long seconds = Math.max(0, state.elapsedMillis / 1000L);
         String time = String.format(java.util.Locale.US, "%02d:%02d:%02d",
@@ -306,11 +316,13 @@ final class DashRideControls {
         rideEnd.setEnabled(state.rideActive || state.rideHasElapsed);
         previewArea.setVisibility(showPreview ? View.VISIBLE : View.GONE);
         if (!showPreview) clearFrames();
-        if (recording) previewState.setText("Recording · check the camera angles");
-        else if (state.starting) previewState.setText("Dash is starting. Waiting for live images.");
+        if (recording) setPreviewStatus("Camera recording confirmed.", true);
+        else if (starting) setPreviewStatus("Dash is starting. Waiting for live images.", false);
+        else if (state.recordingRequested && !state.recordingStatusFresh)
+            setPreviewStatus("Checking Dash camera status.", false);
         else if (!state.accepted && state.recordingRequested)
-            previewState.setText("Dash is unavailable. Check settings and try again.");
-        else previewState.setText("Waiting for live camera preview.");
+            setPreviewStatus("Dash is unavailable. Check settings and try again.", false);
+        else setPreviewStatus("Waiting for live camera preview.", false);
     }
 
     private int dp(int value) {

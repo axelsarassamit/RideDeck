@@ -36,12 +36,15 @@ public final class DashRecordingClient {
     private static Context app;
     private static WeakReference<Activity> permissionActivity = new WeakReference<>(null);
     private static Messenger remote;
-    private static Messenger reply;
+    private static long nextRequestId;
+    private static long pendingRequestId;
     private static ServiceConnection connection;
     private static boolean bound;
     private static boolean startSent;
     private static boolean accepted;
     private static boolean recordingStartSent;
+    private static boolean statusTrackingRequested;
+    private static WeakReference<Activity> statusActivity = new WeakReference<>(null);
     private static boolean startGesturePending;
     private static long startGestureDeadline;
     private static WeakReference<Activity> startGestureActivity = new WeakReference<>(null);
@@ -65,6 +68,7 @@ public final class DashRecordingClient {
         int expiredWhat = pendingWhat;
         requestPending = false;
         pendingWhat = 0;
+        pendingRequestId = 0L;
         if (expiredWhat == MSG_START) {
             accepted = false;
             startSent = false;
@@ -117,21 +121,20 @@ public final class DashRecordingClient {
     private static void clearPendingRequest() {
         requestPending = false;
         pendingWhat = 0;
+        pendingRequestId = 0L;
         MAIN.removeCallbacks(requestTimeout);
     }
 
     private static final Runnable poll = () -> {
         Listener target = listener;
-        if (!accepted || !recordingStartSent || target == null || !target.previewVisible() || remote == null || requestPending) return;
+        if (!DashRecordingProtocol.shouldPoll(statusTrackingRequested, remote != null, requestPending,
+                target != null && target.previewVisible(), false)) return;
         try {
             Message request = Message.obtain(null, MSG_PREVIEW);
             Bundle data = new Bundle();
             data.putInt("protocolVersion", PROTOCOL_VERSION);
             request.setData(data);
-            request.replyTo = reply;
-            requestPending = true;
-            pendingWhat = MSG_PREVIEW;
-            MAIN.postDelayed(requestTimeout, 3000L);
+            beginRequest(request, MSG_PREVIEW, 3000L);
             remote.send(request);
         } catch (RuntimeException | RemoteException error) {
             clearPendingRequest();
@@ -142,16 +145,14 @@ public final class DashRecordingClient {
 
     private static final Runnable statusPoll = () -> {
         StatusListener target = statusListener.get();
-        if (!accepted || !recordingStartSent || target == null || !target.visible() || remote == null || requestPending) return;
+        if (!DashRecordingProtocol.shouldPoll(statusTrackingRequested, remote != null, requestPending,
+                false, target != null && target.visible())) return;
         try {
             Message request = Message.obtain(null, MSG_STATUS);
             Bundle data = new Bundle();
             data.putInt("protocolVersion", PROTOCOL_VERSION);
             request.setData(data);
-            request.replyTo = reply;
-            requestPending = true;
-            pendingWhat = MSG_STATUS;
-            MAIN.postDelayed(requestTimeout, 3000L);
+            beginRequest(request, MSG_STATUS, 3000L);
             remote.send(request);
         } catch (RuntimeException | RemoteException error) {
             clearPendingRequest();
@@ -161,14 +162,14 @@ public final class DashRecordingClient {
     };
 
     private static void scheduleNextPoll() {
-        if (!accepted || !recordingStartSent || remote == null || requestPending) return;
         Listener preview = listener;
-        if (preview != null && preview.previewVisible()) {
-            MAIN.post(poll);
-            return;
-        }
         StatusListener status = statusListener.get();
-        if (status != null && status.visible()) MAIN.post(statusPoll);
+        boolean previewVisible = preview != null && preview.previewVisible();
+        boolean statusVisible = status != null && status.visible();
+        if (!DashRecordingProtocol.shouldPoll(statusTrackingRequested, remote != null, requestPending,
+                previewVisible, statusVisible)) return;
+        if (previewVisible) MAIN.post(poll);
+        else MAIN.post(statusPoll);
     }
 
     private DashRecordingClient() { }
@@ -184,12 +185,12 @@ public final class DashRecordingClient {
         accepted = false;
         startSent = false;
         recordingStartSent = false;
+        statusTrackingRequested = false;
         clearPendingRequest();
         clearStartGesture();
         startGestureActivity = new WeakReference<>(activity);
         startGesturePending = true;
         startGestureDeadline = SystemClock.elapsedRealtime() + START_GESTURE_TTL_MS;
-        ensureReplyMessenger();
         java.util.ArrayList<String> missing = new java.util.ArrayList<>();
         if (activity.checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
             missing.add(android.Manifest.permission.CAMERA);
@@ -244,25 +245,24 @@ public final class DashRecordingClient {
             @Override public void onServiceConnected(ComponentName name, android.os.IBinder binder) {
                 synchronized (DashRecordingClient.class) {
                     remote = new Messenger(binder);
-                    sendStart();
+                    if (DashRecordingProtocol.shouldSendStart(hasVisibleStartGesture(), false)) sendStart();
+                    else scheduleNextPoll();
                 }
             }
             @Override public void onServiceDisconnected(ComponentName name) {
                 synchronized (DashRecordingClient.class) {
-                    remote = null; startSent = false; accepted = false; recordingStartSent = false; clearStartGesture(); clearPendingRequest();
+                    remote = null;
+                    startSent = false;
+                    accepted = false;
+                    clearPendingRequest();
+                    clearStartGesture();
                     MAIN.removeCallbacks(poll);
                     MAIN.removeCallbacks(statusPoll);
-                    notifyListener(false, false, false, "Dash recording connection ended.", null, null);
+                    notifyListener(false, false, false, "Dash recording connection ended.", null, null, false);
                 }
             }
-            @Override public void onBindingDied(ComponentName name) {
-                onServiceDisconnected(name);
-                end(app);
-            }
-            @Override public void onNullBinding(ComponentName name) {
-                onServiceDisconnected(name);
-                end(app);
-            }
+            @Override public void onBindingDied(ComponentName name) { recoverAfterBindingLoss(); }
+            @Override public void onNullBinding(ComponentName name) { recoverAfterBindingLoss(); }
         };
         try {
             // Called only from the visible host Activity after an explicit recording choice.
@@ -279,32 +279,59 @@ public final class DashRecordingClient {
         }
     }
 
-    private static void ensureReplyMessenger() {
-        if (reply != null) return;
-        reply = new Messenger(new Handler(Looper.getMainLooper()) {
-            @Override public void handleMessage(Message message) {
+    private static void beginRequest(Message request, int what, long timeoutMs) {
+        long requestId = nextRequestId + 1L;
+        if (requestId == 0L) requestId = 1L;
+        nextRequestId = requestId;
+        pendingRequestId = requestId;
+        final long currentRequestId = requestId;
+        requestPending = true;
+        pendingWhat = what;
+        request.replyTo = new Messenger(new Handler(Looper.getMainLooper()) {
+            @Override public void handleMessage(Message response) {
+                if (!DashRecordingProtocol.isCurrentResponse(currentRequestId, pendingRequestId,
+                        what, pendingWhat, requestPending, response.what)) return;
+                handleReply(response);
+            }
+        });
+        MAIN.removeCallbacks(requestTimeout);
+        MAIN.postDelayed(requestTimeout, timeoutMs);
+    }
+
+    private static synchronized void handleReply(Message message) {
                 Bundle data = message.getData();
-                boolean ok = data != null && data.getInt("protocolVersion", 0) == PROTOCOL_VERSION
-                    && data.getBoolean("accepted", false);
+                if (!isTrustedDashReply(message)) return;
+                boolean protocolOk = data != null && data.getInt("protocolVersion", 0) == PROTOCOL_VERSION;
+                boolean acceptedPresent = data != null && data.containsKey("accepted");
+                boolean ok = acceptedPresent && data.getBoolean("accepted", false);
                 boolean starting = data != null && data.getBoolean("starting", false);
                 boolean recording = data != null && data.getBoolean("recording", false);
                 String text = data == null ? "Dash status is unavailable." : data.getString("message", "");
+                boolean messagePresent = data != null && data.containsKey("message");
                 if (message.what == MSG_STATUS) {
                     if (pendingWhat != MSG_STATUS) return;
                     clearPendingRequest();
-                    notifyStatus(ok, starting, recording, text);
+                    boolean valid = DashRecordingProtocol.hasValidReply(protocolOk, acceptedPresent, ok,
+                        data != null && data.containsKey("recording"), data != null && data.containsKey("starting"),
+                        messagePresent, true);
+                    if (!valid) {
+                        accepted = false;
+                        notifyStatus(false, false, false, "Dash recording status is unavailable.", false);
+                    } else {
+                        accepted = ok;
+                        notifyStatus(ok, starting, recording, text, ok);
+                    }
                     MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
                     return;
                 }
                 if (message.what == MSG_START && pendingWhat != MSG_START) return;
                 if (message.what == MSG_PREVIEW && pendingWhat != MSG_PREVIEW) return;
-                if (!ok && (data == null || data.getInt("protocolVersion", 0) != PROTOCOL_VERSION)) {
+                if (!protocolOk || !acceptedPresent || !messagePresent) {
                     clearPendingRequest();
                     accepted = false;
-                    recordingStartSent = false;
                     clearStartGesture();
-                    notifyListener(false, false, false, "Dash needs a compatible update.", null, null);
-                    notifyStatus(false, false, false, "Dash needs a compatible update.");
+                    notifyListener(false, false, false, "Dash needs a compatible update.", null, null, false);
+                    MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
                     return;
                 }
                 if (message.what == MSG_START) {
@@ -326,9 +353,9 @@ public final class DashRecordingClient {
                         sendDashStart(startIntent);
                         clearStartGesture();
                         recordingStartSent = true;
+                        statusTrackingRequested = true;
                         accepted = true;
-                        notifyListener(true, starting, recording, text, null, null);
-                        notifyStatus(true, starting, recording, text);
+                        notifyListener(true, false, false, text, null, null, false);
                         scheduleNextPoll();
                     } catch (PendingIntent.CanceledException | RuntimeException error) {
                         accepted = false;
@@ -341,18 +368,35 @@ public final class DashRecordingClient {
                     }
                 } else if (message.what == MSG_PREVIEW) {
                     clearPendingRequest();
-                    accepted = ok;
+                    boolean valid = DashRecordingProtocol.hasValidReply(protocolOk, acceptedPresent, ok,
+                        data.containsKey("recording"), data.containsKey("starting"), messagePresent, true);
+                    if (!valid || !ok) {
+                        accepted = false;
+                        notifyListener(false, false, false, ok ? "Dash camera status is unavailable." : text,
+                            null, null, false);
+                        MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
+                        return;
+                    }
+                    accepted = true;
                     byte[] rearBytes = data.getByteArray("rearJpeg");
                     byte[] frontBytes = data.getByteArray("frontJpeg");
                     int total = (rearBytes == null ? 0 : rearBytes.length) + (frontBytes == null ? 0 : frontBytes.length);
                     Bitmap rear = total <= MAX_TOTAL_FRAME_BYTES ? decode(rearBytes) : null;
                     Bitmap front = total <= MAX_TOTAL_FRAME_BYTES ? decode(frontBytes) : null;
-                    notifyListener(ok, starting, recording, text, rear, front);
-                    notifyStatus(ok, starting, recording, text);
+                    notifyListener(true, starting, recording, text, rear, front, true);
                     MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
                 }
-            }
-        });
+
+    }
+
+    private static boolean isTrustedDashReply(Message message) {
+        if (message == null || app == null || !DashPackageVerifier.isInstalledAndSigned(app)) return false;
+        try {
+            int dashUid = app.getPackageManager().getApplicationInfo(DASH_PACKAGE, 0).uid;
+            return DashRecordingProtocol.isTrustedSender(message.sendingUid, dashUid);
+        } catch (PackageManager.NameNotFoundException | RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static void sendDashStart(PendingIntent startIntent) throws PendingIntent.CanceledException {
@@ -390,11 +434,8 @@ public final class DashRecordingClient {
             Bundle data = new Bundle();
             data.putInt("protocolVersion", PROTOCOL_VERSION);
             request.setData(data);
-            request.replyTo = reply;
             startSent = true;
-            requestPending = true;
-            pendingWhat = MSG_START;
-            MAIN.postDelayed(requestTimeout, 5000L);
+            beginRequest(request, MSG_START, 5000L);
             remote.send(request);
         } catch (RuntimeException | RemoteException error) {
             startSent = false;
@@ -405,22 +446,32 @@ public final class DashRecordingClient {
         }
     }
 
-    private static void notifyListener(boolean ok, boolean starting, boolean recording, String text, Bitmap rear, Bitmap front) {
+    private static void notifyListener(boolean ok, boolean starting, boolean recording, String text,
+            Bitmap rear, Bitmap front) {
+        notifyListener(ok, starting, recording, text, rear, front, false);
+    }
+
+    private static void notifyListener(boolean ok, boolean starting, boolean recording, String text,
+            Bitmap rear, Bitmap front, boolean freshStatus) {
         Listener target = listener;
-        if (target == null) return;
-        MAIN.post(() -> {
+        if (target != null) MAIN.post(() -> {
             Listener current = listener;
             if (current != null && current.previewVisible()) current.onUpdate(ok, starting, recording, text, rear, front);
         });
-        notifyStatus(ok, starting, recording, text);
+        notifyStatus(ok, starting, recording, text, freshStatus);
     }
 
     private static void notifyStatus(boolean ok, boolean starting, boolean recording, String text) {
+        notifyStatus(ok, starting, recording, text, false);
+    }
+
+    private static void notifyStatus(boolean ok, boolean starting, boolean recording, String text,
+            boolean freshStatus) {
         StatusListener target = statusListener.get();
         if (target == null) return;
         MAIN.post(() -> {
             StatusListener current = statusListener.get();
-            if (current != null && current.visible()) current.onStatus(ok, starting, recording, text);
+            if (current != null && current.visible()) current.onStatus(ok, starting, recording, text, freshStatus);
         });
     }
 
@@ -429,8 +480,82 @@ public final class DashRecordingClient {
         scheduleNextPoll();
     }
 
+    /** Reconnects only to read authenticated camera status. It never issues a recording start. */
+    public static synchronized void refreshStatus(Activity activity, boolean requestWasMade) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        app = activity.getApplicationContext();
+        statusActivity = new WeakReference<>(activity);
+        statusTrackingRequested |= requestWasMade;
+        StatusListener target = statusListener.get();
+        if (!statusTrackingRequested || target == null || !target.visible()) return;
+        if (remote != null) {
+            scheduleNextPoll();
+            return;
+        }
+        if (DashRecordingProtocol.shouldReconnect(statusTrackingRequested, target.visible(), bound))
+            bindForStatus(activity);
+    }
+
+    private static void bindForStatus(Activity activity) {
+        StatusListener target = statusListener.get();
+        if (activity == null || target == null || !target.visible() || bound || remote != null
+                || !statusTrackingRequested || !DashPackageVerifier.isInstalledAndSigned(app)) return;
+        Intent intent = new Intent().setComponent(new ComponentName(DASH_PACKAGE, DASH_SERVICE));
+        int flags = Context.BIND_AUTO_CREATE;
+        if (Build.VERSION.SDK_INT >= 30) flags |= Context.BIND_INCLUDE_CAPABILITIES;
+        connection = new ServiceConnection() {
+            @Override public void onServiceConnected(ComponentName name, android.os.IBinder binder) {
+                synchronized (DashRecordingClient.class) {
+                    remote = new Messenger(binder);
+                    if (DashRecordingProtocol.shouldSendStart(hasVisibleStartGesture(), true)) sendStart();
+                    else scheduleNextPoll();
+                }
+            }
+            @Override public void onServiceDisconnected(ComponentName name) {
+                synchronized (DashRecordingClient.class) {
+                    remote = null;
+                    clearPendingRequest();
+                    notifyStatus(false, false, false, "Dash recording status is unavailable.", false);
+                }
+            }
+            @Override public void onBindingDied(ComponentName name) { recoverAfterBindingLoss(); }
+            @Override public void onNullBinding(ComponentName name) { recoverAfterBindingLoss(); }
+        };
+        try {
+            bound = app.bindService(intent, connection, flags);
+            if (!bound) notifyStatus(false, false, false, "Dash recording status is unavailable.", false);
+        } catch (RuntimeException error) {
+            bound = false;
+            notifyStatus(false, false, false, "Dash recording status is unavailable.", false);
+        }
+    }
+
+    private static void recoverAfterBindingLoss() {
+        synchronized (DashRecordingClient.class) {
+            ServiceConnection lost = connection;
+            Context context = app;
+            boolean wasBound = bound;
+            connection = null;
+            bound = false;
+            remote = null;
+            startSent = false;
+            accepted = false;
+            clearPendingRequest();
+            clearStartGesture();
+            if (wasBound && lost != null && context != null) {
+                try { context.unbindService(lost); } catch (RuntimeException ignored) { }
+            }
+            notifyStatus(false, false, false, "Dash recording status is unavailable.", false);
+            Activity activity = statusActivity.get();
+            StatusListener status = statusListener.get();
+            if (statusTrackingRequested && activity != null && status != null && status.visible())
+                MAIN.postDelayed(() -> bindForStatus(activity), 1000L);
+        }
+    }
+
     public static synchronized void clearStatusListener() {
         statusListener.clear();
+        statusActivity.clear();
         MAIN.removeCallbacks(statusPoll);
     }
 
@@ -446,7 +571,7 @@ public final class DashRecordingClient {
 
     public static synchronized boolean attachPreview(Activity activity, Listener target) {
         if (activity == null || target == null || activity.isFinishing() || activity.isDestroyed()
-                || !accepted || !recordingStartSent || remote == null || !bound) return false;
+                || !statusTrackingRequested || remote == null || !bound) return false;
         listener = target;
         scheduleNextPoll();
         return true;
@@ -473,6 +598,7 @@ public final class DashRecordingClient {
         accepted = false;
         startSent = false;
         recordingStartSent = false;
+        statusTrackingRequested = false;
         clearStartGesture();
         clearPendingRequest();
         remote = null;
@@ -484,6 +610,7 @@ public final class DashRecordingClient {
         connection = null;
         permissionActivity.clear();
         statusListener.clear();
+        statusActivity.clear();
         MAIN.removeCallbacks(statusPoll);
     }
 }

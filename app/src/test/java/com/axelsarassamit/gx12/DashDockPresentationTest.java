@@ -14,17 +14,31 @@ public class DashDockPresentationTest {
     }
 
     @Test public void showsUnavailableWhenDashIsNotInstalled() {
-        assertEquals("Dash\nUnavailable", DashDockPresentation.label(false, false, false, false, false));
+        assertEquals("Dash\nUnavailable", DashDockPresentation.label(false, false, false, false, false, false));
     }
 
     @Test public void showsDashWhenIdleAndStartingWhenCameraLaunches() {
-        assertEquals("Dash", DashDockPresentation.label(true, false, false, false, false));
-        assertEquals("Dash\nStarting", DashDockPresentation.label(true, false, true, true, true));
+        assertEquals("Dash", DashDockPresentation.label(true, false, false, false, false, false));
+        assertEquals("Dash\nStarting", DashDockPresentation.label(true, false, true, true, true, true));
     }
 
-    @Test public void recordingHasRedRecLabelAndStoppedOrUnknownStateIsClear() {
-        assertEquals("● REC", DashDockPresentation.label(true, true, false, true, true));
-        assertEquals("Dash\nStopped", DashDockPresentation.label(true, false, false, true, true));
-        assertEquals("Dash\nUnknown", DashDockPresentation.label(true, false, false, true, false));
+    @Test public void recordingHasRedRecLabelAndStoppedOrUnavailableStateIsClear() {
+        assertEquals("● REC", DashDockPresentation.label(true, true, false, true, true, true));
+        assertEquals("Dash\nStopped", DashDockPresentation.label(true, false, false, true, true, true));
+        assertEquals("Dash\nUnavailable", DashDockPresentation.label(true, false, false, true, false, true));
+    }
+
+    @Test public void onlyFreshStatusShowsRecording() {
+        assertEquals("Dash\nChecking", DashDockPresentation.label(true, true, false, true, true, false));
+        assertEquals("● REC", DashDockPresentation.label(true, true, false, true, true, true));
+        assertEquals("Dash\nStopped", DashDockPresentation.label(true, false, false, true, true, true));
+    }
+
+    @Test public void dockButtonContractKeepsSharedSizingAndShape() {
+        assertEquals(0xff2c322c, DashDockPresentation.DOCK_BUTTON_COLOR);
+        assertEquals(12, DashDockPresentation.DOCK_BUTTON_CORNER_DP);
+        assertEquals(16, DashDockPresentation.DOCK_BUTTON_TEXT_SIZE_SP);
+        assertEquals(56, DashDockPresentation.DOCK_COMPACT_HEIGHT_DP);
+        assertEquals(64, DashDockPresentation.DOCK_HEIGHT_DP);
     }
 }
