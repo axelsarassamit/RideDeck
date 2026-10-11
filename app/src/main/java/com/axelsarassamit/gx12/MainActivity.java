@@ -1217,12 +1217,14 @@ public class MainActivity extends android.app.Activity {
         dashRecordingStarting = starting;
         if (recording) dashRecordingConfirmed = true;
         if (message != null && !message.trim().isEmpty()) dashRecordingMessage = message.trim();
+        boolean startingNow = starting || (dashRecordingRequestedAt > 0L && !dashRecordingConfirmed
+            && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L);
         if (dashButton != null) {
-            String label = DashDockPresentation.label(dashInstalled, recording, starting,
+            String label = DashDockPresentation.label(dashInstalled, recording, startingNow,
                 dashRecordingRequestedAt > 0L, accepted);
             dashButton.setText(label);
             dashButton.setTextColor(recording ? 0xffff4c4c : 0xfff4f6fa);
-            dashButton.setContentDescription("RideDeck Dash. " + label.replace("\n", ". ") + ". Open ride controls.");
+            dashButton.setContentDescription("RideDeck Dash. " + label.replace("\\n", ". ") + ". Open ride controls.");
         }
         if (dashControls != null) dashControls.refresh();
     }
@@ -1239,7 +1241,8 @@ public class MainActivity extends android.app.Activity {
         state.rideHasElapsed = state.elapsedMillis > 0L;
         state.recordingRequested = dashRecordingRequestedAt > 0L;
         state.recording = dashRecordingConfirmed;
-        state.starting = dashRecordingStarting;
+        state.starting = dashRecordingStarting || (dashRecordingRequestedAt > 0L && !dashRecordingConfirmed
+            && android.os.SystemClock.elapsedRealtime() - dashRecordingRequestedAt < 15000L);
         state.accepted = dashRecordingAccepted;
         state.autoRecord = RidePreferences.autoOpenDashOnRide(this);
         state.detail = dashControlsMessage(state);
@@ -1263,14 +1266,16 @@ public class MainActivity extends android.app.Activity {
         showDashRideControls();
         DashRideControls.State state = dashControlsState();
         if (!state.dashAvailable || !state.rideActive) return;
-        if (!state.autoRecord) return;
-        if (pendingDashAutoOpen) return;
+        if (dashRecordingRequestedAt > 0L) {
+            showDashRecordingPreview();
+            return;
+        }
+        if (!state.autoRecord || pendingDashAutoOpen) return;
         if (!getPreferences(0).getBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false)) {
             beginDashAutoOpenAfterLease();
             return;
         }
-        if (dashRecordingRequestedAt == 0L) startDashRecordingAfterRideStart();
-        else showDashRecordingPreview();
+        startDashRecordingAfterRideStart();
     }
 
     private void showDashRideControls() {
