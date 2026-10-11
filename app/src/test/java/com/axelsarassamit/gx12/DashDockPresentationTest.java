@@ -5,6 +5,14 @@ import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 
 public class DashDockPresentationTest {
+    @Test public void startsOnlyFromActiveAuthenticatedRideControls() {
+        assertEquals(true, DashDockPresentation.shouldStartRecordingFromControls(true, true, true, false));
+        assertEquals(false, DashDockPresentation.shouldStartRecordingFromControls(false, true, true, false));
+        assertEquals(false, DashDockPresentation.shouldStartRecordingFromControls(true, false, true, false));
+        assertEquals(false, DashDockPresentation.shouldStartRecordingFromControls(true, true, false, false));
+        assertEquals(false, DashDockPresentation.shouldStartRecordingFromControls(true, true, true, true));
+    }
+
     @Test public void showsUnavailableWhenDashIsNotInstalled() {
         assertEquals("Dash\nUnavailable", DashDockPresentation.label(false, false, false, false, false));
     }
