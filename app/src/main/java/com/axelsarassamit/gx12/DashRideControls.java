@@ -167,8 +167,12 @@ final class DashRideControls {
         }
 
         @Override public void run() {
-            if (!running || !dialog.isShowing() || !dialogFocused()) {
+            if (!running || !dialog.isShowing()) {
                 stop();
+                return;
+            }
+            if (!dialogFocused()) {
+                handler.postDelayed(this, 250L);
                 return;
             }
             update(host.state());
@@ -233,6 +237,17 @@ final class DashRideControls {
     }
 
     boolean isShowing() { return dialog.isShowing(); }
+
+    void pause() {
+        refresh.stop();
+        clearFrames();
+    }
+
+    void refresh() {
+        if (!dialog.isShowing()) return;
+        update(host.state());
+        refresh.start();
+    }
 
     boolean previewVisible() {
         return dialog.isShowing() && dialogFocused()
