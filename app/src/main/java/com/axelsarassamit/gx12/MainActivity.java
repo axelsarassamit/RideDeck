@@ -217,6 +217,7 @@ public class MainActivity extends android.app.Activity {
 
     @Override protected void onDestroy() {
         cancelDashAutoOpen();
+        DashRecordingClient.finishPreview();
         handler.removeCallbacksAndMessages(null);
         if (headsetMic != null) headsetMic.release();
         pendingHeadsetVoice = null;
@@ -264,9 +265,9 @@ public class MainActivity extends android.app.Activity {
         navigation.setOnClickListener(v -> chooseMapApp());
         page.addView(navigation, buttonParams());
         if (dashInstalled) {
-            page = setupGroup(sections, "RideDeck Dash", "Open Dash after Start or Resume", false);
+            page = setupGroup(sections, "RideDeck Dash", "Start recording after Start or Resume", false);
             CheckBox autoOpenDash = new CheckBox(this);
-            autoOpenDash.setText("Open Dash automatically on ride start or resume");
+            autoOpenDash.setText("Start Dash recording automatically on ride start or resume");
             autoOpenDash.setTextColor(0xfff4f6fa);
             autoOpenDash.setTextSize(16);
             if (Build.VERSION.SDK_INT >= 21) {
@@ -276,7 +277,7 @@ public class MainActivity extends android.app.Activity {
             autoOpenDash.setOnCheckedChangeListener((button, checked) ->
                 RidePreferences.setAutoOpenDashOnRide(this, checked));
             page.addView(autoOpenDash, buttonParams());
-            page.addView(text("Dash recording still follows its Auto record setting, permissions and power checks.", 14, 0xffaab4c0, false));
+            page.addView(text("Dash recording uses its own camera settings and power checks. RideDeck shows a live angle preview.", 14, 0xffaab4c0, false));
         }
         page = setupGroup(sections, "Cockpit appearance", "Music player, colours, messages and control placement", false);
         page.addView(personalize, buttonParams());
@@ -1148,7 +1149,7 @@ public class MainActivity extends android.app.Activity {
                 rideRunning, serviceRunning, leaseAuthenticated, dashInstalled, autoOpenEnabled)) {
             pendingDashAutoOpen = false;
             handler.removeCallbacks(dashAutoOpenPoll);
-            openDashAfterRideStart();
+            startDashRecordingAfterRideStart();
             return;
         }
         if (!activityResumed || isFinishing() || isDestroyed() || !rideRunning || !serviceRunning
@@ -1160,16 +1161,58 @@ public class MainActivity extends android.app.Activity {
         handler.postDelayed(dashAutoOpenPoll, 250L);
     }
 
-    private void openDashAfterRideStart() {
+    private void startDashRecordingAfterRideStart() {
         refreshDashInstallation();
         if (!dashInstalled || !activityResumed) return;
-        Intent launch = getPackageManager().getLaunchIntentForPackage(DASH_PACKAGE);
-        if (launch == null) {
-            refreshDashInstallation();
-            return;
+        showDashRecordingPreview();
+    }
+
+    private void showDashRecordingPreview() {
+        final android.app.Dialog dialog = new android.app.Dialog(this);
+        android.widget.LinearLayout page = new android.widget.LinearLayout(this);
+        page.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = dp(18);
+        page.setPadding(pad, pad, pad, pad);
+        page.setBackgroundColor(0xff101722);
+        android.widget.TextView title = text("Check Dash camera angle", 22, 0xfff4f6fa, true);
+        page.addView(title);
+        android.widget.TextView status = text("Connecting to Dash recording…", 16, 0xffd4dce5, false);
+        page.addView(status);
+        android.widget.ImageView rear = new android.widget.ImageView(this);
+        rear.setContentDescription("Rear camera full-frame preview");
+        rear.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        rear.setBackgroundColor(0xff000000);
+        page.addView(rear, new android.widget.LinearLayout.LayoutParams(-1, dp(190)));
+        android.widget.ImageView front = new android.widget.ImageView(this);
+        front.setContentDescription("Front camera full-frame preview");
+        front.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        front.setBackgroundColor(0xff000000);
+        page.addView(front, new android.widget.LinearLayout.LayoutParams(-1, dp(190)));
+        android.widget.Button done = button("Done");
+        page.addView(done, buttonParams());
+        dialog.setContentView(page);
+        dialog.setCancelable(true);
+        done.setOnClickListener(v -> dialog.dismiss());
+        dialog.setOnDismissListener(d -> DashRecordingClient.finishPreview());
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            dialog.getWindow().setLayout(Math.min(getResources().getDisplayMetrics().widthPixels, dp(500)), -2);
         }
-        try { startActivity(launch); }
-        catch (RuntimeException error) { showDashMessage("RideDeck Dash could not be opened."); }
+        DashRecordingClient.start(this, new DashRecordingClient.Listener() {
+            @Override public boolean previewVisible() {
+                return dialog.isShowing() && !isFinishing() && !isDestroyed();
+            }
+            @Override public void onUpdate(boolean accepted, boolean recording, String message,
+                    android.graphics.Bitmap rearFrame, android.graphics.Bitmap frontFrame) {
+                if (!dialog.isShowing()) return;
+                status.setText(message == null || message.isEmpty()
+                    ? (accepted ? (recording ? "Recording. Check the angle, then tap Done." : "Dash is ready.") : "Waiting for Dash.")
+                    : message);
+                if (rearFrame != null) rear.setImageBitmap(rearFrame);
+                if (frontFrame != null) front.setImageBitmap(frontFrame);
+            }
+        });
     }
 
     private void refreshRideSessionUi() {
@@ -1191,8 +1234,8 @@ public class MainActivity extends android.app.Activity {
                 .putLong(RideSessionState.PREF_ELAPSED, elapsed)
                 .remove(RideSessionState.PREF_BASE_ELAPSED)
                 .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
-            RideDashLeaseService.stop(this);
             cancelDashAutoOpen();
+            RideDashLeaseService.stop(this);
             rideClock.stop(); rideClock.setBase(now - elapsed); rideClock.setText(formatElapsed(elapsed));
             setRideButtonState("Resume");
         } else {
@@ -1516,6 +1559,7 @@ public class MainActivity extends android.app.Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (DashRecordingClient.onRequestPermissionsResult(this, requestCode, results)) return;
         if (requestCode == 84) {
             Runnable next = pendingHeadsetVoice; pendingHeadsetVoice = null;
             boolean granted = results.length > 0;

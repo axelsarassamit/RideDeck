@@ -60,6 +60,7 @@ public final class RideDashLeaseService extends Service {
     }
 
     public static void stop(Context context) {
+        DashRecordingClient.end(context);
         boolean wasRunning = serviceRequested;
         serviceRequested = false;
         context.getSharedPreferences(RideSessionState.PREFERENCES_NAME, Context.MODE_PRIVATE).edit()
