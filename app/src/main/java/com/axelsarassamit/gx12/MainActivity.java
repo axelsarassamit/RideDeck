@@ -1224,9 +1224,9 @@ public class MainActivity extends android.app.Activity {
                 dashRecordingRequestedAt > 0L, accepted);
             dashButton.setText(label);
             dashButton.setTextColor(recording ? 0xffff4c4c : 0xfff4f6fa);
-            dashButton.setContentDescription("RideDeck Dash. " + label.replace("\\n", ". ") + ". Open ride controls.");
+            dashButton.setContentDescription("RideDeck Dash. " + label.replace("\n", ". ") + ". Open ride controls.");
         }
-        if (dashControls != null) dashControls.refresh();
+        if (dashControls != null && activityResumed) dashControls.refresh();
     }
 
     private DashRideControls.State dashControlsState() {
@@ -1302,7 +1302,13 @@ public class MainActivity extends android.app.Activity {
                 RidePreferences.setAutoOpenDashOnRide(MainActivity.this, enabled);
                 if (!enabled) {
                     cancelDashAutoOpen();
-                    DashRecordingClient.cancelPendingStart();
+                    if (DashRecordingClient.cancelPendingStart()) {
+                        dashRecordingRequestedAt = 0L;
+                        dashRecordingAccepted = false;
+                        dashRecordingStarting = false;
+                        dashRecordingConfirmed = false;
+                        updateDashRecordingIndicator(false, false, false, "Dash recording request cancelled.");
+                    }
                 } else if (getPreferences(0).getBoolean(RideSessionState.PREF_RUNNING, false)
                         && RideDashLeaseService.isRunning() && dashRecordingRequestedAt == 0L) {
                     if (getPreferences(0).getBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false))
