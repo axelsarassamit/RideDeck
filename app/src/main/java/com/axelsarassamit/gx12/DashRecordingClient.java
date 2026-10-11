@@ -55,12 +55,12 @@ public final class DashRecordingClient {
 
     public interface Listener {
         boolean previewVisible();
-        void onUpdate(boolean accepted, boolean starting, boolean recording, String message, Bitmap rear, Bitmap front);
+        void onUpdate(boolean accepted, boolean starting, boolean recording, String message, Bitmap rear, Bitmap front, boolean freshStatus);
     }
 
     public interface StatusListener {
         boolean visible();
-        void onStatus(boolean accepted, boolean starting, boolean recording, String message);
+        void onStatus(boolean accepted, boolean starting, boolean recording, String message, boolean freshStatus);
     }
 
     private static final Runnable requestTimeout = () -> {
@@ -177,7 +177,7 @@ public final class DashRecordingClient {
     public static synchronized void start(Activity activity, Listener target) {
         if (activity == null || target == null || activity.isFinishing() || activity.isDestroyed()) return;
         if (!DashPackageVerifier.supportsPendingIntentRecording(activity)) {
-            target.onUpdate(false, false, false, "Update signed RideDeck Dash to version 0.5.3 or later.", null, null);
+            target.onUpdate(false, false, false, "Update signed RideDeck Dash to version 0.5.3 or later.", null, null, false);
             return;
         }
         app = activity.getApplicationContext();
@@ -456,7 +456,7 @@ public final class DashRecordingClient {
         Listener target = listener;
         if (target != null) MAIN.post(() -> {
             Listener current = listener;
-            if (current != null && current.previewVisible()) current.onUpdate(ok, starting, recording, text, rear, front);
+            if (current != null && current.previewVisible()) current.onUpdate(ok, starting, recording, text, rear, front, freshStatus);
         });
         notifyStatus(ok, starting, recording, text, freshStatus);
     }
