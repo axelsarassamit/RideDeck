@@ -1207,11 +1207,17 @@ public class MainActivity extends android.app.Activity {
             @Override public void onUpdate(boolean accepted, boolean recording, String message,
                     android.graphics.Bitmap rearFrame, android.graphics.Bitmap frontFrame) {
                 if (!dialog.isShowing()) return;
-                status.setText(message == null || message.isEmpty()
+                String visibleStatus = message == null || message.isEmpty()
                     ? (accepted ? (recording ? "Recording. Check the angle, then tap Done." : "Dash is ready.") : "Waiting for Dash.")
-                    : message);
-                if (rearFrame != null) rear.setImageBitmap(rearFrame);
-                if (frontFrame != null) front.setImageBitmap(frontFrame);
+                    : message;
+                if (rearFrame == null && frontFrame == null) visibleStatus += "\nWaiting for a fresh camera preview.";
+                else {
+                    if (rearFrame == null) visibleStatus += "\nRear preview unavailable.";
+                    if (frontFrame == null) visibleStatus += "\nFront preview unavailable.";
+                }
+                status.setText(visibleStatus);
+                rear.setImageBitmap(rearFrame);
+                front.setImageBitmap(frontFrame);
             }
         });
     }
