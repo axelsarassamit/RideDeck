@@ -52,6 +52,28 @@ public final class DashRecordingClient {
         void onStatus(boolean accepted, boolean starting, boolean recording, String message);
     }
 
+    private static final Runnable requestTimeout = () -> {
+        if (!requestPending) return;
+        int expiredWhat = pendingWhat;
+        requestPending = false;
+        pendingWhat = 0;
+        if (expiredWhat == MSG_START) {
+            accepted = false;
+            startSent = false;
+            notifyListener(false, false, false, "Dash did not confirm the recording request.", null, null);
+            notifyStatus(false, false, false, "Dash did not confirm the recording request.");
+        } else {
+            notifyStatus(false, false, false, "Dash recording status is unavailable.");
+        }
+        MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
+    };
+
+    private static void clearPendingRequest() {
+        requestPending = false;
+        pendingWhat = 0;
+        MAIN.removeCallbacks(requestTimeout);
+    }
+
     private static final Runnable poll = () -> {
         Listener target = listener;
         if (!accepted || target == null || !target.previewVisible() || remote == null || requestPending) return;
@@ -91,28 +113,6 @@ public final class DashRecordingClient {
             MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
         }
     };
-
-    private static final Runnable requestTimeout = () -> {
-        if (!requestPending) return;
-        int expiredWhat = pendingWhat;
-        requestPending = false;
-        pendingWhat = 0;
-        if (expiredWhat == MSG_START) {
-            accepted = false;
-            startSent = false;
-            notifyListener(false, false, false, "Dash did not confirm the recording request.", null, null);
-            notifyStatus(false, false, false, "Dash did not confirm the recording request.");
-        } else {
-            notifyStatus(false, false, false, "Dash recording status is unavailable.");
-        }
-        MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
-    };
-
-    private static void clearPendingRequest() {
-        requestPending = false;
-        pendingWhat = 0;
-        MAIN.removeCallbacks(requestTimeout);
-    }
 
     private static void scheduleNextPoll() {
         if (!accepted || remote == null || requestPending) return;
