@@ -1271,11 +1271,15 @@ public class MainActivity extends android.app.Activity {
             return;
         }
         if (!state.autoRecord || pendingDashAutoOpen) return;
-        if (!getPreferences(0).getBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false)) {
+        boolean leaseAuthenticated = getPreferences(0)
+            .getBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false);
+        if (!leaseAuthenticated) {
             beginDashAutoOpenAfterLease();
             return;
         }
-        startDashRecordingAfterRideStart();
+        if (DashDockPresentation.shouldStartRecordingFromControls(state.rideActive,
+                state.autoRecord, leaseAuthenticated, dashRecordingRequestedAt > 0L))
+            startDashRecordingAfterRideStart();
     }
 
     private void showDashRideControls() {
