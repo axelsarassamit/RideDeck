@@ -28,6 +28,18 @@ final class DashRecordingProtocol {
         return visibleUserGesture && !statusOnlyConnection;
     }
 
+    static boolean shouldWaitForStartFocus(boolean gesturePending, boolean hostAlive,
+            boolean previewAttached, boolean startSent, long now, long deadline) {
+        return gesturePending && hostAlive && previewAttached && !startSent && now < deadline;
+    }
+
+    static boolean shouldSendVisibleStart(boolean gesturePending, boolean hostAlive,
+            boolean previewAttached, boolean previewVisible, boolean serviceConnected,
+            boolean startSent, long now, long deadline) {
+        return shouldWaitForStartFocus(gesturePending, hostAlive, previewAttached, startSent, now, deadline)
+            && previewVisible && serviceConnected;
+    }
+
     static boolean isCurrentResponse(long requestId, long pendingRequestId, int requestWhat,
             int pendingWhat, boolean requestPending, int responseWhat) {
         return requestPending && requestId != 0L && requestId == pendingRequestId

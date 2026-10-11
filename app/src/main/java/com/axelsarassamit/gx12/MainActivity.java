@@ -228,6 +228,7 @@ public class MainActivity extends android.app.Activity {
         activityResumed = false;
         cancelDashAutoOpen();
         if (dashControls != null) dashControls.pause();
+        DashRecordingClient.cancelPendingStartForHostPause(this);
         dashRecordingStatusFresh = false;
         dashRecordingConfirmed = false;
         if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
@@ -1229,6 +1230,10 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void updateDashRecordingIndicator(boolean accepted, boolean starting, boolean recording, String message) {
+        if (DashRecordingClient.START_CANCELLED_MESSAGE.equals(message)) {
+            dashRecordingRequestedAt = 0L;
+            dashRecordingStatusFresh = false;
+        }
         dashRecordingAccepted = accepted;
         dashRecordingStarting = starting;
         dashRecordingConfirmed = recording;
@@ -1339,6 +1344,7 @@ public class MainActivity extends android.app.Activity {
             }
             @Override public void onDashSettings() { openDashSettings(); }
             @Override public void onDismiss() {
+                DashRecordingClient.cancelPendingStart();
                 DashRecordingClient.finishPreview();
                 if (dashControls != null) dashControls = null;
             }

@@ -32,6 +32,8 @@ public final class DashRecordingClient {
     private static final int MAX_FRAME_BYTES = 100000;
     private static final int MAX_TOTAL_FRAME_BYTES = 200000;
     private static final long START_GESTURE_TTL_MS = 60000L;
+    private static final long START_FOCUS_RETRY_MS = 50L;
+    static final String START_CANCELLED_MESSAGE = "Dash start cancelled. Tap Start or Resume to try again.";
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static Context app;
     private static WeakReference<Activity> permissionActivity = new WeakReference<>(null);
@@ -63,6 +65,8 @@ public final class DashRecordingClient {
         void onStatus(boolean accepted, boolean starting, boolean recording, String message, boolean freshStatus);
     }
 
+    private static final Runnable startFocusRetry = DashRecordingClient::retryStartWhenVisible;
+
     private static final Runnable requestTimeout = () -> {
         if (!requestPending) return;
         int expiredWhat = pendingWhat;
@@ -83,16 +87,59 @@ public final class DashRecordingClient {
     };
 
     private static void clearStartGesture() {
+        MAIN.removeCallbacks(startFocusRetry);
         startGesturePending = false;
         startGestureActivity.clear();
+    }
+
+    private static boolean isCurrentStartGesture(Activity origin, Listener preview) {
+        return startGesturePending && SystemClock.elapsedRealtime() < startGestureDeadline
+            && origin != null && !origin.isFinishing() && !origin.isDestroyed()
+            && startGestureActivity.get() == origin && preview != null;
     }
 
     private static boolean hasVisibleStartGesture() {
         Activity origin = startGestureActivity.get();
         Listener preview = listener;
-        return startGesturePending && SystemClock.elapsedRealtime() < startGestureDeadline
-            && origin != null && !origin.isFinishing() && !origin.isDestroyed()
-            && preview != null && preview.previewVisible();
+        return isCurrentStartGesture(origin, preview) && preview.previewVisible();
+    }
+
+    private static void scheduleStartFocusRetry() {
+        MAIN.removeCallbacks(startFocusRetry);
+        MAIN.post(startFocusRetry);
+    }
+
+    private static void retryStartWhenVisible() {
+        if (!startGesturePending || startSent || recordingStartSent) return;
+        Activity origin = startGestureActivity.get();
+        Listener preview = listener;
+        long now = SystemClock.elapsedRealtime();
+        boolean hostAlive = origin != null && !origin.isFinishing() && !origin.isDestroyed();
+        if (!DashRecordingProtocol.shouldWaitForStartFocus(startGesturePending, hostAlive,
+                preview != null, startSent || recordingStartSent, now, startGestureDeadline)) {
+            failPendingStartGesture();
+            return;
+        }
+        boolean previewVisible = preview.previewVisible();
+        if (DashRecordingProtocol.shouldSendVisibleStart(startGesturePending, hostAlive,
+                preview != null, previewVisible, remote != null, startSent || recordingStartSent,
+                now, startGestureDeadline)) {
+            sendStart();
+            return;
+        }
+        if (previewVisible && remote == null && !bound) bindFromVisibleHost(origin);
+        if (startGesturePending && !startSent)
+            MAIN.postDelayed(startFocusRetry, START_FOCUS_RETRY_MS);
+    }
+
+    private static void failPendingStartGesture() {
+        if (pendingWhat == MSG_START) clearPendingRequest();
+        startSent = false;
+        recordingStartSent = false;
+        accepted = false;
+        clearStartGesture();
+        notifyListener(false, false, false, START_CANCELLED_MESSAGE, null, null, false);
+        notifyStatus(false, false, false, START_CANCELLED_MESSAGE, false);
     }
 
     private static PendingIntent getStartIntent(Bundle data) {
@@ -205,7 +252,7 @@ public final class DashRecordingClient {
             }
             return;
         }
-        bindFromVisibleHost(activity);
+        scheduleStartFocusRetry();
     }
 
     public static synchronized boolean onRequestPermissionsResult(Activity activity, int requestCode, int[] results) {
@@ -214,7 +261,7 @@ public final class DashRecordingClient {
         permissionActivity.clear();
         if (pending != activity || activity.isFinishing() || activity.isDestroyed()) return true;
         Listener target = listener;
-        if (target == null || !hasVisibleStartGesture()) {
+        if (target == null || !isCurrentStartGesture(activity, target)) {
             clearStartGesture();
             notifyListener(false, false, false, "Return to RideDeck and start the ride again to begin Dash recording.", null, null);
             return true;
@@ -226,13 +273,17 @@ public final class DashRecordingClient {
             notifyListener(false, false, false, "Camera and Microphone access are required for Dash recording. Enable them for RideDeck and try again.", null, null);
             return true;
         }
-        bindFromVisibleHost(activity);
+        scheduleStartFocusRetry();
         return true;
     }
 
     private static void bindFromVisibleHost(Activity activity) {
         Listener target = listener;
-        if (target == null || !hasVisibleStartGesture()) return;
+        if (target == null) return;
+        if (!hasVisibleStartGesture()) {
+            if (startGesturePending) scheduleStartFocusRetry();
+            return;
+        }
         if (remote != null) {
             sendStart();
             return;
@@ -246,6 +297,7 @@ public final class DashRecordingClient {
                 synchronized (DashRecordingClient.class) {
                     remote = new Messenger(binder);
                     if (DashRecordingProtocol.shouldSendStart(hasVisibleStartGesture(), false)) sendStart();
+                    else if (startGesturePending) scheduleStartFocusRetry();
                     else scheduleNextPoll();
                 }
             }
@@ -425,8 +477,7 @@ public final class DashRecordingClient {
     private static void sendStart() {
         if (remote == null || startSent) return;
         if (!hasVisibleStartGesture()) {
-            clearStartGesture();
-            notifyListener(false, false, false, "Return to RideDeck and tap Start to begin Dash recording.", null, null);
+            scheduleStartFocusRetry();
             return;
         }
         try {
@@ -560,13 +611,20 @@ public final class DashRecordingClient {
     }
 
     public static synchronized boolean cancelPendingStart() {
-        if (pendingWhat != MSG_START || recordingStartSent) return false;
-        clearPendingRequest();
+        if (recordingStartSent || (!startGesturePending && pendingWhat != MSG_START)) return false;
+        if (pendingWhat == MSG_START) clearPendingRequest();
         startSent = false;
         accepted = false;
+        permissionActivity.clear();
         clearStartGesture();
-        notifyListener(false, false, false, "Dash recording request cancelled.", null, null);
+        notifyListener(false, false, false, START_CANCELLED_MESSAGE, null, null, false);
+        notifyStatus(false, false, false, START_CANCELLED_MESSAGE, false);
         return true;
+    }
+
+    public static synchronized boolean cancelPendingStartForHostPause(Activity activity) {
+        if (activity != null && permissionActivity.get() == activity) return false;
+        return cancelPendingStart();
     }
 
     public static synchronized boolean attachPreview(Activity activity, Listener target) {
@@ -588,7 +646,15 @@ public final class DashRecordingClient {
 
     public static synchronized void finishPreview() {
         listener = null;
-        clearStartGesture();
+        if (!recordingStartSent && (startGesturePending || pendingWhat == MSG_START)) {
+            if (pendingWhat == MSG_START) clearPendingRequest();
+            startSent = false;
+            accepted = false;
+            clearStartGesture();
+            permissionActivity.clear();
+        } else {
+            clearStartGesture();
+        }
         MAIN.removeCallbacks(poll);
         scheduleNextPoll();
     }

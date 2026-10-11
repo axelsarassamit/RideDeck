@@ -31,6 +31,21 @@ public class DashRecordingProtocolTest {
         assertFalse(DashRecordingProtocol.shouldPoll(false, true, false, true, true));
     }
 
+    @Test public void startWaitsForFocusOnlyWhileTheVisibleGestureIsCurrent() {
+        assertTrue(DashRecordingProtocol.shouldWaitForStartFocus(true, true, true, false, 50L, 100L));
+        assertFalse(DashRecordingProtocol.shouldWaitForStartFocus(true, true, true, false, 100L, 100L));
+        assertFalse(DashRecordingProtocol.shouldWaitForStartFocus(true, false, true, false, 50L, 100L));
+        assertFalse(DashRecordingProtocol.shouldWaitForStartFocus(true, true, false, false, 50L, 100L));
+        assertFalse(DashRecordingProtocol.shouldWaitForStartFocus(true, true, true, true, 50L, 100L));
+    }
+
+    @Test public void visibleStartRequiresFocusAndConnectedServiceBeforeDeadline() {
+        assertTrue(DashRecordingProtocol.shouldSendVisibleStart(true, true, true, true, true, false, 50L, 100L));
+        assertFalse(DashRecordingProtocol.shouldSendVisibleStart(true, true, true, false, true, false, 50L, 100L));
+        assertFalse(DashRecordingProtocol.shouldSendVisibleStart(true, true, true, true, false, false, 50L, 100L));
+        assertFalse(DashRecordingProtocol.shouldSendVisibleStart(true, true, true, true, true, false, 100L, 100L));
+    }
+
     @Test public void statusRecoveryNeverRestartsRecording() {
         assertTrue(DashRecordingProtocol.shouldSendStart(true, false));
         assertFalse(DashRecordingProtocol.shouldSendStart(false, false));
