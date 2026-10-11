@@ -1368,12 +1368,12 @@ public class MainActivity extends android.app.Activity {
                 .remove(RideSessionState.PREF_BASE_ELAPSED)
                 .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
             cancelDashAutoOpen();
-            updateDashRecordingIndicator(false, false, false, "Ride session paused.");
             dashRecordingRequestedAt = 0L;
             dashRecordingConfirmed = false;
             dashRecordingAccepted = false;
             dashRecordingStarting = false;
             dashRecordingMessage = "Ride session paused.";
+            updateDashRecordingIndicator(false, false, false, dashRecordingMessage);
             RideDashLeaseService.stop(this);
             rideClock.stop(); rideClock.setBase(now - elapsed); rideClock.setText(formatElapsed(elapsed));
             if (dashControls != null) dashControls.refresh();
