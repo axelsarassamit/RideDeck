@@ -68,8 +68,7 @@ public final class DashRecordingClient {
             accepted = false;
             startSent = false;
             recordingStartSent = false;
-            startGesturePending = false;
-            startGestureActivity.clear();
+            clearStartGesture();
             notifyListener(false, false, false, "Dash did not confirm the recording request.", null, null);
             notifyStatus(false, false, false, "Dash did not confirm the recording request.");
         } else {
@@ -77,6 +76,10 @@ public final class DashRecordingClient {
         }
         MAIN.postDelayed(DashRecordingClient::scheduleNextPoll, 1000L);
     };
+
+    private static void clearStartGesture() {
+        clearStartGesture();
+    }
 
     private static boolean hasVisibleStartGesture() {
         Activity origin = startGestureActivity.get();
@@ -117,7 +120,7 @@ public final class DashRecordingClient {
 
     private static final Runnable poll = () -> {
         Listener target = listener;
-        if (!accepted || target == null || !target.previewVisible() || remote == null || requestPending) return;
+        if (!accepted || !recordingStartSent || target == null || !target.previewVisible() || remote == null || requestPending) return;
         try {
             Message request = Message.obtain(null, MSG_PREVIEW);
             Bundle data = new Bundle();
@@ -137,7 +140,7 @@ public final class DashRecordingClient {
 
     private static final Runnable statusPoll = () -> {
         StatusListener target = statusListener.get();
-        if (!accepted || target == null || !target.visible() || remote == null || requestPending) return;
+        if (!accepted || !recordingStartSent || target == null || !target.visible() || remote == null || requestPending) return;
         try {
             Message request = Message.obtain(null, MSG_STATUS);
             Bundle data = new Bundle();
@@ -156,7 +159,7 @@ public final class DashRecordingClient {
     };
 
     private static void scheduleNextPoll() {
-        if (!accepted || remote == null || requestPending) return;
+        if (!accepted || !recordingStartSent || remote == null || requestPending) return;
         Listener preview = listener;
         if (preview != null && preview.previewVisible()) {
             MAIN.post(poll);
@@ -180,6 +183,7 @@ public final class DashRecordingClient {
         startSent = false;
         recordingStartSent = false;
         clearPendingRequest();
+        clearStartGesture();
         startGestureActivity = new WeakReference<>(activity);
         startGesturePending = true;
         startGestureDeadline = SystemClock.elapsedRealtime() + START_GESTURE_TTL_MS;
@@ -193,6 +197,7 @@ public final class DashRecordingClient {
             permissionActivity = new WeakReference<>(activity);
             try { activity.requestPermissions(missing.toArray(new String[0]), REQUEST_PERMISSIONS); }
             catch (RuntimeException error) {
+                clearStartGesture();
                 notifyListener(false, false, false, "Grant Camera and Microphone permissions to RideDeck, then try again.", null, null);
             }
             return;
@@ -206,11 +211,15 @@ public final class DashRecordingClient {
         permissionActivity.clear();
         if (pending != activity || activity.isFinishing() || activity.isDestroyed()) return true;
         Listener target = listener;
-        if (target == null || !hasVisibleStartGesture()) return true;
+        if (target == null || !hasVisibleStartGesture()) {
+            clearStartGesture();
+            notifyListener(false, false, false, "Return to RideDeck and start the ride again to begin Dash recording.", null, null);
+            return true;
+        }
         boolean granted = results != null && results.length > 0;
         if (granted) for (int result : results) granted &= result == PackageManager.PERMISSION_GRANTED;
         if (!granted) {
-            startGesturePending = false;
+            clearStartGesture();
             notifyListener(false, false, false, "Camera and Microphone access are required for Dash recording. Enable them for RideDeck and try again.", null, null);
             return true;
         }
@@ -238,7 +247,7 @@ public final class DashRecordingClient {
             }
             @Override public void onServiceDisconnected(ComponentName name) {
                 synchronized (DashRecordingClient.class) {
-                    remote = null; startSent = false; accepted = false; clearPendingRequest();
+                    remote = null; startSent = false; accepted = false; recordingStartSent = false; clearStartGesture(); clearPendingRequest();
                     MAIN.removeCallbacks(poll);
                     MAIN.removeCallbacks(statusPoll);
                     notifyListener(false, false, false, "Dash recording connection ended.", null, null);
@@ -256,11 +265,12 @@ public final class DashRecordingClient {
         try {
             // Called only from the visible host Activity after an explicit recording choice.
             bound = app.bindService(intent, connection, flags);
-            if (!bound) notifyListener(false, false, false, Build.VERSION.SDK_INT < 30
+            if (!bound) { clearStartGesture(); notifyListener(false, false, false, Build.VERSION.SDK_INT < 30
                     ? "Dash background camera access is unavailable on this Android version."
-                    : "Dash recording service is unavailable. Update Dash and try again.", null, null);
+                    : "Dash recording service is unavailable. Update Dash and try again.", null, null); }
         } catch (RuntimeException error) {
             bound = false;
+            clearStartGesture();
             notifyListener(false, false, false, Build.VERSION.SDK_INT < 30
                     ? "Dash background camera access is unavailable on this Android version."
                     : "Dash recording service could not be reached.", null, null);
@@ -289,6 +299,8 @@ public final class DashRecordingClient {
                 if (!ok && (data == null || data.getInt("protocolVersion", 0) != PROTOCOL_VERSION)) {
                     clearPendingRequest();
                     accepted = false;
+                    recordingStartSent = false;
+                    clearStartGesture();
                     notifyListener(false, false, false, "Dash needs a compatible update.", null, null);
                     notifyStatus(false, false, false, "Dash needs a compatible update.");
                     return;
@@ -300,8 +312,7 @@ public final class DashRecordingClient {
                         accepted = false;
                         startSent = false;
                         recordingStartSent = false;
-                        startGesturePending = false;
-                        startGestureActivity.clear();
+                        clearStartGesture();
                         String failure = !ok ? text : !hasVisibleStartGesture()
                             ? "Return to RideDeck and start the ride again to begin Dash recording."
                             : "Dash did not provide a trusted recording start token. Update Dash and try again.";
@@ -311,8 +322,7 @@ public final class DashRecordingClient {
                     }
                     try {
                         startIntent.send();
-                        startGesturePending = false;
-                        startGestureActivity.clear();
+                        clearStartGesture();
                         recordingStartSent = true;
                         accepted = true;
                         notifyListener(true, starting, recording, text, null, null);
@@ -322,8 +332,7 @@ public final class DashRecordingClient {
                         accepted = false;
                         startSent = false;
                         recordingStartSent = false;
-                        startGesturePending = false;
-                        startGestureActivity.clear();
+                        clearStartGesture();
                         String failure = "Dash recording could not be started. Return to RideDeck and try again.";
                         notifyListener(false, false, false, failure, null, null);
                         notifyStatus(false, false, false, failure);
@@ -352,7 +361,7 @@ public final class DashRecordingClient {
     private static void sendStart() {
         if (remote == null || startSent) return;
         if (!hasVisibleStartGesture()) {
-            startGesturePending = false;
+            clearStartGesture();
             notifyListener(false, false, false, "Return to RideDeck and tap Start to begin Dash recording.", null, null);
             return;
         }
@@ -369,6 +378,8 @@ public final class DashRecordingClient {
             remote.send(request);
         } catch (RuntimeException | RemoteException error) {
             startSent = false;
+            recordingStartSent = false;
+            clearStartGesture();
             clearPendingRequest();
             notifyListener(false, false, false, "Dash could not accept the recording request.", null, null);
         }
@@ -409,8 +420,7 @@ public final class DashRecordingClient {
 
     public static synchronized void finishPreview() {
         listener = null;
-        startGesturePending = false;
-        startGestureActivity.clear();
+        clearStartGesture();
         MAIN.removeCallbacks(poll);
         scheduleNextPoll();
     }
@@ -420,8 +430,7 @@ public final class DashRecordingClient {
         accepted = false;
         startSent = false;
         recordingStartSent = false;
-        startGesturePending = false;
-        startGestureActivity.clear();
+        clearStartGesture();
         clearPendingRequest();
         remote = null;
         if (bound && connection != null) {
