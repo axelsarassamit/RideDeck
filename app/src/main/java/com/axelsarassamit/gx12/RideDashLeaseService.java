@@ -52,6 +52,8 @@ public final class RideDashLeaseService extends Service {
 
     public static void start(Context context) {
         Intent intent = new Intent(context, RideDashLeaseService.class).setAction(ACTION_START);
+        context.getSharedPreferences(RideSessionState.PREFERENCES_NAME, Context.MODE_PRIVATE).edit()
+            .putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         serviceRequested = true;
         try { androidx.core.content.ContextCompat.startForegroundService(context, intent); }
         catch (RuntimeException error) { serviceRequested = false; throw error; }
@@ -60,6 +62,8 @@ public final class RideDashLeaseService extends Service {
     public static void stop(Context context) {
         boolean wasRunning = serviceRequested;
         serviceRequested = false;
+        context.getSharedPreferences(RideSessionState.PREFERENCES_NAME, Context.MODE_PRIVATE).edit()
+            .putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         Intent intent = new Intent(context, RideDashLeaseService.class).setAction(ACTION_PAUSE)
             .putExtra(EXTRA_STOP_WHEN_DONE, !wasRunning);
         try { context.startService(intent); }
@@ -102,6 +106,7 @@ public final class RideDashLeaseService extends Service {
         serviceRequested = true;
         stopping = false;
         stopSent = false;
+        ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         try {
             int foregroundType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
                 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC : 0;
@@ -135,6 +140,7 @@ public final class RideDashLeaseService extends Service {
 
     @Override public void onDestroy() {
         serviceRequested = false;
+        ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         if (worker != null) {
             worker.removeCallbacks(renewTask);
             if (!stopSent) worker.post(() -> {
@@ -148,6 +154,7 @@ public final class RideDashLeaseService extends Service {
 
     private void requestStop() {
         serviceRequested = false;
+        ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         if (stopping) return;
         stopping = true;
         if (worker == null) { stopSelf(); return; }
@@ -189,37 +196,55 @@ public final class RideDashLeaseService extends Service {
 
     private void pausePersistedRide() {
         SharedPreferences prefs = ridePreferences();
-        if (!prefs.getBoolean(RideSessionState.PREF_RUNNING, false)) return;
+        if (!prefs.getBoolean(RideSessionState.PREF_RUNNING, false)) {
+            prefs.edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
+            return;
+        }
         long now = android.os.SystemClock.elapsedRealtime();
         long base = prefs.getLong(RideSessionState.PREF_BASE_ELAPSED, prefs.getLong(RideSessionState.PREF_ELAPSED, 0));
         long started = prefs.getLong(RideSessionState.PREF_STARTED_ELAPSED, now);
         long elapsed = RideSessionState.elapsed(base, started, now);
         prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
+            .putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false)
             .putLong(RideSessionState.PREF_ELAPSED, elapsed)
             .remove(RideSessionState.PREF_BASE_ELAPSED)
             .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
     }
 
     private void callProvider(String method, boolean isStop) {
+        if (isStop) {
+            ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
+        }
         if (!isStop && !DashPackageVerifier.isInstalledAndSigned(this)) {
+            ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
             updateNotification("Ride session active. Signed RideDeck Dash is not installed.");
             return;
         }
         try {
             Bundle request = new Bundle(); request.putInt("protocolVersion", PROTOCOL_VERSION);
             Bundle response = getContentResolver().call(DASH_PROVIDER_URI, method, null, request);
-            if (isStop || !serviceRequested || stopping) return;
+            if (isStop) return;
+            boolean accepted = response != null
+                && response.getInt("protocolVersion", -1) == PROTOCOL_VERSION
+                && response.getBoolean("accepted", false)
+                && serviceRequested && !stopping
+                && ridePreferences().getBoolean(RideSessionState.PREF_RUNNING, false);
+            ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, accepted).apply();
+            if (!serviceRequested || stopping) return;
             String status;
             if (response == null || response.getInt("protocolVersion", -1) != PROTOCOL_VERSION) {
                 status = "Dash connection unavailable. Open or update RideDeck Dash.";
             } else if (!response.getBoolean("accepted", false)) {
                 status = "Dash is in use by the other RideDeck companion.";
             } else {
-                status = "Dash is ready. Start recording in RideDeck Dash.";
+                status = "Dash ride session authenticated.";
             }
             updateNotification(status);
         } catch (RuntimeException error) {
-            if (!isStop && serviceRequested && !stopping) updateNotification("Dash connection unavailable. Open or update RideDeck Dash.");
+            if (!isStop) {
+                ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
+                if (serviceRequested && !stopping) updateNotification("Dash connection unavailable. Open or update RideDeck Dash.");
+            }
         }
     }
 

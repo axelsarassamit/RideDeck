@@ -6,6 +6,7 @@ final class RideSessionState {
     static final String PREF_ELAPSED = "ride_elapsed";
     static final String PREF_BASE_ELAPSED = "ride_base_elapsed";
     static final String PREF_STARTED_ELAPSED = "ride_started_elapsed";
+    static final String PREF_DASH_LEASE_ACCEPTED = "ride_dash_lease_accepted";
 
     private RideSessionState() { }
 

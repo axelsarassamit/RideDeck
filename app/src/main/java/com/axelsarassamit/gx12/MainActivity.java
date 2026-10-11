@@ -81,6 +81,10 @@ public class MainActivity extends android.app.Activity {
     private TextView rideButton;
     private Button dashButton;
     private boolean dashInstalled;
+    private boolean activityResumed;
+    private boolean pendingDashAutoOpen;
+    private int dashAutoOpenPollCount;
+    private final Runnable dashAutoOpenPoll = () -> pollDashAutoOpen();
     private File downloadedApk;
     private MediaController mediaController;
     private BluetoothProfile a2dpProfile;
@@ -113,6 +117,7 @@ public class MainActivity extends android.app.Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         headsetMic = new HeadsetMicRoute(this);
+        dashInstalled = DashPackageVerifier.isInstalledAndSigned(this);
         if (this instanceof SetupActivity) buildSetupScreen();
         else if (state != null && state.getBoolean("setup_visible", false)) buildSetupScreen();
         else if ("android.app.action.AUTOMATIC_ZEN_RULE".equals(getIntent().getAction())) buildSetupScreen();
@@ -182,7 +187,10 @@ public class MainActivity extends android.app.Activity {
         super.onResume();
         if (refreshAfterSetup && !(this instanceof SetupActivity)) { refreshAfterSetup = false; buildScreen(); }
         RideQuietMode.refresh(this);
+        boolean previouslyDashInstalled = dashInstalled;
         refreshDashInstallation();
+        if (this instanceof SetupActivity && previouslyDashInstalled != dashInstalled) buildSetupScreen();
+        activityResumed = true;
         refreshRideSessionUi();
         if (externalVoiceDeparted) { headsetMic.release(); externalVoiceDeparted = false; }
         if (deviceStatus != null) refreshDeviceStatus();
@@ -193,6 +201,8 @@ public class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onPause() {
+        activityResumed = false;
+        cancelDashAutoOpen();
         if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
         handler.removeCallbacks(trackRefresh);
         SharedPreferences prefs = getPreferences(0);
@@ -206,6 +216,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     @Override protected void onDestroy() {
+        cancelDashAutoOpen();
         handler.removeCallbacksAndMessages(null);
         if (headsetMic != null) headsetMic.release();
         pendingHeadsetVoice = null;
@@ -252,6 +263,21 @@ public class MainActivity extends android.app.Activity {
         Button navigation = button("CHOOSE MAP APP");
         navigation.setOnClickListener(v -> chooseMapApp());
         page.addView(navigation, buttonParams());
+        if (dashInstalled) {
+            page = setupGroup(sections, "RideDeck Dash", "Open Dash after Start or Resume", false);
+            CheckBox autoOpenDash = new CheckBox(this);
+            autoOpenDash.setText("Open Dash automatically on ride start or resume");
+            autoOpenDash.setTextColor(0xfff4f6fa);
+            autoOpenDash.setTextSize(16);
+            if (Build.VERSION.SDK_INT >= 21) {
+                autoOpenDash.setButtonTintList(android.content.res.ColorStateList.valueOf(RideTheme.accent(this)));
+            }
+            autoOpenDash.setChecked(RidePreferences.autoOpenDashOnRide(this));
+            autoOpenDash.setOnCheckedChangeListener((button, checked) ->
+                RidePreferences.setAutoOpenDashOnRide(this, checked));
+            page.addView(autoOpenDash, buttonParams());
+            page.addView(text("Dash recording still follows its Auto record setting, permissions and power checks.", 14, 0xffaab4c0, false));
+        }
         page = setupGroup(sections, "Cockpit appearance", "Music player, colours, messages and control placement", false);
         page.addView(personalize, buttonParams());
         page = setupGroup(sections, "Permissions & quiet mode", "Music and messages, notifications and interruption control", false);
@@ -1095,6 +1121,57 @@ public class MainActivity extends android.app.Activity {
         if (dashButton != null) dashButton.setVisibility(dashInstalled ? View.VISIBLE : View.GONE);
     }
 
+    private void beginDashAutoOpenAfterLease() {
+        cancelDashAutoOpen();
+        refreshDashInstallation();
+        if (!activityResumed || !dashInstalled || !RidePreferences.autoOpenDashOnRide(this)) return;
+        pendingDashAutoOpen = true;
+        dashAutoOpenPollCount = 0;
+        handler.post(dashAutoOpenPoll);
+    }
+
+    private void cancelDashAutoOpen() {
+        pendingDashAutoOpen = false;
+        dashAutoOpenPollCount = 0;
+        handler.removeCallbacks(dashAutoOpenPoll);
+    }
+
+    private void pollDashAutoOpen() {
+        if (!pendingDashAutoOpen) return;
+        refreshDashInstallation();
+        SharedPreferences rideState = getSharedPreferences(RideSessionState.PREFERENCES_NAME, MODE_PRIVATE);
+        boolean rideRunning = rideState.getBoolean(RideSessionState.PREF_RUNNING, false);
+        boolean serviceRunning = RideDashLeaseService.isRunning();
+        boolean leaseAuthenticated = rideState.getBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false);
+        boolean autoOpenEnabled = RidePreferences.autoOpenDashOnRide(this);
+        if (DashAutoOpenPolicy.shouldLaunchAfterExplicitStart(pendingDashAutoOpen, activityResumed,
+                rideRunning, serviceRunning, leaseAuthenticated, dashInstalled, autoOpenEnabled)) {
+            pendingDashAutoOpen = false;
+            handler.removeCallbacks(dashAutoOpenPoll);
+            openDashAfterRideStart();
+            return;
+        }
+        if (!activityResumed || isFinishing() || isDestroyed() || !rideRunning || !serviceRunning
+                || !dashInstalled || !autoOpenEnabled || dashAutoOpenPollCount >= 40) {
+            cancelDashAutoOpen();
+            return;
+        }
+        dashAutoOpenPollCount++;
+        handler.postDelayed(dashAutoOpenPoll, 250L);
+    }
+
+    private void openDashAfterRideStart() {
+        refreshDashInstallation();
+        if (!dashInstalled || !activityResumed) return;
+        Intent launch = getPackageManager().getLaunchIntentForPackage(DASH_PACKAGE);
+        if (launch == null) {
+            refreshDashInstallation();
+            return;
+        }
+        try { startActivity(launch); }
+        catch (RuntimeException error) { showDashMessage("RideDeck Dash could not be opened."); }
+    }
+
     private void refreshRideSessionUi() {
         if (rideClock == null || rideButton == null) return;
         SharedPreferences prefs = getPreferences(0);
@@ -1115,6 +1192,7 @@ public class MainActivity extends android.app.Activity {
                 .remove(RideSessionState.PREF_BASE_ELAPSED)
                 .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
             RideDashLeaseService.stop(this);
+            cancelDashAutoOpen();
             rideClock.stop(); rideClock.setBase(now - elapsed); rideClock.setText(formatElapsed(elapsed));
             setRideButtonState("Resume");
         } else {
@@ -1134,6 +1212,7 @@ public class MainActivity extends android.app.Activity {
             }
             rideClock.setBase(now - elapsed); rideClock.start();
             setRideButtonState("Pause");
+            beginDashAutoOpenAfterLease();
         }
     }
 
@@ -1186,6 +1265,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void resetRide() {
+        cancelDashAutoOpen();
         SharedPreferences prefs = getPreferences(0);
         prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
             .putLong(RideSessionState.PREF_ELAPSED, 0)

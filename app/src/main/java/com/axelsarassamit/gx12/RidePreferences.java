@@ -7,7 +7,16 @@ import java.util.*;
 
 /** Explicit app selection. No account credentials or notification text are saved here. */
 public final class RidePreferences {
+    public static final String PREF_AUTO_OPEN_DASH_ON_RIDE = "auto_open_dash_on_ride";
     public static SharedPreferences prefs(Context context) { return context.getSharedPreferences("ride_config", 0); }
+    public static boolean autoOpenDashOnRide(Context context) {
+        return DashPackageVerifier.isInstalledAndSigned(context)
+            && prefs(context).getBoolean(PREF_AUTO_OPEN_DASH_ON_RIDE, true);
+    }
+    public static void setAutoOpenDashOnRide(Context context, boolean enabled) {
+        if (!DashPackageVerifier.isInstalledAndSigned(context)) return;
+        prefs(context).edit().putBoolean(PREF_AUTO_OPEN_DASH_ON_RIDE, enabled).apply();
+    }
     public static final String[] MUSIC_NAMES = {"Spotify", "YouTube Music", "Apple Music", "Amazon Music", "Deezer", "TIDAL", "VLC", "Poweramp", "Samsung Music", "Musicolet"};
     public static final String[] MUSIC_PACKAGES = {"com.spotify.music", "com.google.android.apps.youtube.music", "com.apple.android.music", "com.amazon.mp3", "deezer.android.app", "com.aspiro.tidal", "org.videolan.vlc", "com.maxmpz.audioplayer", "com.sec.android.app.music", "in.krosbits.musicolet"};
     public static String selectedMusic(Context context) { return prefs(context).getString("music_app", MUSIC_PACKAGES[0]); }
