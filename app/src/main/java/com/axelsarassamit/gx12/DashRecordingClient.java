@@ -1,6 +1,7 @@
 package com.axelsarassamit.gx12;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
@@ -322,7 +323,7 @@ public final class DashRecordingClient {
                         return;
                     }
                     try {
-                        startIntent.send();
+                        sendDashStart(startIntent);
                         clearStartGesture();
                         recordingStartSent = true;
                         accepted = true;
@@ -352,6 +353,19 @@ public final class DashRecordingClient {
                 }
             }
         });
+    }
+
+    private static void sendDashStart(PendingIntent startIntent) throws PendingIntent.CanceledException {
+        if (Build.VERSION.SDK_INT >= 34) {
+            ActivityOptions options = ActivityOptions.makeBasic();
+            int mode = Build.VERSION.SDK_INT >= 36
+                ? ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE
+                : ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED;
+            options.setPendingIntentBackgroundActivityStartMode(mode);
+            startIntent.send(app, 0, null, null, null, null, options.toBundle());
+        } else {
+            startIntent.send();
+        }
     }
 
     private static Bitmap decode(byte[] bytes) {
