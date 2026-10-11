@@ -137,7 +137,7 @@ public final class DashRecordingClient {
         listener = target;
         accepted = false;
         startSent = false;
-        requestPending = false;
+        clearPendingRequest();
         ensureReplyMessenger();
         java.util.ArrayList<String> missing = new java.util.ArrayList<>();
         if (activity.checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
