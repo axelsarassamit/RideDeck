@@ -434,13 +434,14 @@ public final class DashRecordingClient {
         MAIN.removeCallbacks(statusPoll);
     }
 
-    public static synchronized void cancelPendingStart() {
-        if (pendingWhat != MSG_START || recordingStartSent) return;
+    public static synchronized boolean cancelPendingStart() {
+        if (pendingWhat != MSG_START || recordingStartSent) return false;
         clearPendingRequest();
         startSent = false;
         accepted = false;
         clearStartGesture();
         notifyListener(false, false, false, "Dash recording request cancelled.", null, null);
+        return true;
     }
 
     public static synchronized boolean attachPreview(Activity activity, Listener target) {
