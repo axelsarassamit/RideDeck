@@ -53,7 +53,6 @@ import java.util.concurrent.Executors;
 public class MainActivity extends android.app.Activity {
     private static final String REPOSITORY = "axelsarassamit/RideDeck";
     private static final String DASH_PACKAGE = DashPackageVerifier.PACKAGE_NAME;
-    private static final Uri DASH_PROVIDER_URI = DashPackageVerifier.PROVIDER_URI;
     private static final int REQUEST_BLUETOOTH = 12;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -443,7 +442,7 @@ public class MainActivity extends android.app.Activity {
         if (this instanceof SetupActivity) { buildSetupScreen(); return; }
         setupVisible = false; cockpitVisible = true;
         messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;
-        rideClock = null; rideButton = null; dashButton = null; dashRecordingStatus = null;
+        rideClock = null; rideButton = null; dashButton = null;
         deviceStatus = text("", 12, 0xffaab4c0, false);
         updateStatus = text("", 12, 0xffaab4c0, false);
         boolean portrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
@@ -1448,11 +1447,6 @@ public class MainActivity extends android.app.Activity {
         rideClock.setContentDescription("Ride session timer");
         rideClock.setBase(android.os.SystemClock.elapsedRealtime());
         rideControl.addView(rideClock, new LinearLayout.LayoutParams(-1, dp(compact ? 21 : 24)));
-        dashRecordingStatus = text("DASH STARTING", compact ? 8 : 9, 0xffffc247, true);
-        dashRecordingStatus.setGravity(Gravity.CENTER);
-        dashRecordingStatus.setSingleLine(true);
-        dashRecordingStatus.setVisibility(View.GONE);
-        rideControl.addView(dashRecordingStatus, new LinearLayout.LayoutParams(-1, dp(compact ? 13 : 15)));
         rideButton = text("Start", compact ? 11 : 12, 0xfff4f6fa, true);
         rideButton.setGravity(Gravity.CENTER); rideButton.setSingleLine(true);
         rideButton.setPadding(dp(2), 0, dp(2), 0);
@@ -1464,44 +1458,27 @@ public class MainActivity extends android.app.Activity {
         dock.addView(rideControl, rideWeight(compact ? 56 : 64));
 
         dashButton = rideAction("Dash", false);
-        dashButton.setContentDescription("Open RideDeck Dash. Start recording in Dash.");
-        dashButton.setVisibility(View.GONE);
-        dashButton.setOnClickListener(v -> openDash());
+        dashButton.setContentDescription("RideDeck Dash. Open ride controls.");
+        dashButton.setVisibility(View.VISIBLE);
+        dashButton.setOnClickListener(v -> handleDashButton());
         dock.addView(dashButton, rideWeight(compact ? 56 : 64));
     }
 
-    private void openDash() {
+    private void openDashSettings() {
         refreshDashInstallation();
         if (!dashInstalled) {
-            showDashMessage("Install the signed RideDeck Dash app to use this entry.");
+            showDashMessage("Install the signed RideDeck Dash app to change camera settings.");
             return;
         }
         Intent launch = getPackageManager().getLaunchIntentForPackage(DASH_PACKAGE);
         if (launch == null) {
-            refreshDashInstallation();
-            showDashMessage("RideDeck Dash is installed but cannot be opened.");
+            showDashMessage("RideDeck Dash settings cannot be opened.");
             return;
-        }
-        String notice = null;
-        if (!RideDashLeaseService.isRunning()) {
-            notice = "Start a RideDeck session first, then start recording in Dash.";
-        } else {
-            try {
-                Bundle request = new Bundle(); request.putInt("protocolVersion", 1);
-                Bundle status = getContentResolver().call(DASH_PROVIDER_URI, "status", null, request);
-                if (status == null || status.getInt("protocolVersion", -1) != 1) {
-                    notice = "RideDeck Dash is installed but its connection needs an update.";
-                }
-            } catch (RuntimeException unavailable) {
-                notice = "RideDeck Dash connection is unavailable. Opening the app so you can check it.";
-            }
         }
         try { startActivity(launch); }
         catch (RuntimeException error) {
-            showDashMessage("RideDeck Dash could not be opened.");
-            return;
+            showDashMessage("RideDeck Dash settings could not be opened.");
         }
-        if (notice != null) showDashMessage(notice);
     }
 
     private void showDashMessage(String message) {
