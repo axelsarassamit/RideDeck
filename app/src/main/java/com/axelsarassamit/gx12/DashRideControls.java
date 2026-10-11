@@ -60,6 +60,7 @@ final class DashRideControls {
     private final Button rideToggle;
     private final Button rideEnd;
     private final Button settings;
+    private final Button done;
     private final TextView explanation;
     private boolean applyingState;
 
@@ -84,14 +85,29 @@ final class DashRideControls {
 
         title = text(28, true);
         page.addView(title);
-        Button done = button("Done", true);
-        page.addView(done, 1, new LinearLayout.LayoutParams(-1, dp(80)));
-        done.setOnClickListener(v -> dialog.dismiss());
-
         rideState = text(24, true);
         page.addView(rideState);
         detail = text(18, false);
         page.addView(detail);
+
+        previewArea = new LinearLayout(activity);
+        previewArea.setOrientation(LinearLayout.VERTICAL);
+        previewArea.setVisibility(View.GONE);
+        TextView angle = text(20, true);
+        angle.setText("Check both camera angles before riding.");
+        previewArea.addView(angle);
+        previewState = text(18, false);
+        previewArea.addView(previewState);
+        LinearLayout cameras = new LinearLayout(activity);
+        cameras.setOrientation(LinearLayout.HORIZONTAL);
+        rear = camera(cameras, "Rear camera");
+        front = camera(cameras, "Front camera");
+        previewArea.addView(cameras);
+        page.addView(previewArea);
+
+        explanation = text(18, false);
+        explanation.setText("Start or resume a ride to record with Dash and check the camera angles here. Pause or End stops the background session.");
+        page.addView(explanation);
 
         autoRecord = new Switch(activity);
         autoRecord.setText("Record with Dash");
@@ -102,10 +118,6 @@ final class DashRideControls {
         autoRecord.setOnCheckedChangeListener((button, enabled) -> {
             if (!applyingState) host.onRecordWithDashChanged(enabled);
         });
-
-        explanation = text(18, false);
-        explanation.setText("Start or resume a ride to record with Dash and check the camera angles here. Pause or End stops the background session.");
-        page.addView(explanation);
 
         LinearLayout controls = new LinearLayout(activity);
         rideToggle = button("Start ride", true);
@@ -124,20 +136,9 @@ final class DashRideControls {
         page.addView(settings, settingsParams);
         settings.setOnClickListener(v -> host.onDashSettings());
 
-        previewArea = new LinearLayout(activity);
-        previewArea.setOrientation(LinearLayout.VERTICAL);
-        previewArea.setVisibility(View.GONE);
-        TextView angle = text(20, true);
-        angle.setText("Check both camera angles before riding.");
-        previewArea.addView(angle);
-        previewState = text(18, false);
-        previewArea.addView(previewState);
-        LinearLayout cameras = new LinearLayout(activity);
-        cameras.setOrientation(LinearLayout.HORIZONTAL);
-        rear = camera(cameras, "Rear camera");
-        front = camera(cameras, "Front camera");
-        previewArea.addView(cameras);
-        page.addView(previewArea);
+        done = button("Close", false);
+        page.addView(done, 1, new LinearLayout.LayoutParams(-1, dp(80)));
+        done.setOnClickListener(v -> dialog.dismiss());
 
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(true);
@@ -286,13 +287,15 @@ final class DashRideControls {
         applyingState = true;
         if (autoRecord.isChecked() != state.autoRecord) autoRecord.setChecked(state.autoRecord);
         applyingState = false;
-        autoRecord.setVisibility(available ? View.VISIBLE : View.GONE);
-        explanation.setVisibility(available ? View.VISIBLE : View.GONE);
+        boolean showPreview = available && state.rideActive && state.recordingRequested;
+        detail.setVisibility(available && !showPreview ? View.VISIBLE : View.GONE);
+        autoRecord.setVisibility(available && !showPreview ? View.VISIBLE : View.GONE);
+        explanation.setVisibility(available && !showPreview ? View.VISIBLE : View.GONE);
         settings.setVisibility(available ? View.VISIBLE : View.GONE);
+        done.setText(showPreview ? "Done" : "Close");
         rideToggle.setText(state.rideActive ? "Pause ride"
             : state.rideHasElapsed ? "Resume ride" : "Start ride");
         rideEnd.setEnabled(state.rideActive || state.rideHasElapsed);
-        boolean showPreview = available && state.rideActive && state.recordingRequested;
         previewArea.setVisibility(showPreview ? View.VISIBLE : View.GONE);
         if (!showPreview) clearFrames();
         if (recording) previewState.setText("Recording · check the camera angles");
