@@ -219,6 +219,7 @@ public class MainActivity extends android.app.Activity {
     @Override protected void onPause() {
         activityResumed = false;
         cancelDashAutoOpen();
+        if (dashControls != null) dashControls.pause();
         if (headsetMic != null) { externalVoiceDeparted = headsetMic.listening(); headsetMic.cancelPending(); }
         handler.removeCallbacks(trackRefresh);
         SharedPreferences prefs = getPreferences(0);
