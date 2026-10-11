@@ -33,6 +33,7 @@ public final class DashRecordingClient {
     private static final int MAX_TOTAL_FRAME_BYTES = 200000;
     private static final long START_GESTURE_TTL_MS = 60000L;
     private static final long START_FOCUS_RETRY_MS = 50L;
+    private static final long START_FOCUS_WAIT_MS = 1000L;
     static final String START_CANCELLED_MESSAGE = "Dash start cancelled. Tap Start or Resume to try again.";
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static Context app;
@@ -49,6 +50,7 @@ public final class DashRecordingClient {
     private static WeakReference<Activity> statusActivity = new WeakReference<>(null);
     private static boolean startGesturePending;
     private static long startGestureDeadline;
+    private static long startFocusDeadline;
     private static WeakReference<Activity> startGestureActivity = new WeakReference<>(null);
     private static boolean requestPending;
     private static int pendingWhat;
@@ -89,6 +91,8 @@ public final class DashRecordingClient {
     private static void clearStartGesture() {
         MAIN.removeCallbacks(startFocusRetry);
         startGesturePending = false;
+        startGestureDeadline = 0L;
+        startFocusDeadline = 0L;
         startGestureActivity.clear();
     }
 
@@ -109,21 +113,28 @@ public final class DashRecordingClient {
         MAIN.post(startFocusRetry);
     }
 
+    private static void beginStartFocusWait() {
+        long now = SystemClock.elapsedRealtime();
+        startFocusDeadline = Math.min(startGestureDeadline, now + START_FOCUS_WAIT_MS);
+        scheduleStartFocusRetry();
+    }
+
     private static void retryStartWhenVisible() {
         if (!startGesturePending || startSent || recordingStartSent) return;
         Activity origin = startGestureActivity.get();
         Listener preview = listener;
         long now = SystemClock.elapsedRealtime();
+        long deadline = Math.min(startGestureDeadline, startFocusDeadline);
         boolean hostAlive = origin != null && !origin.isFinishing() && !origin.isDestroyed();
         if (!DashRecordingProtocol.shouldWaitForStartFocus(startGesturePending, hostAlive,
-                preview != null, startSent || recordingStartSent, now, startGestureDeadline)) {
+                preview != null, startSent || recordingStartSent, now, deadline)) {
             failPendingStartGesture();
             return;
         }
         boolean previewVisible = preview.previewVisible();
         if (DashRecordingProtocol.shouldSendVisibleStart(startGesturePending, hostAlive,
                 preview != null, previewVisible, remote != null, startSent || recordingStartSent,
-                now, startGestureDeadline)) {
+                now, deadline)) {
             sendStart();
             return;
         }
@@ -252,7 +263,7 @@ public final class DashRecordingClient {
             }
             return;
         }
-        scheduleStartFocusRetry();
+        beginStartFocusWait();
     }
 
     public static synchronized boolean onRequestPermissionsResult(Activity activity, int requestCode, int[] results) {
@@ -273,7 +284,7 @@ public final class DashRecordingClient {
             notifyListener(false, false, false, "Camera and Microphone access are required for Dash recording. Enable them for RideDeck and try again.", null, null);
             return true;
         }
-        scheduleStartFocusRetry();
+        beginStartFocusWait();
         return true;
     }
 
