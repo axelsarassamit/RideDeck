@@ -59,6 +59,9 @@ final class DashRideControls {
     private final Switch autoRecord;
     private final Button rideToggle;
     private final Button rideEnd;
+    private final Button settings;
+    private final TextView explanation;
+    private boolean applyingState;
 
     DashRideControls(Activity activity, Host host) {
         this.activity = activity;
@@ -96,9 +99,11 @@ final class DashRideControls {
         autoRecord.setTextColor(Color.WHITE);
         autoRecord.setMinHeight(dp(80));
         page.addView(autoRecord, new LinearLayout.LayoutParams(-1, dp(80)));
-        autoRecord.setOnCheckedChangeListener((button, enabled) -> host.onRecordWithDashChanged(enabled));
+        autoRecord.setOnCheckedChangeListener((button, enabled) -> {
+            if (!applyingState) host.onRecordWithDashChanged(enabled);
+        });
 
-        TextView explanation = text(18, false);
+        explanation = text(18, false);
         explanation.setText("Start or resume a ride to record with Dash and check the camera angles here. Pause or End stops the background session.");
         page.addView(explanation);
 
@@ -113,7 +118,7 @@ final class DashRideControls {
         rideToggle.setOnClickListener(v -> host.onRideToggle());
         rideEnd.setOnClickListener(v -> host.onRideEnd());
 
-        Button settings = button("Dash settings", false);
+        settings = button("Dash settings", false);
         LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(-1, dp(80));
         settingsParams.topMargin = dp(12);
         page.addView(settings, settingsParams);
@@ -162,7 +167,7 @@ final class DashRideControls {
         }
 
         @Override public void run() {
-            if (!running || !dialog.isShowing() || !activity.hasWindowFocus()) {
+            if (!running || !dialog.isShowing() || !dialogFocused()) {
                 stop();
                 return;
             }
@@ -230,8 +235,7 @@ final class DashRideControls {
     boolean isShowing() { return dialog.isShowing(); }
 
     boolean previewVisible() {
-        return dialog.isShowing() && activity.hasWindowFocus()
-            && dialog.getWindow() != null && dialog.getWindow().getDecorView().hasWindowFocus()
+        return dialog.isShowing() && dialogFocused()
             && previewArea.getVisibility() == View.VISIBLE;
     }
 
@@ -249,6 +253,10 @@ final class DashRideControls {
         front.setImageDrawable(null);
     }
 
+    private boolean dialogFocused() {
+        return dialog.getWindow() != null && dialog.getWindow().getDecorView().hasWindowFocus();
+    }
+
     private void update(State state) {
         boolean available = state.dashAvailable;
         boolean recording = available && state.rideActive && state.recording;
@@ -260,12 +268,15 @@ final class DashRideControls {
         rideState.setText(state.rideActive ? "Ride active · " + time
             : state.rideHasElapsed ? "Ride paused · " + time : "Ready to ride");
         detail.setText(state.detail == null ? "" : state.detail);
+        applyingState = true;
         if (autoRecord.isChecked() != state.autoRecord) autoRecord.setChecked(state.autoRecord);
+        applyingState = false;
         autoRecord.setVisibility(available ? View.VISIBLE : View.GONE);
+        explanation.setVisibility(available ? View.VISIBLE : View.GONE);
+        settings.setVisibility(available ? View.VISIBLE : View.GONE);
         rideToggle.setText(state.rideActive ? "Pause ride"
             : state.rideHasElapsed ? "Resume ride" : "Start ride");
         rideEnd.setEnabled(state.rideActive || state.rideHasElapsed);
-        for (int i = 0; i < 0; i++) { /* Keep this method free of app-specific settings. */ }
         boolean showPreview = available && state.rideActive && state.recordingRequested;
         previewArea.setVisibility(showPreview ? View.VISIBLE : View.GONE);
         if (!showPreview) clearFrames();
