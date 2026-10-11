@@ -1,6 +1,7 @@
 package com.axelsarassamit.gx12;
 
 import android.app.Activity;
+import android.content.res.ColorStateList;
 import android.app.Dialog;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -83,9 +84,9 @@ final class DashRideControls {
             return insets;
         });
 
-        title = text(28, true);
+        title = text(28, false);
         page.addView(title);
-        rideState = text(24, true);
+        rideState = text(24, false);
         page.addView(rideState);
         detail = text(18, false);
         page.addView(detail);
@@ -93,7 +94,7 @@ final class DashRideControls {
         previewArea = new LinearLayout(activity);
         previewArea.setOrientation(LinearLayout.VERTICAL);
         previewArea.setVisibility(View.GONE);
-        TextView angle = text(20, true);
+        TextView angle = text(20, false);
         angle.setText("Check both camera angles before riding.");
         previewArea.addView(angle);
         previewState = text(18, false);
@@ -114,6 +115,13 @@ final class DashRideControls {
         autoRecord.setTextSize(22);
         autoRecord.setTextColor(Color.WHITE);
         autoRecord.setMinHeight(dp(80));
+        int[][] switchStates = new int[][] {
+            new int[] {android.R.attr.state_checked}, new int[] {}
+        };
+        autoRecord.setThumbTintList(new ColorStateList(switchStates,
+            new int[] {0xff087eff, 0xfff4f6fa}));
+        autoRecord.setTrackTintList(new ColorStateList(switchStates,
+            new int[] {0x66087eff, 0x55677686}));
         page.addView(autoRecord, new LinearLayout.LayoutParams(-1, dp(80)));
         autoRecord.setOnCheckedChangeListener((button, enabled) -> {
             if (!applyingState) host.onRecordWithDashChanged(enabled);
@@ -209,7 +217,7 @@ final class DashRideControls {
     private ImageView camera(LinearLayout cameras, String label) {
         LinearLayout column = new LinearLayout(activity);
         column.setOrientation(LinearLayout.VERTICAL);
-        TextView cameraLabel = text(18, true);
+        TextView cameraLabel = text(18, false);
         cameraLabel.setText(label);
         column.addView(cameraLabel);
         ImageView frame = new ImageView(activity);
