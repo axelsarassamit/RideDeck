@@ -13,3 +13,4 @@ signing/
 release-key.properties
 
 legacy-adb/
+design-build.log

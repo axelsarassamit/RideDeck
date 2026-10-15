@@ -10,9 +10,9 @@ import androidx.core.view.WindowInsetsControllerCompat;
 public final class ScreenChrome {
     private ScreenChrome() { }
     public static void apply(Window window, boolean immersive) {
-        window.setStatusBarColor(0xff101419);
-        window.setNavigationBarColor(0xff101419);
-        if (Build.VERSION.SDK_INT >= 28) window.setNavigationBarDividerColor(0xff101419);
+        window.setStatusBarColor(RideStyle.BACKGROUND);
+        window.setNavigationBarColor(RideStyle.BACKGROUND);
+        if (Build.VERSION.SDK_INT >= 28) window.setNavigationBarDividerColor(RideStyle.BACKGROUND);
         if (Build.VERSION.SDK_INT >= 29) {
             window.setNavigationBarContrastEnforced(false);
             window.setStatusBarContrastEnforced(false);

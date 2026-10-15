@@ -26,6 +26,14 @@ public final class GX12NotificationListener extends NotificationListenerService 
     public static synchronized java.util.List<NotificationPreview> selectedPreviews(android.content.Context context) {
         return previews.selected(RidePreferences.selectedMessages(context));
     }
+    /**
+     * Yamaha's future accessory writer must use this state, not a second inbox
+     * or Android's raw notification count. It exposes no message contents.
+     * UNAVAILABLE is distinct from an empty inbox when the listener is lost.
+     */
+    public static synchronized MessageInbox.Indicator messageIndicator(android.content.Context context) {
+        return previews.indicator(RidePreferences.selectedMessages(context), connected != null);
+    }
     public static synchronized void acknowledge(NotificationPreview item) {
         item.acknowledged = true;
         previews.acknowledge(item.packageName, item.key, item);
@@ -39,14 +47,63 @@ public final class GX12NotificationListener extends NotificationListenerService 
         public final String key;
         public final String packageName;
         public final String appName;
-        public final android.app.PendingIntent open;
+        public volatile android.app.PendingIntent open;
         public volatile boolean acknowledged;
         public Notification.Action[] callActions;
         public android.app.PendingIntent markRead;
-        public android.app.PendingIntent reply;
-        public android.app.RemoteInput replyInput;
+        public volatile ReplyAction reply;
+        void refreshActions(NotificationPreview updated) {
+            if (updated.open != null) open = updated.open;
+            if (updated.reply != null) reply = updated.reply;
+            if (updated.markRead != null) markRead = updated.markRead;
+        }
         NotificationPreview(String title, String text, String key, android.app.PendingIntent open, String packageName, String appName) {
             this.title = title.substring(0, Math.min(160, title.length())); this.text = text.substring(0, Math.min(20000, text.length())); this.key = key; this.open = open; this.packageName = packageName; this.appName = appName;
+        }
+    }
+
+    public static final class ReplyAction {
+        public final android.app.PendingIntent intent;
+        public final android.app.RemoteInput input;
+        public final android.app.RemoteInput[] inputs;
+        final int rank;
+        ReplyAction(android.app.PendingIntent intent, android.app.RemoteInput input,
+                    android.app.RemoteInput[] inputs, int rank) {
+            this.intent = intent; this.input = input; this.inputs = inputs; this.rank = rank;
+        }
+    }
+    private static void inspectAction(NotificationPreview preview, Notification.Action action) {
+        if (action == null) return;
+        int semantic = android.os.Build.VERSION.SDK_INT >= 28 ? action.getSemanticAction() : 0;
+        if (semantic == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) preview.markRead = action.actionIntent;
+        android.app.RemoteInput[] inputs = action.getRemoteInputs();
+        if (inputs == null) return;
+        for (android.app.RemoteInput input : inputs) {
+            int rank = ReplyActionPolicy.rank(semantic, input.getAllowFreeFormInput(), action.actionIntent != null);
+            if (rank > 0 && (preview.reply == null || rank > preview.reply.rank)) {
+                preview.reply = new ReplyAction(action.actionIntent, input, inputs, rank);
+            }
+        }
+    }
+
+    private static void inspectInvisibleAction(NotificationPreview preview, androidx.core.app.NotificationCompat.Action action) {
+        androidx.core.app.RemoteInput[] compatInputs = action.getRemoteInputs();
+        if (compatInputs == null || action.actionIntent == null) return;
+        android.app.RemoteInput[] inputs = new android.app.RemoteInput[compatInputs.length];
+        for (int i = 0; i < inputs.length; i++) {
+            androidx.core.app.RemoteInput input = compatInputs[i];
+            android.app.RemoteInput.Builder builder = new android.app.RemoteInput.Builder(input.getResultKey())
+                .setLabel(input.getLabel()).setChoices(input.getChoices()).setAllowFreeFormInput(input.getAllowFreeFormInput())
+                .addExtras(input.getExtras());
+            if (input.getAllowedDataTypes() != null) for (String type : input.getAllowedDataTypes()) builder.setAllowDataType(type, true);
+            if (android.os.Build.VERSION.SDK_INT >= 29) builder.setEditChoicesBeforeSending(input.getEditChoicesBeforeSending());
+            inputs[i] = builder.build();
+        }
+        for (android.app.RemoteInput input : inputs) {
+            int rank = ReplyActionPolicy.rank(action.getSemanticAction(), input.getAllowFreeFormInput(), true);
+            if (rank > 0 && (preview.reply == null || rank > preview.reply.rank)) {
+                preview.reply = new ReplyAction(action.actionIntent, input, inputs, rank);
+            }
         }
     }
 
@@ -126,17 +183,12 @@ public final class GX12NotificationListener extends NotificationListenerService 
                 activeCall = preview;
                 return;
             }
-            if (notification.actions != null) for (Notification.Action action : notification.actions) {
-                if (android.os.Build.VERSION.SDK_INT >= 28 && action.getSemanticAction() == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) preview.markRead = action.actionIntent;
-                android.app.RemoteInput[] inputs = action.getRemoteInputs();
-                if (inputs != null && action.actionIntent != null) for (android.app.RemoteInput input : inputs) {
-                    if (input.getAllowFreeFormInput()) { preview.reply = action.actionIntent; preview.replyInput = input; break; }
-                }
-
-            }
+            if (notification.actions != null) for (Notification.Action action : notification.actions) inspectAction(preview, action);
+            for (Notification.Action action : new Notification.WearableExtender(notification).getActions()) inspectAction(preview, action);
+            for (androidx.core.app.NotificationCompat.Action action : androidx.core.app.NotificationCompat.getInvisibleActions(notification)) inspectInvisibleAction(preview, action);
             synchronized (GX12NotificationListener.class) {
                 if (!RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
-                previews.put(sbn.getPackageName(), sbn.getKey(), preview.title + "\n" + preview.text, preview);
+                previews.put(sbn.getPackageName(), sbn.getKey(), preview.title + "\n" + preview.text, preview, NotificationPreview::refreshActions);
                 latestWhatsAppPreview = preview;
             }
         }
@@ -146,8 +198,13 @@ public final class GX12NotificationListener extends NotificationListenerService 
         if (sbn == null) return;
         if (activeCall != null && activeCall.key.equals(sbn.getKey())) { RideDeckDiagnostics.record(this, "Call notification removed"); activeCall = null; }
         synchronized (GX12NotificationListener.class) {
+            // Retain the pending RideDeck message until Seen / next. The bike
+            // indicator uses this same queue and must not clear independently.
             for (NotificationPreview item : previews.selected(RidePreferences.selectedMessages(this))) {
-                if (sbn.getKey().equals(item.key)) { item.reply = null; item.replyInput = null; item.markRead = null; }
+                // Dismissing a notification does not cancel its PendingIntent. Keep the
+                // explicit reply handle while this message remains in RideDeck.
+                // A cancelled handle is detected on Send, with the draft retained.
+                if (sbn.getKey().equals(item.key)) item.markRead = null;
             }
         }
     }

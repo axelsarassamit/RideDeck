@@ -58,7 +58,9 @@ public class MainActivity extends android.app.Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView deviceStatus;
     private TextView updateStatus;
-    private TextView trackStatus;
+    private TextView trackStatus, trackArtist, musicSource;
+    private PlaybackTimelineView playbackTimeline;
+    private android.app.Dialog voiceReplyReview;
     private TextView messagePreview;
     private TextView messageSource;
     private TextView dockMessage;
@@ -125,6 +127,8 @@ public class MainActivity extends android.app.Activity {
         super.onCreate(state);
         if (state != null && state.getBoolean("dash_recording_requested", false))
             dashRecordingRequestedAt = android.os.SystemClock.elapsedRealtime();
+        Object retained = getLastNonConfigurationInstance();
+        if (retained instanceof GX12NotificationListener.NotificationPreview) voiceReplyTarget = (GX12NotificationListener.NotificationPreview) retained;
         headsetMic = new HeadsetMicRoute(this);
         dashInstalled = DashPackageVerifier.isInstalledAndSigned(this);
         if (this instanceof SetupActivity) buildSetupScreen();
@@ -273,23 +277,24 @@ public class MainActivity extends android.app.Activity {
             return;
         }
         setupVisible = true; cockpitVisible = false;
+        trackArtist = null; musicSource = null; playbackTimeline = null;
         albumArt = null; messagePreview = null; messageSource = null; dockMessage = null;
         trackStatus = null; previousButton = null; playPauseButton = null; nextButton = null;
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xff151715); root.setPadding(dp(16), dp(16), dp(16), dp(16));
+        root.setBackgroundColor(RideStyle.BACKGROUND); root.setPadding(dp(16), dp(16), dp(16), dp(16));
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text("Setup", 30, 0xfff4f6fa, true);
+        TextView heading = text("Setup", 30, RideStyle.TEXT, true);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         Button back = rideAction("Done", false); back.setOnClickListener(v -> finish());
         header.addView(back, new LinearLayout.LayoutParams(dp(88), dp(56))); root.addView(header);
         LinearLayout sections = new LinearLayout(this); sections.setOrientation(LinearLayout.VERTICAL);
         sections.addView(text("RideDeck", 16, RideTheme.accent(this), true));
-        TextView parked = text("Make changes while parked", 14, 0xffaab4c0, false);
+        TextView parked = text("Make changes while parked", 14, RideStyle.MUTED, false);
         parked.setPadding(0, dp(4), 0, dp(16)); sections.addView(parked);
-        LinearLayout page = setupGroup(sections, "Navigation", "Choose the map app for split screen", true);
+        LinearLayout page = setupGroup(sections, "Navigation", "Choose the map app for split screen", false);
         Button personalize = button("CUSTOMIZATION"); personalize.setOnClickListener(v -> showPersonalization());
         // Customization is presented in its own section below.
-        page.addView(text("Phone navigation with your chosen map app", 16, 0xfff4f6fa, true));
+        page.addView(text("Phone navigation with your chosen map app", 16, RideStyle.TEXT, true));
         Button navigation = button("CHOOSE MAP APP");
         navigation.setOnClickListener(v -> chooseMapApp());
         page.addView(navigation, buttonParams());
@@ -297,7 +302,7 @@ public class MainActivity extends android.app.Activity {
             page = setupGroup(sections, "RideDeck Dash", "Start recording after Start or Resume", false);
             CheckBox autoOpenDash = new CheckBox(this);
             autoOpenDash.setText("Start Dash recording automatically on ride start or resume");
-            autoOpenDash.setTextColor(0xfff4f6fa);
+            autoOpenDash.setTextColor(RideStyle.TEXT);
             autoOpenDash.setTextSize(16);
             if (Build.VERSION.SDK_INT >= 21) {
                 autoOpenDash.setButtonTintList(android.content.res.ColorStateList.valueOf(RideTheme.accent(this)));
@@ -306,7 +311,7 @@ public class MainActivity extends android.app.Activity {
             autoOpenDash.setOnCheckedChangeListener((button, checked) ->
                 RidePreferences.setAutoOpenDashOnRide(this, checked));
             page.addView(autoOpenDash, buttonParams());
-            page.addView(text("Dash recording uses its own camera settings and power checks. RideDeck shows a live angle preview.", 14, 0xffaab4c0, false));
+            page.addView(text("Dash recording uses its own camera settings and power checks. RideDeck shows a live angle preview.", 14, RideStyle.MUTED, false));
         }
         page = setupGroup(sections, "Cockpit appearance", "Music player, colours, messages and control placement", false);
         page.addView(personalize, buttonParams());
@@ -325,7 +330,7 @@ public class MainActivity extends android.app.Activity {
         page.addView(access, buttonParams());
         LinearLayout permissionPage = page;
         page = setupGroup(sections, "Bluetooth & headset", "Pair devices and check your audio connection", false);
-        deviceStatus = text("Checking headset...", 14, 0xfff4f6fa, false);
+        deviceStatus = text("Checking headset...", 14, RideStyle.TEXT, false);
         addCockpitCard(page, "CONNECTIONS", deviceStatus);
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             Button nearby = button("ALLOW NEARBY DEVICES");
@@ -364,10 +369,10 @@ public class MainActivity extends android.app.Activity {
             else android.widget.Toast.makeText(this, "App notifications are available on this Android version.", android.widget.Toast.LENGTH_SHORT).show();
         }); permissionPage.addView(notifications, buttonParams());
         page = setupGroup(sections, "App & updates", "Installed version, updates and app information", false);
-        updateStatus = text("Installed " + appVersion(), 14, 0xfff4f6fa, false);
+        updateStatus = text("Installed " + appVersion(), 14, RideStyle.TEXT, false);
         addCockpitCard(page, "APP UPDATES", updateStatus);
         Button update = button("CHECK FOR UPDATES"); update.setOnClickListener(v -> checkForUpdate()); page.addView(update, buttonParams());
-        page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, 0xffaab4c0, false));
+        page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, RideStyle.MUTED, false));
         Button about = button("ABOUT"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
         styleSetupActions(sections);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(sections);
@@ -383,16 +388,25 @@ public class MainActivity extends android.app.Activity {
     private LinearLayout setupGroup(LinearLayout parent, String title, String summary, boolean expanded) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setColor(0xff222824); background.setCornerRadius(dp(18));
+        background.setColor(RideStyle.PANEL); background.setCornerRadius(dp(8)); background.setStroke(dp(1), RideStyle.LINE);
         card.setBackground(background); card.setPadding(dp(16), dp(10), dp(16), dp(12));
         LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(-1, -2);
-        spacing.bottomMargin = dp(12); parent.addView(card, spacing);
-        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL); heading.setMinimumHeight(dp(68));
+        spacing.bottomMargin = dp(8); parent.addView(card, spacing);
+        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL); heading.setMinimumHeight(dp(72));
+        String category = title.equals("Navigation") ? "Map" : title.equals("Cockpit appearance") ? "Palette"
+            : title.equals("Keep running") ? "Battery" : title.startsWith("Permissions") ? "Shield"
+            : title.startsWith("Bluetooth") ? "Bluetooth" : title.startsWith("RideDeck Dash") ? "Camera"
+            : title.startsWith("Help") ? "Help" : "Update";
+        ControlIconButton glyph = new ControlIconButton(this, category, false);
+        glyph.setBackground(null); glyph.setClickable(false); glyph.setFocusable(false);
+        glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams glyphParams = new LinearLayout.LayoutParams(dp(40), dp(40)); glyphParams.rightMargin = dp(12);
+        heading.addView(glyph, glyphParams);
         LinearLayout labels = new LinearLayout(this); labels.setOrientation(LinearLayout.VERTICAL);
-        labels.addView(text(title, 20, 0xfff4f6fa, true));
-        TextView detail = text(summary, 14, 0xffb4bfb8, false); detail.setPadding(0, dp(4), dp(8), 0); labels.addView(detail);
+        labels.addView(text(title, 20, RideStyle.TEXT, true));
+        TextView detail = text(summary, 14, RideStyle.MUTED, false); detail.setPadding(0, dp(4), dp(8), 0); labels.addView(detail);
         heading.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView toggle = text(expanded ? "−" : "+", 28, RideTheme.accent(this), true);
+        TextView toggle = text(expanded ? "⌃" : "⌄", 22, RideTheme.accent(this), true);
         toggle.setGravity(Gravity.CENTER); heading.addView(toggle, new LinearLayout.LayoutParams(dp(40), dp(48)));
         card.addView(heading);
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
@@ -400,7 +414,7 @@ public class MainActivity extends android.app.Activity {
         heading.setFocusable(true); heading.setContentDescription(title + ". " + summary + (expanded ? ". Expanded" : ". Collapsed"));
         heading.setOnClickListener(v -> {
             boolean open = content.getVisibility() != View.VISIBLE;
-            content.setVisibility(open ? View.VISIBLE : View.GONE); toggle.setText(open ? "−" : "+");
+            content.setVisibility(open ? View.VISIBLE : View.GONE); toggle.setText(open ? "⌃" : "⌄");
             heading.setContentDescription(title + ". " + summary + (open ? ". Expanded" : ". Collapsed"));
         });
         return content;
@@ -409,19 +423,25 @@ public class MainActivity extends android.app.Activity {
     private void styleSetupActions(android.view.ViewGroup group) {
         for (int i = 0; i < group.getChildCount(); i++) {
             View child = group.getChildAt(i);
-            if (child instanceof Button) {
+            if (child instanceof android.widget.CompoundButton) {
+                android.widget.CompoundButton choice = (android.widget.CompoundButton) child;
+                choice.setTextColor(RideStyle.TEXT); choice.setTextSize(16);
+                choice.setButtonTintList(android.content.res.ColorStateList.valueOf(RideTheme.accent(this)));
+            } else if (child instanceof Button) {
                 Button action = (Button) child; action.setAllCaps(false); action.setTextSize(16);
                 String label = action.getText().toString().toLowerCase(Locale.ROOT);
                 if (!label.isEmpty()) action.setText(Character.toUpperCase(label.charAt(0)) + label.substring(1));
                 action.setMinimumHeight(dp(52)); action.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-                action.setPadding(dp(16), dp(8), dp(16), dp(8)); action.setTextColor(0xfff4f6fa);
+                action.setPadding(dp(16), dp(8), dp(16), dp(8)); action.setTextColor(RideStyle.TEXT);
                 android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
-                shape.setColor(0xff343e36); shape.setCornerRadius(dp(12));
-                action.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x336ee7b7), shape, null));
+                shape.setColor(RideStyle.RAISED); shape.setCornerRadius(dp(6));
+                action.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x286c94ff), shape, null));
             } else if (child instanceof android.view.ViewGroup) styleSetupActions((android.view.ViewGroup) child);
         }
     }
 
+
+    @Override public Object onRetainNonConfigurationInstance() { return voiceReplyTarget; }
 
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putBoolean("setup_visible", setupVisible);
@@ -463,16 +483,17 @@ public class MainActivity extends android.app.Activity {
     private void buildScreen() {
         if (this instanceof SetupActivity) { buildSetupScreen(); return; }
         setupVisible = false; cockpitVisible = true;
+        trackArtist = null; musicSource = null; playbackTimeline = null;
         messagePreview = null; messageSource = null; dockMessage = null; albumArt = null;
         rideClock = null; rideButton = null; dashButton = null;
-        deviceStatus = text("", 12, 0xffaab4c0, false);
-        updateStatus = text("", 12, 0xffaab4c0, false);
+        deviceStatus = text("", 12, RideStyle.MUTED, false);
+        updateStatus = text("", 12, RideStyle.MUTED, false);
         boolean portrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
         boolean compact = isInMultiWindowMode();
         boolean stacked = compact || portrait;
         boolean controlsRight = controlsOnRight();
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xff151715); root.setPadding(dp(12), dp(8), dp(12), dp(8));
+        root.setBackgroundColor(RideStyle.BACKGROUND); root.setPadding(dp(12), dp(8), dp(12), dp(8));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(bars.left + dp(12), bars.top + dp(compact ? 4 : 8), bars.right + dp(12), bars.bottom + dp(compact ? 4 : 8));
@@ -487,9 +508,9 @@ public class MainActivity extends android.app.Activity {
         header.addView(logoSlot, new LinearLayout.LayoutParams(dp(80), dp(64)));
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
         ((android.widget.TextClock) clock).setFormat12Hour("h:mm");
-        clock.setTextColor(0xfff4f6fa); clock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        clock.setTextColor(RideStyle.TEXT); clock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         clock.setGravity(Gravity.CENTER); clock.setIncludeFontPadding(false); clock.setSingleLine(true);
-        clock.setAutoSizeTextTypeUniformWithConfiguration(24, 52, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        clock.setAutoSizeTextTypeUniformWithConfiguration(18, 36, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
         header.addView(clock, new LinearLayout.LayoutParams(0, dp(64), 1));
         if (!compact) root.addView(header, new LinearLayout.LayoutParams(-1, dp(64)));
 
@@ -504,17 +525,40 @@ public class MainActivity extends android.app.Activity {
         LinearLayout details = new LinearLayout(this); details.setGravity(Gravity.CENTER_VERTICAL);
         if (!compact) {
             albumArt = new android.widget.ImageView(this); albumArt.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-            albumArt.setImageResource(android.R.drawable.ic_media_play);
-            LinearLayout.LayoutParams art = new LinearLayout.LayoutParams(dp(58), dp(58)); art.rightMargin = dp(12);
+            albumArt.setImageDrawable(new MusicArtworkDrawable());
+            albumArt.setContentDescription("Album artwork");
+            albumArt.setBackground(RideStyle.surface(this, RideStyle.RAISED, 8, false));
+            albumArt.setClipToOutline(true);
+            LinearLayout.LayoutParams art = new LinearLayout.LayoutParams(dp(portrait ? 88 : 64), dp(portrait ? 88 : 64)); art.rightMargin = dp(16);
             details.addView(albumArt, art);
         }
-        trackStatus = text("Tap to open " + RidePreferences.musicName(this), compact ? 16 : 19, 0xfff4f6fa, true);
-        trackStatus.setMaxLines(compact ? 2 : 3); trackStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout metadataColumn = new LinearLayout(this); metadataColumn.setOrientation(LinearLayout.VERTICAL);
+        musicSource = text(RidePreferences.musicName(this), 12, RideTheme.accent(this), true);
+        musicSource.setSingleLine(true); metadataColumn.addView(musicSource);
+        if (compact) musicSource.setVisibility(View.GONE);
+        trackStatus = text("Open " + RidePreferences.musicName(this), compact ? 16 : portrait ? 22 : 20, RideStyle.TEXT, true);
+        trackStatus.setMaxLines(compact ? 1 : 2); trackStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        trackStatus.setPadding(0, dp(2), 0, dp(2)); metadataColumn.addView(trackStatus);
+        trackArtist = text("Start a track to show its details", compact ? 12 : 15, RideStyle.MUTED, false);
+        trackArtist.setMaxLines(1); trackArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        metadataColumn.addView(trackArtist);
+        final TextView titleView = trackStatus, artistView = trackArtist, sourceView = musicSource;
+        details.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            int remaining = bottom - top - artistView.getMeasuredHeight()
+                - (compact ? 0 : sourceView.getMeasuredHeight()) - titleView.getCompoundPaddingTop() - titleView.getCompoundPaddingBottom();
+            int lines = compact ? 1 : Math.max(1, Math.min(2, remaining / Math.max(1, titleView.getLineHeight())));
+            if (titleView.getMaxLines() != lines) titleView.setMaxLines(lines);
+        });
         details.setOnClickListener(v -> openPreferredMusic());
-        trackStatus.setOnClickListener(v -> openPreferredMusic());
         music.setOnClickListener(v -> openPreferredMusic());
-        details.addView(trackStatus, new LinearLayout.LayoutParams(0, -1, 1));
+        details.addView(metadataColumn, new LinearLayout.LayoutParams(0, -2, 1));
         music.addView(details, compact ? new LinearLayout.LayoutParams(0, -1, 1) : new LinearLayout.LayoutParams(-1, 0, 1));
+        if (!compact) {
+            playbackTimeline = new PlaybackTimelineView(this);
+            LinearLayout.LayoutParams timelineParams = new LinearLayout.LayoutParams(-1, dp(26));
+            timelineParams.bottomMargin = dp(6);
+            music.addView(playbackTimeline, timelineParams);
+        }
         LinearLayout transport = new LinearLayout(this);
         previousButton = rideAction("|◀", false); previousButton.setContentDescription("Previous track");
         previousButton.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS));
@@ -522,8 +566,12 @@ public class MainActivity extends android.app.Activity {
         playPauseButton.setOnClickListener(v -> sendMedia(MediaAction.TOGGLE));
         nextButton = rideAction("▶|", false); nextButton.setContentDescription("Next track");
         nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
-        transport.addView(previousButton, rideWeight(compact ? 56 : 72)); transport.addView(playPauseButton, rideWeight(compact ? 56 : 72));
-        transport.addView(nextButton, rideWeight(compact ? 56 : 72)); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(180), -2) : new LinearLayout.LayoutParams(-1, -2));
+        transport.setGravity(Gravity.CENTER_VERTICAL);
+        transport.addView(previousButton, rideWeight(compact ? 56 : 64));
+        LinearLayout.LayoutParams playParams = rideWeight(compact ? 56 : portrait ? 72 : 64);
+        playParams.weight = compact ? 1 : 1.3f;
+        transport.addView(playPauseButton, playParams);
+        transport.addView(nextButton, rideWeight(compact ? 56 : 64)); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(180), -2) : new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams musicParams = compact
             ? new LinearLayout.LayoutParams(-1, dp(72))
             : portrait ? new LinearLayout.LayoutParams(-1, 0, 0.9f)
@@ -546,7 +594,7 @@ public class MainActivity extends android.app.Activity {
         messageSource = text("LATEST MESSAGE", compact ? 13 : 20, RideTheme.accent(this), true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
-        messagePreview = text("No new messages", compact ? 14 : 16, 0xffc8d3df, false);
+        messagePreview = text("No new messages", compact ? 14 : 16, RideStyle.MUTED, false);
         messagePreview.setTextSize(compact ? 16 : portrait ? 20 : 18);
         messagePreview.setMaxLines(portrait ? 7 : 4); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messagePreview.setOnClickListener(v -> showFullMessage());
@@ -554,7 +602,7 @@ public class MainActivity extends android.app.Activity {
         messages.setOnClickListener(v -> showFullMessage());
         messages.addView(messagePreview, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout messageActions = new LinearLayout(this);
-        Button listen = rideAction("Read aloud", true); listen.setOnClickListener(v -> readMessageAloud());
+        Button listen = rideAction("Read aloud", false); listen.setOnClickListener(v -> readMessageAloud());
         messageActions.addView(listen, rideWeight(56));
         Button seenNext = rideAction("Seen / next", false);
         seenNext.setOnClickListener(v -> acknowledgeMessage(displayedMessage()));
@@ -614,8 +662,8 @@ public class MainActivity extends android.app.Activity {
 
     private LinearLayout rideCard(String label) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(8), dp(14), dp(8)); card.setBackground(rideBackground(0xff202320, 12));
-        TextView title = text(label, 11, 0xff92a9be, true); title.setLetterSpacing(0.12f);
+        card.setPadding(dp(16), dp(12), dp(16), dp(12)); card.setBackground(RideStyle.surface(this, RideStyle.PANEL, 8, true));
+        TextView title = text(label, 11, RideStyle.MUTED, true); title.setLetterSpacing(0.12f);
         card.addView(title, new LinearLayout.LayoutParams(-1, dp(18))); return card;
     }
 
@@ -630,13 +678,12 @@ public class MainActivity extends android.app.Activity {
         action.setTypeface(Typeface.DEFAULT, Typeface.BOLD); action.setMinWidth(0); action.setMinimumWidth(0);
         action.setMinHeight(dp(56)); action.setMinimumHeight(dp(56));
         action.setPadding(dp(4), dp(4), dp(4), dp(4)); action.setMaxLines(1);
-        action.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}}, new int[]{0xff8191a1, primary ? 0xff151715 : 0xfff4f6fa}));
+        action.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}}, new int[]{0xff8191a1, primary ? RideStyle.BACKGROUND : RideStyle.TEXT}));
         action.setBackgroundTintList(null);
         android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
-        states.addState(new int[]{-android.R.attr.state_enabled}, rideBackground(0xff252a25, 12));
-        states.addState(new int[]{android.R.attr.state_pressed}, rideBackground(0xff4b554b, 12));
-        states.addState(new int[]{}, rideBackground(primary ? RideTheme.accent(this) : DashDockPresentation.DOCK_BUTTON_COLOR,
-            DashDockPresentation.DOCK_BUTTON_CORNER_DP));
+        states.addState(new int[]{-android.R.attr.state_enabled}, RideStyle.surface(this, RideStyle.PANEL, 8, true));
+        states.addState(new int[]{android.R.attr.state_pressed}, rideBackground(RideStyle.LINE, 8));
+        states.addState(new int[]{}, RideStyle.surface(this, primary ? RideTheme.accent(this) : RideStyle.RAISED, 8, !primary));
         action.setBackground(states);
         if (label.equals("Read aloud") || label.equals("Seen / next")) {
             android.graphics.drawable.Drawable mark = getDrawable(label.equals("Read aloud") ? R.drawable.control_speaker : R.drawable.control_seen);
@@ -692,14 +739,14 @@ public class MainActivity extends android.app.Activity {
         android.app.Dialog reader = new android.app.Dialog(this);
         reader.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(0xff151715);
+        page.setBackgroundColor(RideStyle.BACKGROUND);
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
             androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
         });
         TextView source = text(item == null ? "Messages" : item.appName + " - " + item.title, 24, RideTheme.accent(this), true);
         page.addView(source);
-        TextView body = text(item == null ? "No message available yet. Enable music + message access in Setup and check notification previews in the selected messaging apps." : item.text, 26, 0xfff4f6fa, false);
+        TextView body = text(item == null ? "No message available yet. Enable music + message access in Setup and check notification previews in the selected messaging apps." : item.text, 26, RideStyle.TEXT, false);
         body.setPadding(0, dp(16), 0, dp(16));
         ScrollView scroll = new ScrollView(this); scroll.addView(body); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout actions = new LinearLayout(this);
@@ -712,7 +759,7 @@ public class MainActivity extends android.app.Activity {
         });
         Button reply = rideAction("Reply", true); reply.setEnabled(item != null);
         reply.setOnClickListener(v -> { reader.dismiss(); replyByVoice(item); }); actions.addView(reply, rideWeight(72));
-        Button aloud = rideAction("Read aloud", true); aloud.setEnabled(item != null);
+        Button aloud = rideAction("Read aloud", false); aloud.setEnabled(item != null);
         aloud.setOnClickListener(v -> readMessageAloud(item)); actions.addView(aloud, rideWeight(72)); actions.addView(read, rideWeight(72));
         if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
             LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
@@ -726,54 +773,170 @@ public class MainActivity extends android.app.Activity {
         body.setOnClickListener(v -> reader.dismiss());
         reader.setContentView(page); reader.show();
         if (reader.getWindow() != null) {
-            reader.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xff151715));
+            reader.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(RideStyle.BACKGROUND));
             reader.getWindow().setLayout(-1, -1);
             ScreenChrome.apply(reader.getWindow(), true);
             androidx.core.view.ViewCompat.requestApplyInsets(page);
         }
     }
 
-    private void replyByVoice(GX12NotificationListener.NotificationPreview target) {
-        if (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1 || target.reply == null || target.replyInput == null) {
-            new android.app.AlertDialog.Builder(this).setTitle("Reply in " + target.appName)
-                .setMessage("Voice messages are recorded in the original app. If this notification has no text reply action, reply there too.")
-                .setNegativeButton("Cancel", null).setPositiveButton("Open conversation", (d, w) -> {
-                    withHeadsetMicrophone(() -> {
-                        try {
-                            if (target.open != null) target.open.send();
-                            else {
-                                Intent launch = getPackageManager().getLaunchIntentForPackage(target.packageName);
-                                if (launch == null) { headsetMic.release(); showRideMessage("Messaging app is not available."); return; }
-                                startActivity(launch);
-                            }
-                        } catch (android.app.PendingIntent.CanceledException | android.content.ActivityNotFoundException e) {
-                            headsetMic.release(); showRideMessage("Conversation is no longer available. Try a newer message.");
-                        }
-                    });
-                }).show(); return;
+    private boolean openReplyConversation(GX12NotificationListener.NotificationPreview target) {
+        try {
+            if (target.open != null) target.open.send();
+            else {
+                Intent launch = getPackageManager().getLaunchIntentForPackage(target.packageName);
+                if (launch == null) { showRideMessage("Messaging app is not available."); return false; }
+                startActivity(launch);
+            }
+            return true;
+        } catch (android.app.PendingIntent.CanceledException | RuntimeException error) {
+            showRideMessage("Conversation is no longer available. Try a newer message."); return false;
         }
+    }
+
+    private Button replyControl(String label, boolean primary) {
+        Button action = rideAction(label, primary);
+        action.setTextSize(primary ? 26 : 22);
+        action.setMinHeight(dp(88)); action.setMinimumHeight(dp(88));
+        action.setPadding(dp(16), dp(12), dp(16), dp(12)); action.setMaxLines(2);
+        return action;
+    }
+
+    private void replyByVoice(GX12NotificationListener.NotificationPreview target) {
+        if (target == null) return;
+        GX12NotificationListener.reloadSelected();
+        if (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1) {
+            new android.app.AlertDialog.Builder(this).setTitle("Voice message in " + target.appName)
+                .setMessage("Record a voice message in the conversation. To dictate a text reply here, choose Voice to text in Reply method.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Open conversation", (d, w) -> openReplyConversation(target))
+                .show(); return;
+        }
+        // Text dictation never changes to voice-message mode because an action is missing.
         Intent speechIntent = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Reply to " + target.title + " in " + target.appName);
         speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        speechIntent.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, VoiceLanguage.tag(this));
         voiceReplyTarget = target;
+        RideDeckDiagnostics.record(this, "Text reply dictation requested app=" + target.packageName + " inline=" + (target.reply != null));
         withHeadsetMicrophone(() -> {
             try { startActivityForResult(speechIntent, 82); }
-            catch (android.content.ActivityNotFoundException e) { headsetMic.release(); voiceReplyTarget = null; showRideMessage("No speech recognition app is available."); }
+            catch (RuntimeException e) {
+                headsetMic.release(); voiceReplyTarget = null;
+                confirmVoiceReply(target, "");
+                android.widget.Toast.makeText(this, "Speech recognition is unavailable. You can type your reply.", android.widget.Toast.LENGTH_LONG).show();
+            }
         });
     }
 
     private void confirmVoiceReply(GX12NotificationListener.NotificationPreview target, String words) {
-        new android.app.AlertDialog.Builder(this).setTitle("Send to " + target.title + " - " + target.appName)
-            .setMessage(words).setNegativeButton("Cancel", null).setNeutralButton("Speak again", (d, w) -> replyByVoice(target))
-            .setPositiveButton("Send", (d, w) -> {
-                if (!RidePreferences.selectedMessages(this).contains(target.packageName) || target.reply == null || target.replyInput == null) return;
-                android.os.Bundle results = new android.os.Bundle(); results.putCharSequence(target.replyInput.getResultKey(), words);
-                Intent response = new Intent();
-                android.app.RemoteInput.addResultsToIntent(new android.app.RemoteInput[]{target.replyInput}, response, results);
-                try { target.reply.send(this, 0, response); android.widget.Toast.makeText(this, "Reply handed to " + target.appName, android.widget.Toast.LENGTH_SHORT).show(); }
-                catch (android.app.PendingIntent.CanceledException e) { android.widget.Toast.makeText(this, "Reply expired. Open the conversation to reply.", android.widget.Toast.LENGTH_LONG).show(); }
-            }).show();
+        GX12NotificationListener.reloadSelected();
+        if (voiceReplyReview != null) voiceReplyReview.dismiss();
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        boolean wide = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            && getResources().getConfiguration().screenWidthDp >= 600;
+        LinearLayout root = new LinearLayout(this); root.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        root.setBackgroundColor(RideStyle.BACKGROUND); root.setFocusableInTouchMode(true);
+        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
+        TextView heading = text("Reply · " + target.appName, 20, RideTheme.accent(this), true); page.addView(heading);
+        TextView recipient = text("To: " + target.title, 26, RideStyle.TEXT, true);
+        recipient.setMaxLines(2); recipient.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        recipient.setPadding(0, dp(8), 0, dp(12)); page.addView(recipient);
+        TextView status = text("Check your words, then send.", 18, RideStyle.MUTED, false);
+        status.setPadding(0, 0, 0, dp(16)); page.addView(status);
+        TextView caption = text("YOUR REPLY", 16, RideTheme.accent(this), true);
+        caption.setPadding(0, 0, 0, dp(8)); page.addView(caption);
+        EditText draft = new EditText(this); draft.setHint("Your reply"); draft.setText(words);
+        draft.setTextSize(28); draft.setTextColor(RideStyle.TEXT); draft.setHintTextColor(RideStyle.MUTED);
+        draft.setMinLines(3); draft.setMaxLines(10); draft.setGravity(Gravity.TOP);
+        draft.setPadding(dp(20), dp(16), dp(20), dp(16)); draft.setBackground(RideStyle.surface(this, RideStyle.PANEL, 12, true));
+        draft.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        draft.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE | android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        draft.setOnEditorActionListener((view, action, event) -> {
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_DONE) return false;
+            getSystemService(android.view.inputmethod.InputMethodManager.class).hideSoftInputFromWindow(draft.getWindowToken(), 0);
+            root.requestFocus(); return true;
+        });
+        page.addView(draft, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout fallback = new LinearLayout(this);
+        Button copy = replyControl("Copy text", false); Button open = replyControl("Open conversation", false);
+        LinearLayout.LayoutParams copySize = new LinearLayout.LayoutParams(0, dp(88), 1); copySize.setMargins(0, dp(16), dp(6), 0);
+        LinearLayout.LayoutParams openSize = new LinearLayout.LayoutParams(0, dp(88), 1); openSize.setMargins(dp(6), dp(16), 0, 0);
+        fallback.addView(copy, copySize); fallback.addView(open, openSize); page.addView(fallback);
+        ScrollView content = new ScrollView(this); content.setFillViewport(false); content.addView(page);
+        root.addView(content, wide ? new LinearLayout.LayoutParams(0, -1, 1) : new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout controls = new LinearLayout(this); controls.setOrientation(LinearLayout.VERTICAL);
+        Button send = replyControl("Send reply", true); Button again = replyControl("Speak again", false); Button cancel = replyControl("Cancel", false);
+        if (wide) {
+            LinearLayout.LayoutParams controlSize = new LinearLayout.LayoutParams(dp(232), -1); controlSize.leftMargin = dp(24); root.addView(controls, controlSize);
+            for (Button action : new Button[]{send, again, cancel}) {
+                LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, dp(88)); size.bottomMargin = dp(12); controls.addView(action, size);
+            }
+        } else {
+            LinearLayout.LayoutParams controlSize = new LinearLayout.LayoutParams(-1, -2); controlSize.topMargin = dp(20); root.addView(controls, controlSize);
+            controls.addView(send, new LinearLayout.LayoutParams(-1, dp(88)));
+            LinearLayout secondary = new LinearLayout(this);
+            LinearLayout.LayoutParams againSize = new LinearLayout.LayoutParams(0, dp(88), 1); againSize.setMargins(0, dp(12), dp(6), 0);
+            LinearLayout.LayoutParams cancelSize = new LinearLayout.LayoutParams(0, dp(88), 1); cancelSize.setMargins(dp(6), dp(12), 0, 0);
+            secondary.addView(again, againSize); secondary.addView(cancel, cancelSize); controls.addView(secondary);
+        }
+        Runnable updateAvailability = () -> {
+            boolean selected = RidePreferences.selectedMessages(this).contains(target.packageName);
+            boolean available = selected && target.reply != null;
+            send.setEnabled(available);
+            fallback.setVisibility(available ? View.GONE : View.VISIBLE);
+            status.setText(available ? "Check your words, then send." : !selected
+                ? "This app is no longer selected in Messaging apps. Your draft is still here."
+                : "Direct reply is unavailable for this message. Copy your words, then open " + target.appName + " to paste and send.");
+        };
+        copy.setOnClickListener(v -> {
+            android.content.ClipboardManager clipboard = getSystemService(android.content.ClipboardManager.class);
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Reply draft", draft.getText().toString()));
+            android.widget.Toast.makeText(this, "Reply text copied", android.widget.Toast.LENGTH_SHORT).show();
+        });
+        open.setOnClickListener(v -> openReplyConversation(target));
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        // Keep the review open behind dictation, so cancellation preserves edits.
+        again.setOnClickListener(v -> replyByVoice(target));
+        send.setOnClickListener(v -> {
+            String replyText = draft.getText().toString().trim();
+            if (replyText.isEmpty()) { draft.setError("Enter or dictate a reply first"); return; }
+            GX12NotificationListener.reloadSelected();
+            GX12NotificationListener.ReplyAction action = target.reply;
+            if (!RidePreferences.selectedMessages(this).contains(target.packageName) || action == null) {
+                updateAvailability.run(); return;
+            }
+            android.os.Bundle results = new android.os.Bundle(); results.putCharSequence(action.input.getResultKey(), replyText);
+            Intent response = new Intent().addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+            android.app.RemoteInput.addResultsToIntent(action.inputs, response, results);
+            if (Build.VERSION.SDK_INT >= 28) android.app.RemoteInput.setResultsSource(response, android.app.RemoteInput.SOURCE_FREE_FORM_INPUT);
+            try {
+                action.intent.send(this, 0, response);
+                RideDeckDiagnostics.record(this, "Text reply handed to app=" + target.packageName);
+                dialog.dismiss(); android.widget.Toast.makeText(this, "Reply handed to " + target.appName, android.widget.Toast.LENGTH_SHORT).show();
+            } catch (android.app.PendingIntent.CanceledException | RuntimeException error) {
+                if (target.reply == action) target.reply = null;
+                RideDeckDiagnostics.record(this, "Text reply rejected app=" + target.packageName + " reason=" + error.getClass().getSimpleName());
+                updateAvailability.run();
+                status.setText("The reply control expired or was rejected. Your draft is still here. Copy your words, then open the conversation to paste and send.");
+            }
+        });
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
+            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            int keyboard = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;
+            view.setPadding(edges.left + dp(20), edges.top + dp(20), edges.right + dp(20), Math.max(edges.bottom, keyboard) + dp(20)); return insets;
+        });
+        dialog.setContentView(root); voiceReplyReview = dialog;
+        dialog.setOnDismissListener(d -> { if (voiceReplyReview == dialog) voiceReplyReview = null; });
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(RideStyle.BACKGROUND));
+            dialog.getWindow().setLayout(-1, -1);
+            dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+            ScreenChrome.apply(dialog.getWindow(), true);
+        }
+        root.requestFocus(); androidx.core.view.ViewCompat.requestApplyInsets(root); updateAvailability.run();
     }
 
     private void showQuickCamera() {
@@ -818,7 +981,7 @@ public class MainActivity extends android.app.Activity {
         android.app.Dialog menu = new android.app.Dialog(this);
         menu.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(16), dp(16), dp(16), dp(16)); page.setBackgroundColor(0xff151715);
+        page.setPadding(dp(16), dp(16), dp(16), dp(16)); page.setBackgroundColor(RideStyle.BACKGROUND);
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
             androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
@@ -831,16 +994,21 @@ public class MainActivity extends android.app.Activity {
         LinearLayout items = new LinearLayout(this); items.setOrientation(LinearLayout.VERTICAL);
         for (int i = 0; i < labels.length; i++) {
             final int choice = i;
-            LinearLayout row = rideCard(labels[i].toUpperCase(java.util.Locale.ROOT));
-            String detail = i == 5 ? RideTheme.NAMES[RidePreferences.prefs(this).getInt("color_theme", 0)]
-                : i == 6 ? RidePreferences.musicName(this)
-                : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
-                : i == 0 ? new String[]{"Left", "Centre", "Right"}[RidePreferences.prefs(this).getInt("mount", 1)]
-                : i == 1 ? "Choose which apps appear in Messages"
-                : i == 3 ? "Voice text or voice message" : "Choose the control position";
-            row.addView(text(detail, 19, 0xfff4f6fa, true));
-            row.setMinimumHeight(dp(88)); row.setOnClickListener(v -> { menu.dismiss(); choose.onClick(menu, choice); });
-            items.addView(row, rideParams(96));
+            LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(16), dp(12), dp(12), dp(12));
+            row.setBackground(RideStyle.row(this));
+            LinearLayout words = new LinearLayout(this); words.setOrientation(LinearLayout.VERTICAL);
+            words.addView(text(labels[i], 18, RideStyle.TEXT, true));
+            String detail = i == 5 ? RideTheme.NAMES[Math.max(0, Math.min(RideTheme.NAMES.length - 1, RidePreferences.prefs(this).getInt("color_theme", 0)))]
+                : i == 6 ? RidePreferences.musicName(this) : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
+                : i == 0 ? new String[]{"Left", "Centre", "Right"}[Math.max(0, Math.min(2, RidePreferences.prefs(this).getInt("mount", 1)))]
+                : i == 1 ? "Choose which apps appear in Messages" : i == 3 ? (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1 ? "Voice message in original app" : "Voice to text with send confirmation") : (RidePreferences.prefs(this).getInt("controls_side", 0) == 1 ? "Music left, messages right" : RidePreferences.prefs(this).getInt("controls_side", 0) == 2 ? "Messages left, music right" : "Automatic based on phone mount");
+            TextView detailText = text(detail, 14, RideStyle.MUTED, false); detailText.setPadding(0, dp(4), dp(8), 0);
+            words.addView(detailText); row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+            TextView chevron = text("›", 26, RideStyle.MUTED, false);
+            row.addView(chevron, new LinearLayout.LayoutParams(dp(24), -2));
+            row.setMinimumHeight(dp(80)); row.setOnClickListener(v -> { menu.dismiss(); choose.onClick(menu, choice); });
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2); rowParams.topMargin = dp(6); items.addView(row, rowParams);
         }
         scroll.addView(items); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         menu.setContentView(page); menu.show(); menu.getWindow().setLayout(-1, -1);
@@ -983,7 +1151,7 @@ public class MainActivity extends android.app.Activity {
 
     private Button dockButton(String title) {
         Button b = button(title); b.setTextSize(15); b.setMinHeight(dp(76)); b.setPadding(dp(6), dp(6), dp(6), dp(6));
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff252e39)); b.setTextColor(0xfff4f6fa); return b;
+        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff252e39)); b.setTextColor(RideStyle.TEXT); return b;
     }
 
     private LinearLayout.LayoutParams dockButtonParams() {
@@ -993,7 +1161,7 @@ public class MainActivity extends android.app.Activity {
     private Button cockpitButton(String eyebrow, String label) {
         Button b = button(eyebrow + "\n" + label);
         b.setTextSize(17); b.setAllCaps(false); b.setMinHeight(dp(100)); b.setPadding(dp(8), dp(8), dp(8), dp(8));
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff252e39)); b.setTextColor(0xfff4f6fa);
+        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff252e39)); b.setTextColor(RideStyle.TEXT);
         return b;
     }
 
@@ -1012,7 +1180,7 @@ public class MainActivity extends android.app.Activity {
         ComponentName listener = new ComponentName(this, GX12NotificationListener.class);
         if (!hasNotificationAccess(listener)) {
             mediaController = null;
-            trackStatus.setText("Connect music in Setup");
+            showMusicEmpty("Connect music in Setup", "Allow music access to show playback details");
             updateMediaButtons(false, false, false);
             return;
         }
@@ -1027,8 +1195,7 @@ public class MainActivity extends android.app.Activity {
                 }
             }
             if (mediaController == null) {
-                trackStatus.setText("Tap to open " + RidePreferences.musicName(this));
-                if (albumArt != null) albumArt.setImageResource(android.R.drawable.ic_media_play);
+                showMusicEmpty("Open " + RidePreferences.musicName(this), "Start a track to show its details");
                 if (playPauseButton instanceof ControlIconButton) ((ControlIconButton) playPauseButton).setControl("▶");
                 playPauseButton.setContentDescription("Open " + RidePreferences.musicName(this));
                 updateMediaButtons(false, false, false);
@@ -1040,13 +1207,22 @@ public class MainActivity extends android.app.Activity {
             PlaybackState state = mediaController.getPlaybackState();
             boolean playing = state != null && state.getState() == PlaybackState.STATE_PLAYING;
             String label = title == null || title.isBlank() ? "Active media player" : title;
-            if (artist != null && !artist.isBlank()) label += "\n" + artist;
+            if (trackArtist == null && artist != null && !artist.isBlank()) label += "\n" + artist;
+            if (trackArtist != null) trackArtist.setText(artist == null || artist.isBlank() ? (playing ? "Playing" : "Paused") : artist);
+            if (musicSource != null) musicSource.setText(RidePreferences.musicName(this) + (playing ? " · Playing" : ""));
+            if (playbackTimeline != null) {
+                long duration = metadata == null ? 0 : metadata.getLong(MediaMetadata.METADATA_KEY_DURATION);
+                long position = state == null ? -1 : state.getPosition();
+                if (playing && position >= 0 && state.getLastPositionUpdateTime() > 0)
+                    position += (long) ((android.os.SystemClock.elapsedRealtime() - state.getLastPositionUpdateTime()) * state.getPlaybackSpeed());
+                playbackTimeline.update(position, position < 0 ? 0 : duration);
+            }
             trackStatus.setText(label + (cockpitVisible ? "" : (playing ? "\nPlaying" : "\nNot playing")));
             if (albumArt != null) {
                 android.graphics.Bitmap image = metadata == null ? null : metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
                 if (image == null && metadata != null) image = metadata.getBitmap(MediaMetadata.METADATA_KEY_ART);
                 if (image != null) albumArt.setImageBitmap(image);
-                else albumArt.setImageResource(android.R.drawable.ic_media_play);
+                else albumArt.setImageDrawable(new MusicArtworkDrawable());
             }
             long actions = state == null ? 0 : state.getActions();
             updateMediaButtons(true, (actions & PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0,
@@ -1056,9 +1232,19 @@ public class MainActivity extends android.app.Activity {
             playPauseButton.setContentDescription(playing ? "Pause music" : "Play music");
         } catch (SecurityException | IllegalStateException error) {
             mediaController = null;
-            trackStatus.setText("Android has not granted access yet. Enable RideDeck under Notification access.");
+            showMusicEmpty("Connect music in Setup", "Enable RideDeck under Notification access");
             updateMediaButtons(false, false, false);
         }
+    }
+
+    private void showMusicEmpty(String title, String hint) {
+        trackStatus.setText(title);
+        if (trackArtist != null) trackArtist.setText(hint);
+        if (musicSource != null) musicSource.setText(RidePreferences.musicName(this));
+        if (albumArt != null) albumArt.setImageDrawable(new MusicArtworkDrawable());
+        if (playbackTimeline != null) playbackTimeline.update(0, 0);
+        if (playPauseButton instanceof ControlIconButton) ((ControlIconButton) playPauseButton).setControl("▶");
+        if (playPauseButton != null) playPauseButton.setContentDescription("Open " + RidePreferences.musicName(this));
     }
 
     private void updateMediaButtons(boolean active, boolean previous, boolean next) {
@@ -1245,7 +1431,7 @@ public class MainActivity extends android.app.Activity {
             String label = DashDockPresentation.label(dashInstalled, actualRecording, actualStarting,
                 dashRecordingRequestedAt > 0L, fresh && accepted, fresh);
             dashButton.setText(label);
-            dashButton.setTextColor(actualRecording ? 0xffff4c4c : 0xfff4f6fa);
+            dashButton.setTextColor(actualRecording ? 0xffff4c4c : RideStyle.TEXT);
             dashButton.setContentDescription("RideDeck Dash. "
                 + (actualRecording ? "Recording. " : label.replace("\n", ". ") + ". ")
                 + "Open ride controls.");
@@ -1506,17 +1692,17 @@ public class MainActivity extends android.app.Activity {
         LinearLayout rideControl = new LinearLayout(this);
         rideControl.setOrientation(LinearLayout.VERTICAL); rideControl.setGravity(Gravity.CENTER);
         rideControl.setPadding(dp(2), dp(2), dp(2), dp(2));
-        rideControl.setBackground(rideBackground(0xff202820, 12));
+        rideControl.setBackground(RideStyle.surface(this, RideStyle.PANEL, 8, true));
         rideClock = new Chronometer(this); rideClock.setFormat("%s");
-        rideClock.setTextColor(0xffc8d3df); rideClock.setTextSize(compact ? 10 : 12);
+        rideClock.setTextColor(RideStyle.MUTED); rideClock.setTextSize(compact ? 10 : 12);
         rideClock.setTypeface(Typeface.DEFAULT, Typeface.BOLD); rideClock.setGravity(Gravity.CENTER);
         rideClock.setContentDescription("Ride session timer");
         rideClock.setBase(android.os.SystemClock.elapsedRealtime());
         rideControl.addView(rideClock, new LinearLayout.LayoutParams(-1, dp(compact ? 21 : 24)));
-        rideButton = text("Start", compact ? 11 : 12, 0xfff4f6fa, true);
+        rideButton = text("Start", compact ? 11 : 12, RideStyle.TEXT, true);
         rideButton.setGravity(Gravity.CENTER); rideButton.setSingleLine(true);
         rideButton.setPadding(dp(2), 0, dp(2), 0);
-        rideButton.setBackground(rideBackground(0xff343d34, 9));
+        rideButton.setBackground(RideStyle.surface(this, RideStyle.RAISED, 8, true));
         rideButton.setClickable(true); rideButton.setFocusable(true);
         rideButton.setOnClickListener(v -> toggleRide());
         rideButton.setOnLongClickListener(v -> { confirmResetRide(); return true; });
@@ -1776,8 +1962,8 @@ public class MainActivity extends android.app.Activity {
     private void showUpdateMessage(String message) { runOnUiThread(() -> { if (updateStatus != null) updateStatus.setText(message); }); }
     private String safeMessage(Exception error) { String m = error.getMessage(); return m == null || m.isBlank() ? error.getClass().getSimpleName() : m; }
     private String appVersion() { try { PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0); return info.versionName + " (" + info.versionCode + ")"; } catch (Exception ignored) { return "unknown"; } }
-    private TextView text(String value, int size, int color, boolean bold) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD); return v; }
-    private Button button(String label) { Button b = new Button(this); b.setText(label); b.setTextColor(0xfff4f6fa); b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff2c322c)); return b; }
+    private TextView text(String value, int size, int color, boolean bold) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); v.setTypeface(Typeface.create(bold ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL)); return v; }
+    private Button button(String label) { Button b = new Button(this); b.setText(label); b.setTextColor(RideStyle.TEXT); b.setAllCaps(false); b.setBackground(RideStyle.row(this)); return b; }
     private LinearLayout.LayoutParams params() { return new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); }
     private LinearLayout.LayoutParams buttonParams() { LinearLayout.LayoutParams p = params(); p.topMargin = dp(8); return p; }
     private LinearLayout.LayoutParams weightedButtonParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); p.setMargins(dp(2), dp(4), dp(2), dp(4)); return p; }

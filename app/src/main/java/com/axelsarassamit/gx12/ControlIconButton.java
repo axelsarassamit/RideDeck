@@ -13,6 +13,12 @@ public final class ControlIconButton extends Button {
  case "Camera":line(c,2,7,7,7,9,4,15,4,17,7,22,7,22,20,2,20,2,7);c.drawCircle(12,13,4,ink);break;
  case "Voice":c.drawRoundRect(9,2,15,15,3,3,ink);Path mic=new Path();mic.moveTo(5,11);mic.cubicTo(5,23,19,23,19,11);c.drawPath(mic,ink);line(c,12,19,12,23);line(c,8,23,16,23);break;
  case "Setup":c.drawCircle(12,12,6,ink);c.drawCircle(12,12,2,ink);for(int i=0;i<8;i++){double a=i*Math.PI/4;line(c,12+(float)Math.cos(a)*8,12+(float)Math.sin(a)*8,12+(float)Math.cos(a)*10,12+(float)Math.sin(a)*10);}break;
+ case "Palette":c.drawOval(3,3,21,21,ink);c.drawCircle(8,8,1,ink);c.drawCircle(15,7,1,ink);c.drawCircle(17,13,1,ink);line(c,6,18,11,15,13,20);break;
+ case "Battery":c.drawRoundRect(3,6,20,18,2,2,ink);line(c,22,10,22,14);line(c,12,8,9,12,14,12,11,16);break;
+ case "Shield":line(c,12,2,21,6,20,15,12,22,4,15,3,6,12,2);line(c,8,12,11,15,16,9);break;
+ case "Bluetooth":line(c,12,2,18,7,6,17);line(c,6,7,18,17,12,22,12,2);break;
+ case "Help":c.drawCircle(12,12,9,ink);c.drawArc(9,6,15,12,180,270,false,ink);line(c,12,12,12,14);c.drawPoint(12,18,ink);break;
+ case "Update":c.drawArc(3,3,21,21,35,290,false,ink);line(c,21,3,21,9,15,9);line(c,12,8,12,17);line(c,8,13,12,17,16,13);break;
  case "|\u25c0":line(c,5,5,5,19);line(c,18,5,8,12,18,19,18,5);break;
  case "\u25b6|":line(c,19,5,19,19);line(c,6,5,16,12,6,19,6,5);break;
  case "\u2161":line(c,8,5,8,19);line(c,16,5,16,19);break;

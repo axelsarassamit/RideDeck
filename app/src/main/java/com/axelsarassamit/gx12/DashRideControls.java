@@ -76,7 +76,7 @@ final class DashRideControls {
         page.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(16);
         page.setPadding(pad, pad, pad, pad);
-        page.setBackgroundColor(0xff101722);
+        page.setBackgroundColor(RideStyle.BACKGROUND);
         ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
                 | WindowInsetsCompat.Type.displayCutout());
@@ -120,7 +120,7 @@ final class DashRideControls {
             new int[] {android.R.attr.state_checked}, new int[] {}
         };
         autoRecord.setThumbTintList(new ColorStateList(switchStates,
-            new int[] {0xff087eff, 0xfff4f6fa}));
+            new int[] {RideTheme.accent(activity), RideStyle.TEXT}));
         autoRecord.setTrackTintList(new ColorStateList(switchStates,
             new int[] {0x66087eff, 0x55677686}));
         page.addView(autoRecord, new LinearLayout.LayoutParams(-1, dp(80)));
@@ -151,7 +151,7 @@ final class DashRideControls {
 
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(0xff101722);
+        scroll.setBackgroundColor(RideStyle.BACKGROUND);
         scroll.addView(page);
         dialog.setContentView(scroll);
         dialog.setOnDismissListener(d -> {
@@ -206,10 +206,10 @@ final class DashRideControls {
         view.setAllCaps(false);
         view.setTextSize(22);
         view.setMinHeight(dp(80));
-        view.setTextColor(Color.WHITE);
+        view.setTextColor(primary ? RideStyle.BACKGROUND : RideStyle.TEXT);
         GradientDrawable background = new GradientDrawable();
-        background.setColor(primary ? 0xff087eff : 0xff242f40);
-        background.setCornerRadius(dp(12));
+        background.setColor(primary ? RideTheme.accent(activity) : RideStyle.RAISED);
+        background.setCornerRadius(dp(8));
         view.setBackground(background);
         view.setPadding(dp(12), dp(8), dp(12), dp(8));
         return view;
@@ -236,7 +236,7 @@ final class DashRideControls {
         if (!dialog.isShowing()) {
             dialog.show();
             if (dialog.getWindow() != null) {
-                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0xff101722));
+                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(RideStyle.BACKGROUND));
                 dialog.getWindow().setLayout(-1, -1);
                 dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 ViewCompat.requestApplyInsets(dialog.getWindow().getDecorView());

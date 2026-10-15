@@ -1,0 +1,21 @@
+<resources>
+    <style name="RideDeckTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#6C94FF</item>
+        <item name="android:windowBackground">#0C111B</item>
+        <item name="android:colorBackground">#0C111B</item>
+        <item name="android:textColorPrimary">#F4F6FB</item>
+        <item name="android:textColorSecondary">#A3B2C9</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:alertDialogTheme">@style/RideDeckDialog</item>
+    </style>
+    <style name="RideDeckDialog" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#6C94FF</item>
+        <item name="android:colorBackground">#141D2B</item>
+        <item name="android:textColorPrimary">#F4F6FB</item>
+        <item name="android:textColorSecondary">#A3B2C9</item>
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+    </style>
+</resources>

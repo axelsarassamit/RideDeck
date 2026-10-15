@@ -4,6 +4,8 @@ import java.util.*;
 
 /** Pending notification previews, newest first. All data stays in memory. */
 public final class MessageInbox<T> {
+    /** Metadata only, shared with the Yamaha accessory indicator. */
+    public enum Indicator { UNAVAILABLE, CLEAR, PENDING }
     private static final class Entry<T> {
         final String app, key, fingerprint; final T value;
         Entry(String app, String key, String fingerprint, T value) {
@@ -17,10 +19,18 @@ public final class MessageInbox<T> {
         put(app, key, String.valueOf(value), value);
     }
     public synchronized void put(String app, String key, String fingerprint, T value) {
+        put(app, key, fingerprint, value, null);
+    }
+    /** Refresh action metadata without moving the message or invalidating an open reader. */
+    public synchronized void put(String app, String key, String fingerprint, T value,
+                                  java.util.function.BiConsumer<T, T> refresh) {
         String id = id(app, key);
         if (fingerprint.equals(seen.get(id))) return;
         Entry<T> old = entries.get(id);
-        if (old != null && old.fingerprint.equals(fingerprint)) return;
+        if (old != null && old.fingerprint.equals(fingerprint)) {
+            if (refresh != null) refresh.accept(old.value, value);
+            return;
+        }
         entries.remove(id); entries.put(id, new Entry<>(app, key, fingerprint, value));
         if (entries.size() > 100) entries.remove(entries.keySet().iterator().next());
     }
@@ -36,6 +46,11 @@ public final class MessageInbox<T> {
         List<T> result = new ArrayList<>();
         for (Entry<T> entry : entries.values()) result.add(entry.value);
         Collections.reverse(result); return result;
+    }
+    /** Uses the exact phone inbox selection and acknowledgement policy. */
+    public synchronized Indicator indicator(Set<String> apps, boolean sourceAvailable) {
+        if (!sourceAvailable) return Indicator.UNAVAILABLE;
+        return selected(apps).isEmpty() ? Indicator.CLEAR : Indicator.PENDING;
     }
     public synchronized void clear() { entries.clear(); seen.clear(); }
 }
