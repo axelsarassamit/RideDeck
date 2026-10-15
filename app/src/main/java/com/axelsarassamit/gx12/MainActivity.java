@@ -559,7 +559,7 @@ public class MainActivity extends android.app.Activity {
             timelineParams.bottomMargin = dp(6);
             music.addView(playbackTimeline, timelineParams);
         }
-        LinearLayout transport = new LinearLayout(this);
+        LinearLayout transport = new LinearLayout(this); transport.setBaselineAligned(false);
         previousButton = rideAction("|◀", false); previousButton.setContentDescription("Previous track");
         previousButton.setOnClickListener(v -> sendMedia(MediaAction.PREVIOUS));
         playPauseButton = rideAction("▶", true); playPauseButton.setContentDescription("Play or pause music");
@@ -567,11 +567,13 @@ public class MainActivity extends android.app.Activity {
         nextButton = rideAction("▶|", false); nextButton.setContentDescription("Next track");
         nextButton.setOnClickListener(v -> sendMedia(MediaAction.NEXT));
         transport.setGravity(Gravity.CENTER_VERTICAL);
-        transport.addView(previousButton, rideWeight(compact ? 56 : 64));
+        LinearLayout.LayoutParams previousParams = rideWeight(compact ? 56 : 64); previousParams.topMargin = 0;
+        transport.addView(previousButton, previousParams);
         LinearLayout.LayoutParams playParams = rideWeight(compact ? 56 : portrait ? 72 : 64);
-        playParams.weight = compact ? 1 : 1.3f;
+        playParams.weight = compact ? 1 : 1.3f; playParams.topMargin = 0;
         transport.addView(playPauseButton, playParams);
-        transport.addView(nextButton, rideWeight(compact ? 56 : 64)); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(180), -2) : new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams nextParams = rideWeight(compact ? 56 : 64); nextParams.topMargin = 0;
+        transport.addView(nextButton, nextParams); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(186), -2) : new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams musicParams = compact
             ? new LinearLayout.LayoutParams(-1, dp(72))
             : portrait ? new LinearLayout.LayoutParams(-1, 0, 0.9f)
