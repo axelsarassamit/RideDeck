@@ -14,24 +14,24 @@ public class DashDockPresentationTest {
     }
 
     @Test public void showsUnavailableWhenDashIsNotInstalled() {
-        assertEquals("Dash\nUnavailable", DashDockPresentation.label(false, false, false, false, false, false));
+        assertEquals("Dash\n! Unavailable", DashDockPresentation.label(false, false, false, false, false, false));
     }
 
     @Test public void showsDashWhenIdleAndStartingWhenCameraLaunches() {
         assertEquals("Dash", DashDockPresentation.label(true, false, false, false, false, false));
-        assertEquals("Dash\nStarting", DashDockPresentation.label(true, false, true, true, true, true));
+        assertEquals("Dash\nConnecting", DashDockPresentation.label(true, false, true, true, true, true));
     }
 
     @Test public void recordingHasRedRecLabelAndStoppedOrUnavailableStateIsClear() {
-        assertEquals("● REC", DashDockPresentation.label(true, true, false, true, true, true));
-        assertEquals("Dash\nStopped", DashDockPresentation.label(true, false, false, true, true, true));
-        assertEquals("Dash\nUnavailable", DashDockPresentation.label(true, false, false, true, false, true));
+        assertEquals("Dash\n● Recording", DashDockPresentation.label(true, true, false, true, true, true));
+        assertEquals("Dash\n■ Stopped", DashDockPresentation.label(true, false, false, true, true, true));
+        assertEquals("Dash\n! Unavailable", DashDockPresentation.label(true, false, false, true, false, true));
     }
 
     @Test public void onlyFreshStatusShowsRecording() {
-        assertEquals("Dash\nChecking", DashDockPresentation.label(true, true, false, true, true, false));
-        assertEquals("● REC", DashDockPresentation.label(true, true, false, true, true, true));
-        assertEquals("Dash\nStopped", DashDockPresentation.label(true, false, false, true, true, true));
+        assertEquals("Dash\nConnecting", DashDockPresentation.label(true, true, false, true, true, false));
+        assertEquals("Dash\n● Recording", DashDockPresentation.label(true, true, false, true, true, true));
+        assertEquals("Dash\n■ Stopped", DashDockPresentation.label(true, false, false, true, true, true));
     }
 
     @Test public void dockButtonContractKeepsSharedSizingAndShape() {

@@ -16,11 +16,11 @@ final class DashDockPresentation {
 
     static String label(boolean installed, boolean recording, boolean starting,
             boolean requestMade, boolean accepted, boolean freshStatus) {
-        if (!installed) return "Dash\nUnavailable";
-        if (requestMade && !freshStatus) return "Dash\nChecking";
-        if (recording) return "● REC";
-        if (starting) return "Dash\nStarting";
+        if (!installed) return "Dash\n! Unavailable";
+        if (requestMade && !freshStatus) return "Dash\nConnecting";
+        if (recording) return "Dash\n● Recording";
+        if (starting) return "Dash\nConnecting";
         if (!requestMade) return "Dash";
-        return accepted ? "Dash\nStopped" : "Dash\nUnavailable";
+        return accepted ? "Dash\n■ Stopped" : "Dash\n! Unavailable";
     }
 }

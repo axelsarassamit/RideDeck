@@ -4,10 +4,11 @@ import android.graphics.*;
 import android.widget.Button;
 public final class ControlIconButton extends Button {
  private String control; private final Paint ink=new Paint(Paint.ANTI_ALIAS_FLAG); private final boolean primary;
+ private boolean labelled(){return java.util.Arrays.asList("Yamaha","Map","Camera","Voice","Setup").contains(control);}
  public ControlIconButton(Context c,String label,boolean primary){super(c);this.primary=primary;control=label;setText("");setContentDescription(label);}
  public void setControl(String label){control=label;invalidate();}
  private void line(Canvas c,float... xy){Path p=new Path();p.moveTo(xy[0],xy[1]);for(int i=2;i<xy.length;i+=2)p.lineTo(xy[i],xy[i+1]);c.drawPath(p,ink);}
- @Override protected void onDraw(Canvas c){super.onDraw(c);float size=Math.min(32*getResources().getDisplayMetrics().density,Math.min(getWidth(),getHeight())*.6f);c.save();c.translate((getWidth()-size)/2,(getHeight()-size)/2);c.scale(size/24,size/24);ink.setColor(isEnabled()?(primary?AppearancePalette.onAccent(RideAppearance.isDark(getContext())):RideTheme.accent(getContext())):0xff738078);ink.setStyle(Paint.Style.STROKE);ink.setStrokeWidth(2);ink.setStrokeCap(Paint.Cap.ROUND);ink.setStrokeJoin(Paint.Join.ROUND);
+ @Override protected void onDraw(Canvas c){super.onDraw(c);float d=getResources().getDisplayMetrics().density;boolean caption=labelled();float size=Math.min((caption?26:32)*d,Math.min(getWidth(),getHeight())*.6f);c.save();c.translate((getWidth()-size)/2,caption?Math.max(3*d,(getHeight()-size-18*d)/2):(getHeight()-size)/2);c.scale(size/24,size/24);ink.setColor(isEnabled()?(primary?AppearancePalette.onAccent(RideAppearance.isDark(getContext())):RideTheme.accent(getContext())):0xff738078);ink.setStyle(Paint.Style.STROKE);ink.setStrokeWidth(2);ink.setStrokeCap(Paint.Cap.ROUND);ink.setStrokeJoin(Paint.Join.ROUND);
  switch(control){
  case "Map":Path p=new Path();p.moveTo(12,22);p.cubicTo(8,17,4,13,4,9);p.cubicTo(4,-1,20,-1,20,9);p.cubicTo(20,13,16,17,12,22);c.drawPath(p,ink);c.drawCircle(12,9,3,ink);break;
  case "Camera":line(c,2,7,7,7,9,4,15,4,17,7,22,7,22,20,2,20,2,7);c.drawCircle(12,13,4,ink);break;
@@ -22,5 +23,7 @@ public final class ControlIconButton extends Button {
  case "|\u25c0":line(c,5,5,5,19);line(c,18,5,8,12,18,19,18,5);break;
  case "\u25b6|":line(c,19,5,19,19);line(c,6,5,16,12,6,19,6,5);break;
  case "\u2161":line(c,8,5,8,19);line(c,16,5,16,19);break;
- default:line(c,7,4,19,12,7,20,7,4);break;}c.restore();}
+ default:line(c,7,4,19,12,7,20,7,4);break;}c.restore();
+ if(caption){ink.setStyle(Paint.Style.FILL);ink.setColor(isEnabled()?RideStyle.TEXT:RideStyle.MUTED);ink.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));ink.setTextSize(11*getResources().getDisplayMetrics().scaledDensity);ink.setTextAlign(Paint.Align.CENTER);String label=control;float room=getWidth()-8*d;while(label.length()>1&&ink.measureText(label)>room)label=label.substring(0,label.length()-1);c.drawText(label,getWidth()/2f,getHeight()-7*d,ink);ink.setTextAlign(Paint.Align.LEFT);}
+ }
 }

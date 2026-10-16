@@ -18,5 +18,6 @@ public final class AppearancePalette {
     public static int line(boolean dark) { return dark ? 0xff2b3a50 : 0xffc2ccda; }
     public static int text(boolean dark) { return dark ? 0xfff4f6fb : 0xff172237; }
     public static int muted(boolean dark) { return dark ? 0xffa3b2c9 : 0xff53637a; }
+    public static int danger(boolean dark) { return dark ? 0xffff8585 : 0xffb4232a; }
     public static int onAccent(boolean dark) { return dark ? 0xff0c111b : 0xffffffff; }
 }

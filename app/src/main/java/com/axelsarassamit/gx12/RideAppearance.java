@@ -39,7 +39,8 @@ public final class RideAppearance implements Application.ActivityLifecycleCallba
             }
         }
     }); }
-    public static void show(Activity a) {
+    public static void show(Activity a) { a.startActivity(new android.content.Intent(a,AppearanceActivity.class)); }
+    public static void showOptions(Activity a) {
         new AlertDialog.Builder(a).setTitle("Appearance")
             .setSingleChoiceItems(MODES,Math.max(0,Math.min(2,mode(a))),(dialog,which) -> {
                 prefs(a).edit().putInt("appearance_mode",which).apply();

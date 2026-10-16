@@ -69,6 +69,7 @@
         android:icon="@drawable/ridedeck_icon"
         android:theme="@style/RideDeckTheme"
         android:usesCleartextTraffic="false">
+        <activity android:name=".AppearanceActivity" android:exported="false" />
         <activity android:name=".SharedLocationActivity" android:exported="true" android:screenOrientation="portrait" android:label="${appLabel}">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

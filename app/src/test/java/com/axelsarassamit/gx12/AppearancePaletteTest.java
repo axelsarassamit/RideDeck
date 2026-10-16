@@ -9,6 +9,7 @@ public final class AppearancePaletteTest {
     }
     @Test public void allThemesKeepReadableTextAndPrimaryButtonContrast() {
         for(boolean dark:new boolean[]{false,true}) {
+            assertTrue(contrast(AppearancePalette.danger(dark),AppearancePalette.panel(dark))>=4.5);
             int bg=AppearancePalette.background(dark),panel=AppearancePalette.panel(dark);
             assertTrue(contrast(AppearancePalette.text(dark),bg)>=7);
             assertTrue(contrast(AppearancePalette.muted(dark),panel)>=4.5);

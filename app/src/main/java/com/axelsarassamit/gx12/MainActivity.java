@@ -629,7 +629,6 @@ public class MainActivity extends android.app.Activity {
         settings.setOnClickListener(v -> buildSetupScreen());
         if (!compact) header.addView(settings, new LinearLayout.LayoutParams(dp(80), dp(56)));
         String[] labels = new String[]{"Map", "Camera", "Voice"};
-        if (controlsRight) java.util.Collections.reverse(java.util.Arrays.asList(labels));
         for (String label : labels) {
             Button action = rideAction(label, false);
             if (label.equals("Map")) {
@@ -651,6 +650,7 @@ public class MainActivity extends android.app.Activity {
             gear.setMargins(dp(3), dp(4), dp(3), 0);
             dock.addView(settings, gear);
         }
+        RideStyle.mirrorActions(dock,controlsRight);
         LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(-1, -2); dp.topMargin = dp(8);
         root.addView(dock, dp);
         setContentView(root);
@@ -959,7 +959,7 @@ public class MainActivity extends android.app.Activity {
     }
     private void showPersonalization() {
         showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Appearance"}, (dialog, which) -> {
-            if (which == 7) RideAppearance.show(this);
+            if (which == 7 || which == 5) RideAppearance.show(this);
             else if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                 .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
                     RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
@@ -1434,7 +1434,7 @@ public class MainActivity extends android.app.Activity {
             String label = DashDockPresentation.label(dashInstalled, actualRecording, actualStarting,
                 dashRecordingRequestedAt > 0L, fresh && accepted, fresh);
             dashButton.setText(label);
-            dashButton.setTextColor(actualRecording ? 0xffff4c4c : RideStyle.TEXT);
+            dashButton.setTextColor(actualRecording ? RideStyle.DANGER : RideStyle.TEXT);
             dashButton.setContentDescription("RideDeck Dash. "
                 + (actualRecording ? "Recording. " : label.replace("\n", ". ") + ". ")
                 + "Open ride controls.");
@@ -1715,7 +1715,7 @@ public class MainActivity extends android.app.Activity {
         dashButton = rideAction("Dash", false);
         dashButton.setTextSize(DashDockPresentation.DOCK_BUTTON_TEXT_SIZE_SP);
         dashButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        dashButton.setSingleLine(true);
+        dashButton.setSingleLine(false); dashButton.setMaxLines(2); dashButton.setTextSize(13);
         // rideAction supplies the shared rounded charcoal shape and dock margins.
         dashButton.setContentDescription("RideDeck Dash. Open ride controls.");
         dashButton.setVisibility(dashInstalled ? View.VISIBLE : View.GONE);
