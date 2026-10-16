@@ -478,7 +478,6 @@ public class MainActivity extends android.app.Activity {
     }
 
 
-    private void buildAppDock() { buildScreen(); }
 
     private void buildScreen() {
         if (this instanceof SetupActivity) { buildSetupScreen(); return; }
@@ -703,9 +702,6 @@ public class MainActivity extends android.app.Activity {
         p.setMargins(dp(3), dp(4), dp(3), 0); return p;
     }
 
-    private LinearLayout.LayoutParams rideParams(int height) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(height)); p.topMargin = dp(8); return p;
-    }
 
 
     private GX12NotificationListener.NotificationPreview displayedMessage() {
@@ -715,18 +711,6 @@ public class MainActivity extends android.app.Activity {
         return messages.get(0);
     }
 
-    private void chooseMessageSource() {
-        String[] packages = RidePreferences.messagePackages(this);
-        java.util.List<String> names = new java.util.ArrayList<>(), choices = new java.util.ArrayList<>();
-        names.add("Latest from all apps"); choices.add(null);
-        java.util.Set<String> selected = RidePreferences.selectedMessages(this);
-        for (int i = 0; i < packages.length; i++) if (!packages[i].isEmpty() && selected.contains(packages[i])) {
-            names.add(RidePreferences.MESSAGE_NAMES[i]); choices.add(packages[i]);
-        }
-        new android.app.AlertDialog.Builder(this).setTitle("Message source")
-            .setItems(names.toArray(new String[0]), (dialog, which) -> { messageApp = choices.get(which); refreshWhatsAppPreview(); })
-            .setNegativeButton("Close", null).show();
-    }
 
     private void acknowledgeMessage(GX12NotificationListener.NotificationPreview item) {
         RideDeckDiagnostics.record(this, "Message seen/next requested available=" + (item != null));
@@ -1111,22 +1095,6 @@ public class MainActivity extends android.app.Activity {
         try { startActivity(launch); } catch (Exception e) { displayError("Could not open the selected app."); }
     }
 
-    private void showRideApps() {
-        java.util.ArrayList<String> labels = new java.util.ArrayList<>();
-        java.util.ArrayList<String> packages = new java.util.ArrayList<>();
-        labels.add("Spotify"); packages.add("com.spotify.music");
-        labels.add(RidePreferences.mapName(this)); packages.add(RidePreferences.selectedMap(this));
-        String[] chatPackages = RidePreferences.messagePackages(this);
-        for (int i = 0; i < chatPackages.length; i++) if (RidePreferences.selectedMessages(this).contains(chatPackages[i])) {
-            labels.add(RidePreferences.MESSAGE_NAMES[i]); packages.add(chatPackages[i]);
-        }
-
-        labels.add("Layout + apps"); packages.add("");
-        new android.app.AlertDialog.Builder(this).setTitle("Ride apps")
-            .setItems(labels.toArray(new String[0]), (dialog, which) -> {
-                if (packages.get(which).isEmpty()) showPersonalization(); else launchChosenApp(packages.get(which));
-            }).setNegativeButton("Close", null).show();
-    }
 
     private void readMessageAloud() {
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) { openNotificationAccess(); return; }
@@ -1153,21 +1121,8 @@ public class MainActivity extends android.app.Activity {
         }
     }
 
-    private Button dockButton(String title) {
-        Button b = button(title); b.setTextSize(15); b.setMinHeight(dp(76)); b.setPadding(dp(6), dp(6), dp(6), dp(6));
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(RideStyle.RAISED)); b.setTextColor(RideStyle.TEXT); return b;
-    }
 
-    private LinearLayout.LayoutParams dockButtonParams() {
-        LinearLayout.LayoutParams p = params(); p.topMargin = dp(10); return p;
-    }
 
-    private Button cockpitButton(String eyebrow, String label) {
-        Button b = button(eyebrow + "\n" + label);
-        b.setTextSize(17); b.setAllCaps(false); b.setMinHeight(dp(100)); b.setPadding(dp(8), dp(8), dp(8), dp(8));
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(RideStyle.RAISED)); b.setTextColor(RideStyle.TEXT);
-        return b;
-    }
 
     private void addCockpitCard(LinearLayout parent, String heading, View content) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14), dp(12), dp(14), dp(12));
@@ -1769,11 +1724,6 @@ public class MainActivity extends android.app.Activity {
         startActivity(intent);
     }
 
-    private void openSpotifyAdjacent() {
-        Intent spotify = getPackageManager().getLaunchIntentForPackage("com.spotify.music");
-        if (spotify == null) { openSpotify(); return; }
-        try { startAdjacent(spotify); } catch (Exception ignored) { openSpotify(); }
-    }
 
     private void openSpotify() {
         Intent spotify = getPackageManager().getLaunchIntentForPackage("com.spotify.music");
@@ -1796,12 +1746,6 @@ public class MainActivity extends android.app.Activity {
         catch (Exception ignored) { showRideMessage("WhatsApp is not available on this phone."); }
     }
 
-    private void openWhatsAppAdjacent() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage("com.whatsapp");
-        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("com.whatsapp.w4b");
-        if (launch == null) { openWhatsApp(); return; }
-        try { startAdjacent(launch); } catch (Exception ignored) { openWhatsApp(); }
-    }
 
     private void withHeadsetMicrophone(Runnable listen) {
         java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
@@ -1829,36 +1773,12 @@ public class MainActivity extends android.app.Activity {
         });
     }
 
-    private void setDestination() {
-        EditText destination = new EditText(this);
-        destination.setSingleLine(true);
-        destination.setHint("Place or address");
-        destination.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Find a destination")
-                .setView(destination)
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Open maps", (dialog, which) -> {
-                    String query = destination.getText().toString().trim();
-                    if (query.isEmpty()) { openMaps(); return; }
-                    Intent search = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)));
-                    search.setPackage("com.google.android.apps.maps");
-                    try { startActivity(search); } catch (Exception ignored) { showRideMessage("No maps app is available on this phone."); }
-                }).show();
-    }
 
     private void showRideMessage(String message) {
         if (trackStatus != null) trackStatus.setText(message);
         else android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
     }
 
-    private void addSection(LinearLayout parent, String heading, TextView content) {
-        TextView label = text(heading, 12, 0xff63768b, true);
-        LinearLayout.LayoutParams labelParams = params(); labelParams.topMargin = dp(23); parent.addView(label, labelParams);
-        LinearLayout.LayoutParams contentParams = params(); contentParams.topMargin = dp(7);
-        content.setPadding(dp(15), dp(14), dp(15), dp(14)); content.setBackgroundColor(0xffffffff); content.setGravity(Gravity.CENTER_VERTICAL);
-        parent.addView(content, contentParams);
-    }
 
     private void refreshDeviceStatus() {
         if (deviceStatus == null) return;
@@ -1970,7 +1890,6 @@ public class MainActivity extends android.app.Activity {
     private Button button(String label) { Button b = new Button(this); b.setText(label); b.setTextColor(RideStyle.TEXT); b.setAllCaps(false); b.setBackground(RideStyle.row(this)); return b; }
     private LinearLayout.LayoutParams params() { return new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); }
     private LinearLayout.LayoutParams buttonParams() { LinearLayout.LayoutParams p = params(); p.topMargin = dp(8); return p; }
-    private LinearLayout.LayoutParams weightedButtonParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1); p.setMargins(dp(2), dp(4), dp(2), dp(4)); return p; }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
 }
