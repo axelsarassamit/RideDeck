@@ -25,7 +25,8 @@ public final class RideQuietMode {
         String id = prefs.getString("rule", null);
         try {
             AutomaticZenRule rule = id == null ? null : manager.getAutomaticZenRule(id);
-            if (rule == null && visible > 0) {
+            boolean quiet = visible > 0 && GX12NotificationListener.activeCall == null;
+            if (rule == null && quiet) {
                 ZenPolicy policy = new ZenPolicy.Builder().disallowAllSounds()
                     .allowCalls(ZenPolicy.PEOPLE_TYPE_ANYONE).allowAlarms(true).allowMedia(true)
                     .hideAllVisualEffects().build();
@@ -36,10 +37,10 @@ public final class RideQuietMode {
                 prefs.edit().putString("rule", id).apply();
             }
             if (rule != null) {
-                rule.setEnabled(visible > 0);
+                rule.setEnabled(quiet);
                 manager.updateAutomaticZenRule(id, rule);
                 manager.setAutomaticZenRuleState(id, new Condition(CONDITION, "RideDeck visible",
-                    visible > 0 ? Condition.STATE_TRUE : Condition.STATE_FALSE));
+                    quiet ? Condition.STATE_TRUE : Condition.STATE_FALSE));
             }
         } catch (RuntimeException error) {
             android.util.Log.w("RideDeckQuiet", "Quiet mode unavailable", error);

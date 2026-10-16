@@ -9,3 +9,7 @@ Camera recording status combines words and symbols. Fresh recording is visually 
 Yamaha short landscape music gives metadata its own row above the playback controls. Long metadata is bounded and does not move the controls. Main controls retain at least 56 dp target height, with 64 dp normal action tiles.
 
 Brand artwork uses the original road-shaped R with rounded strokes, tight bounds and a transparent canvas. Header marks are large enough to read without a square tile. Dash speed, GPS and stabilization readouts remain transparent over the camera view. GX12 is not a visible product name; legacy Android identifiers remain compatible with installed apps.
+
+First launcher opening in a process may reveal the road-R and edition for 720 ms. The usable screen is built first; touch dismisses the reveal. Resumes, rotation, disabled animation, touch exploration, and detected calls skip it. No startup sound or invented readiness checks.
+
+Incoming calls use the current calling app notification and its own actions. RideDeck quiet mode pauses during detected calls, and reconciliation removes obsolete caller cards. Confirmed incoming calls may announce a supplied name once, while visible; numeric/private callers are not spoken. Audio follows Android routing and volume. Gmail, Outlook and Samsung Email can be selected as read-only message sources, with no reader or inline reply path.

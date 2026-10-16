@@ -15,12 +15,35 @@ public final class GX12NotificationListener extends NotificationListenerService 
     public static volatile NotificationPreview latestWhatsAppPreview;
     public static volatile NotificationPreview activeCall;
     private static int visibleActivities;
+    private static final java.util.LinkedHashMap<String,NotificationPreview> calls = new java.util.LinkedHashMap<>();
+    private static long lastCallRefresh;
+    public static void refreshCallsIfDue() {
+        GX12NotificationListener listener=connected; long now=android.os.SystemClock.elapsedRealtime();
+        if(listener!=null && now-lastCallRefresh>=1500){lastCallRefresh=now;listener.refreshActive();}
+    }
+    static void removeCall(android.content.Context context,String key) { synchronized(GX12NotificationListener.class){calls.remove(key);CallerAnnouncement.removed(key);} updateCallState(context); }
+    static void reconcileCalls(android.content.Context context,java.util.Set<String> live) { synchronized(GX12NotificationListener.class){for(String key:new java.util.ArrayList<>(calls.keySet())) if(!live.contains(key)) {calls.remove(key);CallerAnnouncement.removed(key);}} updateCallState(context); }
+    private static boolean isCall(Notification n) {
+        return n!=null && (Notification.CATEGORY_CALL.equals(n.category) ||
+            (n.extras!=null && "android.app.Notification$CallStyle".equals(n.extras.getString("android.template"))));
+    }
+    private static void updateCallState(android.content.Context context) {
+        NotificationPreview next=null;
+        synchronized(GX12NotificationListener.class) {
+            for(NotificationPreview item:calls.values()) if(next==null || item.incoming || !next.incoming) next=item;
+            boolean changed=(activeCall==null)!=(next==null);
+            activeCall=next;
+            if(connected!=null) connected.applyQuietMode();
+            if(changed) RideQuietMode.refresh(context);
+            CallerAnnouncement.update(context,next,visibleActivities>0);
+        }
+    }
     public static synchronized void activityVisible(boolean visible) {
         visibleActivities = Math.max(0, visibleActivities + (visible ? 1 : -1));
-        if (connected != null) connected.applyQuietMode();
+        if (connected != null) { connected.applyQuietMode(); CallerAnnouncement.update(connected,activeCall,visibleActivities>0); }
     }
     private void applyQuietMode() {
-        requestListenerHints(visibleActivities > 0 ? HINT_HOST_DISABLE_NOTIFICATION_EFFECTS : 0);
+        requestListenerHints(visibleActivities > 0 && activeCall == null ? HINT_HOST_DISABLE_NOTIFICATION_EFFECTS : 0);
     }
     private static final MessageInbox<NotificationPreview> previews = new MessageInbox<>();
     public static synchronized java.util.List<NotificationPreview> selectedPreviews(android.content.Context context) {
@@ -50,6 +73,9 @@ public final class GX12NotificationListener extends NotificationListenerService 
         public volatile android.app.PendingIntent open;
         public volatile boolean acknowledged;
         public Notification.Action[] callActions;
+        public boolean incoming;
+        public int callType;
+        public String callerName="";
         public android.app.PendingIntent markRead;
         public volatile ReplyAction reply;
         void refreshActions(NotificationPreview updated) {
@@ -73,7 +99,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
         }
     }
     private static void inspectAction(NotificationPreview preview, Notification.Action action) {
-        if (action == null) return;
+        if (action == null || RidePreferences.readOnlyEmail(preview.packageName)) return;
         int semantic = android.os.Build.VERSION.SDK_INT >= 28 ? action.getSemanticAction() : 0;
         if (semantic == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) preview.markRead = action.actionIntent;
         android.app.RemoteInput[] inputs = action.getRemoteInputs();
@@ -87,6 +113,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
     }
 
     private static void inspectInvisibleAction(NotificationPreview preview, androidx.core.app.NotificationCompat.Action action) {
+        if (RidePreferences.readOnlyEmail(preview.packageName)) return;
         androidx.core.app.RemoteInput[] compatInputs = action.getRemoteInputs();
         if (compatInputs == null || action.actionIntent == null) return;
         android.app.RemoteInput[] inputs = new android.app.RemoteInput[compatInputs.length];
@@ -117,7 +144,9 @@ public final class GX12NotificationListener extends NotificationListenerService 
             StatusBarNotification[] active = getActiveNotifications();
             if (active != null) {
                 java.util.Arrays.sort(active, java.util.Comparator.comparingLong(StatusBarNotification::getPostTime));
-                for (StatusBarNotification item : active) onNotificationPosted(item);
+                java.util.Set<String> live=new java.util.HashSet<>();
+                for (StatusBarNotification item : active) { if(isCall(item.getNotification())) live.add(item.getKey()); onNotificationPosted(item); }
+                reconcileCalls(this,live);
             }
         } catch (SecurityException ignored) { }
     }
@@ -155,12 +184,15 @@ public final class GX12NotificationListener extends NotificationListenerService 
         } catch (Exception error) { android.util.Log.w("RideDeckListener", "Listener recovery failed", error); }
     }
     public static void reloadSelected() { if (connected != null) connected.refreshActive(); }
-    @Override public void onDestroy() { if (connected == this) connected = null; super.onDestroy(); }
+    @Override public void onDestroy() { if (connected == this) connected = null; synchronized(GX12NotificationListener.class){calls.clear();activeCall=null;} CallerAnnouncement.close(); RideQuietMode.refresh(this); super.onDestroy(); }
 
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
+        try { consume(this,sbn); } catch (RuntimeException error) { android.util.Log.w("RideDeckCalls","Unsupported notification payload",error); }
+    }
+    static void consume(android.content.Context context, StatusBarNotification sbn) {
         if (sbn == null) return;
-        boolean call = Notification.CATEGORY_CALL.equals(sbn.getNotification().category);
-        if (!call && !RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
+        boolean call = isCall(sbn.getNotification());
+        if (!call && !RidePreferences.selectedMessages(context).contains(sbn.getPackageName())) return;
         Notification notification = sbn.getNotification();
         if (notification == null || (notification.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
         Bundle extras = notification.extras;
@@ -175,19 +207,30 @@ public final class GX12NotificationListener extends NotificationListenerService 
             body = last.getText();
             if (last.getPerson() != null && !TextUtils.isEmpty(last.getPerson().getName())) title = last.getPerson().getName();
         }
-        if (!TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
-            NotificationPreview preview = new NotificationPreview(title == null ? "Message" : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(this, sbn.getPackageName()));
+        if (call || !TextUtils.isEmpty(title) || !TextUtils.isEmpty(body)) {
+            NotificationPreview preview = new NotificationPreview(title == null ? (call ? "Caller unavailable" : "Message") : title.toString(), body == null ? "" : body.toString(), sbn.getKey(), notification.contentIntent, sbn.getPackageName(), RidePreferences.appName(context, sbn.getPackageName()));
             if (call) {
-                if (activeCall == null || !activeCall.key.equals(sbn.getKey())) RideDeckDiagnostics.record(this, "Call notification received actions=" + (notification.actions == null ? 0 : notification.actions.length));
+                if (activeCall == null || !activeCall.key.equals(sbn.getKey())) RideDeckDiagnostics.record(context, "Call notification received actions=" + (notification.actions == null ? 0 : notification.actions.length));
                 preview.callActions = notification.actions;
-                activeCall = preview;
+                preview.callType=extras==null?0:extras.getInt("android.callType",0);
+                boolean answer=false;
+                if(notification.actions!=null) for(Notification.Action action:notification.actions) {
+                    if(action==null) continue;
+                    String label=action.title==null?"":action.title.toString().toLowerCase(java.util.Locale.ROOT);
+                    if(label.matches(".*(answer|accept|svara|annehmen|รับสาย|ตอบรับ).*")) answer=true;
+                }
+                preview.incoming=IncomingCallPolicy.incoming(preview.callType,answer,notification.fullScreenIntent!=null,extras!=null && extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER,false));
+                android.app.Person person=android.os.Build.VERSION.SDK_INT>=28 && extras!=null?extras.getParcelable("android.callPerson"):null;
+                preview.callerName=IncomingCallPolicy.callerName(person!=null && person.getName()!=null?person.getName().toString():preview.title,preview.appName);
+                synchronized(GX12NotificationListener.class){calls.remove(preview.key);calls.put(preview.key,preview);}
+                updateCallState(context);
                 return;
             }
             if (notification.actions != null) for (Notification.Action action : notification.actions) inspectAction(preview, action);
             for (Notification.Action action : new Notification.WearableExtender(notification).getActions()) inspectAction(preview, action);
             for (androidx.core.app.NotificationCompat.Action action : androidx.core.app.NotificationCompat.getInvisibleActions(notification)) inspectInvisibleAction(preview, action);
             synchronized (GX12NotificationListener.class) {
-                if (!RidePreferences.selectedMessages(this).contains(sbn.getPackageName())) return;
+                if (!RidePreferences.selectedMessages(context).contains(sbn.getPackageName())) return;
                 previews.put(sbn.getPackageName(), sbn.getKey(), preview.title + "\n" + preview.text, preview, NotificationPreview::refreshActions);
                 latestWhatsAppPreview = preview;
             }
@@ -196,7 +239,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null) return;
-        if (activeCall != null && activeCall.key.equals(sbn.getKey())) { RideDeckDiagnostics.record(this, "Call notification removed"); activeCall = null; }
+        removeCall(this,sbn.getKey());
         synchronized (GX12NotificationListener.class) {
             // Retain the pending RideDeck message until Seen / next. The bike
             // indicator uses this same queue and must not clear independently.
@@ -211,6 +254,6 @@ public final class GX12NotificationListener extends NotificationListenerService 
     @Override public void onListenerDisconnected() {
         RideDeckDiagnostics.record(this, "Notification listener disconnected");
         if (connected == this) connected = null;
-        activeCall = null; clearPreviews(); super.onListenerDisconnected(); recover(this);
+        synchronized(GX12NotificationListener.class){calls.clear();activeCall=null;} CallerAnnouncement.close(); RideQuietMode.refresh(this); clearPreviews(); super.onListenerDisconnected(); recover(this);
     }
 }

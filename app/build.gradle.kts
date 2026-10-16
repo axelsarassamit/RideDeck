@@ -11,9 +11,10 @@ android {
         applicationId = "com.axelsarassamit.gx12"
         buildConfigField("String", "UPDATE_ASSET", "\"ridedeck-phone-release.apk\"")
         manifestPlaceholders["appLabel"] = "RideDeck"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
         targetSdk = 35
-        val releaseVersion = (System.getenv("GX12_VERSION_NAME") ?: "0.12.22").removePrefix("v")
+        val releaseVersion = (System.getenv("GX12_VERSION_NAME") ?: "0.12.23").removePrefix("v")
         val parts = releaseVersion.split(".")
         require(parts.size >= 2 && parts.take(3).all { it.all(Char::isDigit) }) {
             "GX12_VERSION_NAME must use numeric semver such as 0.1.0"
@@ -43,11 +44,14 @@ android {
     }
 
     buildTypes {
+        debug { applicationIdSuffix = ".preview"; manifestPlaceholders["appLabel"] = "RideDeck preview" }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
         }
     }
+
+    testBuildType = providers.gradleProperty("phoneTestVariant").orElse("debug").get()
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -65,4 +69,8 @@ dependencies {
     implementation("androidx.camera:camera-video:1.4.2")
     implementation("androidx.core:core:1.16.0")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

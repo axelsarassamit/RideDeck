@@ -49,6 +49,16 @@
         <package android:name="net.osmand" />
         <package android:name="net.osmand.plus" />
         <package android:name="app.organicmaps" />
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.microsoft.office.outlook" />
+        <package android:name="com.samsung.android.email.provider" />
+        <package android:name="com.android.phone" />
+        <package android:name="com.android.incallui" />
+        <package android:name="com.android.contacts" />
+        <package android:name="com.xiaomi.phone" />
+        <package android:name="com.google.android.dialer" />
+        <package android:name="com.samsung.android.dialer" />
+        <package android:name="com.microsoft.teams" />
     </queries>
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

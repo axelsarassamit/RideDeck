@@ -26,13 +26,13 @@ public final class RidePreferences {
         try { return context.getPackageManager().getApplicationLabel(context.getPackageManager().getApplicationInfo(pkg, 0)).toString(); }
         catch (Exception ignored) { return "Music player"; }
     }
-    public static final String[] MESSAGE_NAMES = {"WhatsApp", "WhatsApp Business", "LINE", "Messenger", "TikTok", "SMS", "Telegram", "Signal", "Instagram", "Viber", "Discord", "WeChat"};
+    public static final String[] MESSAGE_NAMES = {"WhatsApp", "WhatsApp Business", "LINE", "Messenger", "TikTok", "SMS", "Telegram", "Signal", "Instagram", "Viber", "Discord", "WeChat", "Gmail (read only)", "Outlook (read only)", "Samsung Email (read only)"};
     public static String[] messagePackages(Context context) {
         String sms = Telephony.Sms.getDefaultSmsPackage(context);
         String tiktok = "com.zhiliaoapp.musically";
         try { context.getPackageManager().getPackageInfo("com.ss.android.ugc.trill", 0); tiktok = "com.ss.android.ugc.trill"; }
         catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
-        return new String[]{"com.whatsapp", "com.whatsapp.w4b", "jp.naver.line.android", "com.facebook.orca", tiktok, sms == null ? "" : sms, "org.telegram.messenger", "org.thoughtcrime.securesms", "com.instagram.android", "com.viber.voip", "com.discord", "com.tencent.mm"};
+        return new String[]{"com.whatsapp", "com.whatsapp.w4b", "jp.naver.line.android", "com.facebook.orca", tiktok, sms == null ? "" : sms, "org.telegram.messenger", "org.thoughtcrime.securesms", "com.instagram.android", "com.viber.voip", "com.discord", "com.tencent.mm", "com.google.android.gm", "com.microsoft.office.outlook", "com.samsung.android.email.provider"};
     }
     public static Set<String> selectedMessages(Context context) {
         Set<String> selected = new HashSet<>(prefs(context).getStringSet("message_apps", new HashSet<>(Arrays.asList("com.whatsapp", "com.whatsapp.w4b"))));
@@ -41,11 +41,17 @@ public final class RidePreferences {
         }
         return selected;
     }
+    public static boolean readOnlyEmail(String pkg) { return java.util.Arrays.asList("com.google.android.gm","com.microsoft.office.outlook","com.samsung.android.email.provider").contains(pkg); }
     public static String appName(Context context, String pkg) {
         if (pkg.equals("com.zhiliaoapp.musically") || pkg.equals("com.ss.android.ugc.trill")) return "TikTok";
         String[] packages = messagePackages(context);
-        for (int i = 0; i < packages.length; i++) if (packages[i].equals(pkg)) return MESSAGE_NAMES[i];
-        return "Messages";
+        for (int i = 0; i < packages.length; i++) if (packages[i].equals(pkg)) return MESSAGE_NAMES[i].replace(" (read only)", "");
+        try { return context.getPackageManager().getApplicationLabel(context.getPackageManager().getApplicationInfo(pkg,0)).toString(); }
+        catch (android.content.pm.PackageManager.NameNotFoundException ignored) {
+            if(pkg.equals("com.microsoft.teams")) return "Teams";
+            if(pkg.contains("dialer") || pkg.contains("incall") || pkg.equals("com.android.phone")) return "Phone";
+            return "Messages";
+        }
     }
     public static final String[] MAP_NAMES = {"Google Maps", "Waze", "Grab Driver", "LINE MAN RIDER", "HERE WeGo", "Sygic", "MAPS.ME", "OsmAnd", "OsmAnd+", "Organic Maps"};
     public static final String[] MAP_PACKAGES = {"com.google.android.apps.maps", "com.waze", "com.grabtaxi.driver2", "com.linecorp.lineman.driver", "com.here.app.maps", "com.sygic.aura", "com.mapswithme.maps.pro", "net.osmand", "net.osmand.plus", "app.organicmaps"};

@@ -136,6 +136,7 @@ public class MainActivity extends android.app.Activity {
         else if ("android.app.action.AUTOMATIC_ZEN_RULE".equals(getIntent().getAction())) buildSetupScreen();
         else buildScreen();
         refreshDeviceStatus();
+        if (!(this instanceof SetupActivity)) StartupReveal.show(this,state,"Standard",RideStyle.BACKGROUND,RideTheme.accent(this),RideStyle.TEXT,()->GX12NotificationListener.activeCall!=null || getSystemService(android.media.AudioManager.class).getMode()!=android.media.AudioManager.MODE_NORMAL);
     }
 
     @Override protected void onStart() {
@@ -160,6 +161,7 @@ public class MainActivity extends android.app.Activity {
     private boolean compactCall;
     private GX12NotificationListener.NotificationPreview renderedCall;
     private void refreshCallPanel() {
+        GX12NotificationListener.refreshCallsIfDue();
         if (callPanel == null) return;
         GX12NotificationListener.NotificationPreview call = GX12NotificationListener.activeCall;
         if (messagePanel != null) messagePanel.setVisibility(call == null ? View.VISIBLE : View.GONE);
@@ -168,14 +170,16 @@ public class MainActivity extends android.app.Activity {
         callPanel.removeAllViews();
         callPanel.setVisibility(call == null ? View.GONE : View.VISIBLE);
         if (call == null) return;
-        TextView caller = text(call.appName + " - " + call.title + "\n" + call.text, compactCall ? 16 : 20, 0xff14200b, true);
+        if (headsetMic != null) headsetMic.release();
+        if (speech != null) speech.stop();
+        TextView caller = text(IncomingCallPolicy.heading(call.incoming,call.callType) + " · " + call.appName + "\n" + (call.callerName.isEmpty()?call.title:call.callerName), compactCall ? 18 : 24, RideStyle.TEXT, true);
         caller.setMaxLines(compactCall ? 2 : 4);
         caller.setEllipsize(android.text.TextUtils.TruncateAt.END);
         callPanel.addView(caller, compactCall ? new LinearLayout.LayoutParams(0, -2, 1)
             : new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout actions = new LinearLayout(this);
         if (call.callActions != null) for (android.app.Notification.Action action : call.callActions) {
-            if (action.actionIntent == null || action.getRemoteInputs() != null) continue;
+            if (action == null || action.actionIntent == null || action.getRemoteInputs() != null) continue;
             Button control = rideAction(action.title == null ? "Call control" : action.title.toString(), false);
             control.setOnClickListener(v -> {
                 if (GX12NotificationListener.activeCall != call) return;
@@ -186,9 +190,10 @@ public class MainActivity extends android.app.Activity {
             });
             actions.addView(control, rideWeight(56));
         }
-        if (call.open != null && actions.getChildCount() == 0) {
+        if (call.open != null) {
             Button open = rideAction("Open call", true);
             open.setOnClickListener(v -> {
+                if (GX12NotificationListener.activeCall != call) return;
                 try { call.open.send(); } catch (android.app.PendingIntent.CanceledException ignored) { }
             });
             actions.addView(open, rideWeight(56));
@@ -326,6 +331,11 @@ public class MainActivity extends android.app.Activity {
                 .setNegativeButton("Close", null).show());
             page.addView(quiet, buttonParams());
         }
+        CheckBox announceCallers = new CheckBox(this); announceCallers.setText("Announce incoming caller names"); announceCallers.setTextColor(RideStyle.TEXT); announceCallers.setTextSize(16);
+        announceCallers.setChecked(RidePreferences.prefs(this).getBoolean("announce_callers",true));
+        announceCallers.setOnCheckedChangeListener((button,checked)->RidePreferences.prefs(this).edit().putBoolean("announce_callers",checked).apply());
+        page.addView(announceCallers,buttonParams());
+        page.addView(text("Names only, never phone numbers. Uses the current audio output and volume. RideDeck quiet mode pauses during calls. Email previews are read only.",14,RideStyle.MUTED,false));
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
         LinearLayout permissionPage = page;
@@ -584,7 +594,7 @@ public class MainActivity extends android.app.Activity {
         mediaSlot.addView(music, new android.widget.FrameLayout.LayoutParams(-1, -1));
         callPanel = rideCard("");
         callPanel.removeAllViews();
-        callPanel.setBackground(rideBackground(0xffd2ff79, 18));
+        callPanel.setBackground(RideStyle.surface(this, RideStyle.RAISED, 8, true));
         compactCall = compact;
         if (compact) callPanel.setPadding(dp(8), dp(4), dp(8), dp(4));
         callPanel.setOrientation(compact ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
@@ -744,15 +754,16 @@ public class MainActivity extends android.app.Activity {
             acknowledgeMessage(item); reader.dismiss();
             if (displayedMessage() != null) showFullMessage();
         });
-        Button reply = rideAction("Reply", true); reply.setEnabled(item != null);
-        reply.setOnClickListener(v -> { reader.dismiss(); replyByVoice(item); }); actions.addView(reply, rideWeight(72));
+        Button reply = rideAction("Reply", true); reply.setEnabled(item != null && !RidePreferences.readOnlyEmail(item.packageName));
+        reply.setVisibility(item != null && RidePreferences.readOnlyEmail(item.packageName) ? View.GONE : View.VISIBLE);
+        reply.setOnClickListener(v -> { reader.dismiss(); replyByVoice(item); }); if(item==null || !RidePreferences.readOnlyEmail(item.packageName)) actions.addView(reply, rideWeight(72));
         Button aloud = rideAction("Read aloud", false); aloud.setEnabled(item != null);
         aloud.setOnClickListener(v -> readMessageAloud(item)); actions.addView(aloud, rideWeight(72)); actions.addView(read, rideWeight(72));
         if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
             LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
-            for (int row = 0; row < 2; row++) {
+            while (actions.getChildCount()>0) {
                 LinearLayout pair = new LinearLayout(this);
-                for (int column = 0; column < 2; column++) {
+                for (int column = 0; column < 2 && actions.getChildCount()>0; column++) {
                     android.view.View action = actions.getChildAt(0); actions.removeViewAt(0); pair.addView(action, rideWeight(72));
                 } rows.addView(pair);
             } page.addView(rows);
@@ -790,7 +801,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void replyByVoice(GX12NotificationListener.NotificationPreview target) {
-        if (target == null) return;
+        if (target == null || RidePreferences.readOnlyEmail(target.packageName)) return;
         GX12NotificationListener.reloadSelected();
         if (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1) {
             new android.app.AlertDialog.Builder(this).setTitle("Voice message in " + target.appName)
@@ -817,6 +828,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void confirmVoiceReply(GX12NotificationListener.NotificationPreview target, String words) {
+        if (target == null || RidePreferences.readOnlyEmail(target.packageName)) return;
         GX12NotificationListener.reloadSelected();
         if (voiceReplyReview != null) voiceReplyReview.dismiss();
         android.app.Dialog dialog = new android.app.Dialog(this);
@@ -943,7 +955,7 @@ public class MainActivity extends android.app.Activity {
         } dialog.show();
     }
     private void showPersonalization() {
-        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messaging apps (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Appearance"}, (dialog, which) -> {
+        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messages and email (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Appearance"}, (dialog, which) -> {
             if (which == 7 || which == 5) RideAppearance.show(this);
             else if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                 .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
@@ -1068,7 +1080,7 @@ public class MainActivity extends android.app.Activity {
         java.util.Set<String> selected = RidePreferences.selectedMessages(this);
         boolean[] checked = new boolean[packages.length];
         for (int i = 0; i < packages.length; i++) checked[i] = selected.contains(packages[i]);
-        new android.app.AlertDialog.Builder(this).setTitle("Choose message previews")
+        new android.app.AlertDialog.Builder(this).setTitle("Choose messages and read-only email")
             .setMultiChoiceItems(RidePreferences.MESSAGE_NAMES, checked, (dialog, which, enabled) -> checked[which] = enabled)
             .setNegativeButton("Cancel", null).setPositiveButton("Save", (dialog, which) -> {
                 java.util.Set<String> enabled = new java.util.HashSet<>();
@@ -1236,7 +1248,7 @@ public class MainActivity extends android.app.Activity {
         }
         new android.app.AlertDialog.Builder(this)
         .setTitle("Music controls and selected messages")
-                .setMessage("Android Notification access is a broad, sensitive permission. If enabled, this app reads Spotify playback details, new notifications from your selected messaging apps, and call notifications from calling apps so it can show their call controls. Notifications may include alerts beyond chats. It ignores unselected apps' notification text except call notifications, keeps the preview temporarily on this phone, and never uploads it. You can revoke access in Android Settings. On some phones, first open App info, tap ⋮, and choose Allow restricted settings.")
+                .setMessage("Android Notification access is a broad, sensitive permission. If enabled, this app reads Spotify playback details, new notifications from your selected messaging and email apps, and call notifications from calling apps so it can show their call controls. Notifications may include alerts beyond chats. It ignores unselected apps' notification text except call notifications, keeps the preview temporarily on this phone, and never uploads it. You can revoke access in Android Settings. On some phones, first open App info, tap ⋮, and choose Allow restricted settings.")
                 .setNegativeButton("Not now", null)
                 .setNeutralButton("App info", (dialog, which) -> {
                     Intent appInfo = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
