@@ -1089,11 +1089,6 @@ public class MainActivity extends android.app.Activity {
             }).setNegativeButton("Cancel", null).show();
     }
 
-    private void launchChosenApp(String pkg) {
-        Intent launch = getPackageManager().getLaunchIntentForPackage(pkg);
-        if (launch == null) { displayError("This app is not installed or does not expose a launch screen."); return; }
-        try { startActivity(launch); } catch (Exception e) { displayError("Could not open the selected app."); }
-    }
 
 
     private void readMessageAloud() {
@@ -1701,11 +1696,6 @@ public class MainActivity extends android.app.Activity {
         android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
     }
 
-    private void openMaps() {
-        Intent maps = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q="));
-        maps.setPackage("com.google.android.apps.maps");
-        try { startActivity(maps); } catch (Exception ignored) { showRideMessage("No maps app is available on this phone."); }
-    }
 
     private void openMapsAdjacent() {
         Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
@@ -1725,26 +1715,8 @@ public class MainActivity extends android.app.Activity {
     }
 
 
-    private void openSpotify() {
-        Intent spotify = getPackageManager().getLaunchIntentForPackage("com.spotify.music");
-        if (spotify != null) {
-            try { startActivity(spotify); return; } catch (Exception ignored) { }
-        }
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com")));
-        } catch (Exception ignored) {
-            showRideMessage("Spotify is not installed and no browser is available.");
-        }
-    }
 
 
-    private void openWhatsApp() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage("com.whatsapp");
-        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("com.whatsapp.w4b");
-        if (launch != null) { try { startActivity(launch); return; } catch (Exception ignored) { } }
-        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/"))); }
-        catch (Exception ignored) { showRideMessage("WhatsApp is not available on this phone."); }
-    }
 
 
     private void withHeadsetMicrophone(Runnable listen) {
