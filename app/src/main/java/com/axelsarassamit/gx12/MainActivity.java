@@ -501,10 +501,11 @@ public class MainActivity extends android.app.Activity {
         });
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         android.widget.ImageView logo = new android.widget.ImageView(this);
-        logo.setImageResource(R.drawable.ridedeck_icon);
+        logo.setImageResource(R.drawable.ridedeck_brand);
+        logo.setColorFilter(RideTheme.accent(this));
         android.widget.FrameLayout logoSlot = new android.widget.FrameLayout(this);
         logo.setContentDescription("RideDeck");
-        logoSlot.addView(logo, new android.widget.FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER));
+        logoSlot.addView(logo, new android.widget.FrameLayout.LayoutParams(dp(56), dp(52), Gravity.CENTER));
         header.addView(logoSlot, new LinearLayout.LayoutParams(dp(80), dp(64)));
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
         ((android.widget.TextClock) clock).setFormat12Hour("h:mm");
