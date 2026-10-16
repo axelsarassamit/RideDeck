@@ -35,7 +35,6 @@ public class DashDockPresentationTest {
     }
 
     @Test public void dockButtonContractKeepsSharedSizingAndShape() {
-        assertEquals(0xff1c293b, DashDockPresentation.DOCK_BUTTON_COLOR);
         assertEquals(8, DashDockPresentation.DOCK_BUTTON_CORNER_DP);
         assertEquals(16, DashDockPresentation.DOCK_BUTTON_TEXT_SIZE_SP);
         assertEquals(56, DashDockPresentation.DOCK_COMPACT_HEIGHT_DP);

@@ -2,7 +2,6 @@ package com.axelsarassamit.gx12;
 
 final class DashDockPresentation {
     // Shared dock-button contract for Standard and Yamaha hosts.
-    static final int DOCK_BUTTON_COLOR = RideStyle.RAISED;
     static final int DOCK_BUTTON_CORNER_DP = 8;
     static final int DOCK_BUTTON_TEXT_SIZE_SP = 16;
     static final int DOCK_HEIGHT_DP = 64;

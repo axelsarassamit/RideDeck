@@ -9,11 +9,11 @@ public final class MusicArtworkDrawable extends Drawable {
     @Override public void draw(Canvas c) {
         Rect r = getBounds(); float s = Math.min(r.width(), r.height());
         c.save(); c.translate(r.centerX() - s/2, r.centerY() - s/2); c.scale(s/100, s/100);
-        ink.setStyle(Paint.Style.FILL); ink.setColor(0xff22334d);
+        ink.setStyle(Paint.Style.FILL); ink.setColor(RideStyle.RAISED);
         c.drawRoundRect(0, 0, 100, 100, 8, 8, ink);
-        ink.setStyle(Paint.Style.STROKE); ink.setColor(0xff3a5275); ink.setStrokeWidth(1);
+        ink.setStyle(Paint.Style.STROKE); ink.setColor(RideStyle.LINE); ink.setStrokeWidth(1);
         for (int radius : new int[]{25, 34, 43, 52}) c.drawCircle(50, 50, radius, ink);
-        ink.setColor(0xffd8e5ff); ink.setStrokeWidth(4); ink.setStrokeCap(Paint.Cap.ROUND);
+        ink.setColor(RideStyle.MUTED); ink.setStrokeWidth(4); ink.setStrokeCap(Paint.Cap.ROUND);
         Path note = new Path(); note.moveTo(40, 67); note.lineTo(40, 36); note.lineTo(66, 30); note.lineTo(66, 60); c.drawPath(note, ink);
         ink.setStyle(Paint.Style.FILL); c.drawOval(28, 61, 42, 71, ink); c.drawOval(54, 54, 68, 64, ink);
         c.restore();

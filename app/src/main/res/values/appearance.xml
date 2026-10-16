@@ -1,0 +1,22 @@
+<resources>
+<style name="RideDark0" parent="RideDeckTheme"><item name="android:colorAccent">#C3F77A</item><item name="android:alertDialogTheme">@style/RideDarkDialog0</item></style>
+<style name="RideDarkDialog0" parent="RideDeckDialog"><item name="android:colorAccent">#C3F77A</item></style>
+<style name="RideDark1" parent="RideDeckTheme"><item name="android:colorAccent">#90C8FF</item><item name="android:alertDialogTheme">@style/RideDarkDialog1</item></style>
+<style name="RideDarkDialog1" parent="RideDeckDialog"><item name="android:colorAccent">#90C8FF</item></style>
+<style name="RideDark2" parent="RideDeckTheme"><item name="android:colorAccent">#FFC464</item><item name="android:alertDialogTheme">@style/RideDarkDialog2</item></style>
+<style name="RideDarkDialog2" parent="RideDeckDialog"><item name="android:colorAccent">#FFC464</item></style>
+<style name="RideDark3" parent="RideDeckTheme"><item name="android:colorAccent">#EEF2F6</item><item name="android:alertDialogTheme">@style/RideDarkDialog3</item></style>
+<style name="RideDarkDialog3" parent="RideDeckDialog"><item name="android:colorAccent">#EEF2F6</item></style>
+<style name="RideDark4" parent="RideDeckTheme"><item name="android:colorAccent">#6C94FF</item><item name="android:alertDialogTheme">@style/RideDarkDialog4</item></style>
+<style name="RideDarkDialog4" parent="RideDeckDialog"><item name="android:colorAccent">#6C94FF</item></style>
+<style name="RideLight0" parent="RideDeckLightTheme"><item name="android:colorAccent">#466B10</item><item name="android:alertDialogTheme">@style/RideLightDialog0</item></style>
+<style name="RideLightDialog0" parent="RideDeckLightDialog"><item name="android:colorAccent">#466B10</item></style>
+<style name="RideLight1" parent="RideDeckLightTheme"><item name="android:colorAccent">#126491</item><item name="android:alertDialogTheme">@style/RideLightDialog1</item></style>
+<style name="RideLightDialog1" parent="RideDeckLightDialog"><item name="android:colorAccent">#126491</item></style>
+<style name="RideLight2" parent="RideDeckLightTheme"><item name="android:colorAccent">#875400</item><item name="android:alertDialogTheme">@style/RideLightDialog2</item></style>
+<style name="RideLightDialog2" parent="RideDeckLightDialog"><item name="android:colorAccent">#875400</item></style>
+<style name="RideLight3" parent="RideDeckLightTheme"><item name="android:colorAccent">#465467</item><item name="android:alertDialogTheme">@style/RideLightDialog3</item></style>
+<style name="RideLightDialog3" parent="RideDeckLightDialog"><item name="android:colorAccent">#465467</item></style>
+<style name="RideLight4" parent="RideDeckLightTheme"><item name="android:colorAccent">#345CC4</item><item name="android:alertDialogTheme">@style/RideLightDialog4</item></style>
+<style name="RideLightDialog4" parent="RideDeckLightDialog"><item name="android:colorAccent">#345CC4</item></style>
+</resources>

@@ -5,6 +5,7 @@ import android.app.Application
 class RideDeckApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        RideAppearance.install(this)
         clearLegacyNavigationSettings()
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->

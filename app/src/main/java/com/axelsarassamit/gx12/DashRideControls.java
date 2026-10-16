@@ -114,7 +114,7 @@ final class DashRideControls {
         autoRecord = new Switch(activity);
         autoRecord.setText("Record with Dash");
         autoRecord.setTextSize(22);
-        autoRecord.setTextColor(Color.WHITE);
+        autoRecord.setTextColor(RideStyle.TEXT);
         autoRecord.setMinHeight(dp(80));
         int[][] switchStates = new int[][] {
             new int[] {android.R.attr.state_checked}, new int[] {}
@@ -193,7 +193,7 @@ final class DashRideControls {
     private TextView text(int size, boolean bold) {
         TextView view = new TextView(activity);
         view.setTextSize(size);
-        view.setTextColor(Color.WHITE);
+        view.setTextColor(RideStyle.TEXT);
         view.setTypeface(android.graphics.Typeface.DEFAULT,
             bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
         view.setPadding(0, 0, 0, dp(12));
@@ -206,7 +206,7 @@ final class DashRideControls {
         view.setAllCaps(false);
         view.setTextSize(22);
         view.setMinHeight(dp(80));
-        view.setTextColor(primary ? RideStyle.BACKGROUND : RideStyle.TEXT);
+        view.setTextColor(primary ? AppearancePalette.onAccent(RideAppearance.isDark(activity)) : RideStyle.TEXT);
         GradientDrawable background = new GradientDrawable();
         background.setColor(primary ? RideTheme.accent(activity) : RideStyle.RAISED);
         background.setCornerRadius(dp(8));
@@ -273,7 +273,7 @@ final class DashRideControls {
 
     void setPreviewStatus(String message, boolean recording) {
         previewState.setText(message == null ? "" : message);
-        previewState.setTextColor(recording ? 0xffff4c4c : Color.WHITE);
+        previewState.setTextColor(recording ? 0xffff4c4c : RideStyle.TEXT);
     }
 
     void setPreviewFrames(Bitmap rearFrame, Bitmap frontFrame) {
@@ -295,7 +295,7 @@ final class DashRideControls {
         boolean recording = available && state.rideActive && state.recording && state.recordingStatusFresh;
         boolean starting = state.recordingStatusFresh && state.starting;
         title.setText(recording ? "● REC\nRecording" : available ? "RideDeck Dash" : "Ride session");
-        title.setTextColor(recording ? 0xffff4c4c : Color.WHITE);
+        title.setTextColor(recording ? 0xffff4c4c : RideStyle.TEXT);
         long seconds = Math.max(0, state.elapsedMillis / 1000L);
         String time = String.format(java.util.Locale.US, "%02d:%02d:%02d",
             seconds / 3600L, (seconds / 60L) % 60L, seconds % 60L);

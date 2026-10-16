@@ -28,16 +28,16 @@ public final class QuickCameraActivity extends ComponentActivity {
     private Recording recording;
 
     @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
+        RideAppearance.prepare(this); super.onCreate(state);
         front = state == null ? getIntent().getBooleanExtra("front", false) : state.getBoolean("front");
         video = state == null ? getIntent().getBooleanExtra("video", false) : state.getBoolean("video");
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xff101419); root.setPadding(dp(12), dp(12), dp(12), dp(12));
+        root.setBackgroundColor(RideStyle.BACKGROUND); root.setPadding(dp(12), dp(12), dp(12), dp(12));
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
             view.setPadding(edges.left + dp(12), edges.top + dp(12), edges.right + dp(12), edges.bottom + dp(12)); return insets;
         });
-        status = new TextView(this); status.setTextColor(0xfff4f6fa); status.setTextSize(18); status.setGravity(Gravity.CENTER);
+        status = new TextView(this); status.setTextColor(RideStyle.TEXT); status.setTextSize(18); status.setGravity(Gravity.CENTER);
         root.addView(status);
         preview = new PreviewView(this);
         preview.setContentDescription("Tap camera preview to capture a photo or start or stop recording");

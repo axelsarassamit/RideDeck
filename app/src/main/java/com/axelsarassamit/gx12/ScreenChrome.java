@@ -19,7 +19,7 @@ public final class ScreenChrome {
         }
         WindowCompat.setDecorFitsSystemWindows(window, false);
         WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(window, window.getDecorView());
-        bars.setAppearanceLightStatusBars(false); bars.setAppearanceLightNavigationBars(false);
+        bars.setAppearanceLightStatusBars(!RideAppearance.isDark(window.getContext())); bars.setAppearanceLightNavigationBars(!RideAppearance.isDark(window.getContext()));
         bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         if (immersive) bars.hide(WindowInsetsCompat.Type.systemBars());
         else bars.show(WindowInsetsCompat.Type.systemBars());

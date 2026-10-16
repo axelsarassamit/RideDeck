@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
 class SharedLocationActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     override fun onCreate(state: Bundle?) {
-        super.onCreate(state)
+        RideAppearance.prepare(this); super.onCreate(state)
         RideDeckDiagnostics.record(this, "Shared destination received")
         val text = if (intent.action == Intent.ACTION_SEND) intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() else null
         if (text.isNullOrBlank() || text.length > 12000) { fail("Share a place from Google Maps to RideDeck."); return }
