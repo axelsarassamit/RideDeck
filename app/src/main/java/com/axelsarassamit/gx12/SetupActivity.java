@@ -1,4 +1,4 @@
 package com.axelsarassamit.gx12;
 
-/** A separate portrait task keeps Setup out of the riding screen and split view. */
+/** A separate parked setup task keeps Setup out of the riding screen and split view. */
 public final class SetupActivity extends MainActivity { }

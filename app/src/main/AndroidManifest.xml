@@ -88,7 +88,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".SetupActivity" android:exported="true"
-            android:screenOrientation="portrait" android:resizeableActivity="false"
+            android:screenOrientation="user" android:resizeableActivity="true"
             android:taskAffinity="${applicationId}.setup" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />

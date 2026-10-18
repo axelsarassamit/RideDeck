@@ -125,6 +125,7 @@ public class MainActivity extends android.app.Activity {
 
     @Override protected void onCreate(Bundle state) {
         RideAppearance.prepare(this); super.onCreate(state);
+        setupState = state;
         if (state != null && state.getBoolean("dash_recording_requested", false))
             dashRecordingRequestedAt = android.os.SystemClock.elapsedRealtime();
         Object retained = getLastNonConfigurationInstance();
@@ -274,6 +275,8 @@ public class MainActivity extends android.app.Activity {
         if (focused) ScreenChrome.apply(getWindow(), !setupVisible);
     }
 
+    private SetupMenu setupMenu;
+    private Bundle setupState;
     private boolean refreshAfterSetup;
     private void buildSetupScreen() {
         if (!(this instanceof SetupActivity)) {
@@ -285,20 +288,16 @@ public class MainActivity extends android.app.Activity {
         trackArtist = null; musicSource = null; playbackTimeline = null;
         albumArt = null; messagePreview = null; messageSource = null; dockMessage = null;
         trackStatus = null; previousButton = null; playPauseButton = null; nextButton = null;
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(RideStyle.BACKGROUND); root.setPadding(dp(16), dp(16), dp(16), dp(16));
-        LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text("Setup", 30, RideStyle.TEXT, true);
-        header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        Button back = rideAction("Done", false); back.setOnClickListener(v -> finish());
-        header.addView(back, new LinearLayout.LayoutParams(dp(88), dp(56))); root.addView(header);
+        if (setupMenu != null) { setupState = new Bundle(); setupMenu.save(setupState); }
+        setupMenu = new SetupMenu(this, "RideDeck", RideTheme.accent(this), false, setupState, this::finish);
         LinearLayout sections = new LinearLayout(this); sections.setOrientation(LinearLayout.VERTICAL);
-        sections.addView(text("RideDeck", 16, RideTheme.accent(this), true));
-        TextView parked = text("Make changes while parked", 14, RideStyle.MUTED, false);
-        parked.setPadding(0, dp(4), 0, dp(16)); sections.addView(parked);
+        setupMenu.add("screen", "General", "Screen & layout", "Light or dark, colours and control placement");
+        setupMenu.add("audio", "General", "Headset & sound", "Bluetooth connection and music player");
+        setupMenu.add("power", "General", "Background & power", "Screen awake and background access");
+        setupMenu.add("help", "General", "Help & app", "Permissions, app information and updates");
+        setupMenu.add("calls", "Ride", "Calls & messages", "Caller announcements, messages and read-only email");
+        setupMenu.add("navigation", "Ride", "Navigation", "Your external map app and split screen");
         LinearLayout page = setupGroup(sections, "Navigation", "Choose the map app for split screen", false);
-        Button personalize = button("CUSTOMIZATION"); personalize.setOnClickListener(v -> showPersonalization());
-        // Customization is presented in its own section below.
         page.addView(text("Phone navigation with your chosen map app", 16, RideStyle.TEXT, true));
         Button navigation = button("CHOOSE MAP APP");
         navigation.setOnClickListener(v -> chooseMapApp());
@@ -319,8 +318,21 @@ public class MainActivity extends android.app.Activity {
             page.addView(text("Dash recording uses its own camera settings and power checks. RideDeck shows a live angle preview.", 14, RideStyle.MUTED, false));
         }
         page = setupGroup(sections, "Cockpit appearance", "Music player, colours, messages and control placement", false);
-        page.addView(personalize, buttonParams());
+        setupAction(page, "Appearance and colour theme", () -> RideAppearance.show(this));
+        setupAction(page, "Phone mount", () -> choosePersonalization(0));
+        setupAction(page, "Panel placement", () -> showLayoutChoice());
+        page = setupGroup(sections, "Keep running", "Screen awake and background access", false);
+        page.addView(text("RideDeck keeps the screen awake while open. Manage background access in your phone's app settings.", 14, RideStyle.MUTED, false));
+        setupAction(page, "Phone app settings", () -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
         page = setupGroup(sections, "Permissions & quiet mode", "Music and messages, notifications and interruption control", false);
+        CheckBox announceCallers = new CheckBox(this); announceCallers.setText("Announce incoming caller names"); announceCallers.setTextColor(RideStyle.TEXT); announceCallers.setTextSize(16);
+        announceCallers.setChecked(RidePreferences.prefs(this).getBoolean("announce_callers",true));
+        announceCallers.setOnCheckedChangeListener((button,checked)->RidePreferences.prefs(this).edit().putBoolean("announce_callers",checked).apply());
+        page.addView(announceCallers,buttonParams());
+        page.addView(text("Names only, never phone numbers. Uses the current audio output and volume. RideDeck quiet mode pauses during calls. Email previews are read only.",14,RideStyle.MUTED,false));
+        setupAction(page, "Messages and read-only email", () -> chooseMessageApps());
+        setupAction(page, "Reply method", () -> choosePersonalization(3));
+        page = setupGroup(sections, "App & updates", "Permissions and app information", false);
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
             Button quiet = button(nm.isNotificationPolicyAccessGranted() ? "QUIET MODE ENABLED" : "ENABLE QUIET MODE");
@@ -331,15 +343,11 @@ public class MainActivity extends android.app.Activity {
                 .setNegativeButton("Close", null).show());
             page.addView(quiet, buttonParams());
         }
-        CheckBox announceCallers = new CheckBox(this); announceCallers.setText("Announce incoming caller names"); announceCallers.setTextColor(RideStyle.TEXT); announceCallers.setTextSize(16);
-        announceCallers.setChecked(RidePreferences.prefs(this).getBoolean("announce_callers",true));
-        announceCallers.setOnCheckedChangeListener((button,checked)->RidePreferences.prefs(this).edit().putBoolean("announce_callers",checked).apply());
-        page.addView(announceCallers,buttonParams());
-        page.addView(text("Names only, never phone numbers. Uses the current audio output and volume. RideDeck quiet mode pauses during calls. Email previews are read only.",14,RideStyle.MUTED,false));
         Button access = button("MUSIC + MESSAGE ACCESS"); access.setOnClickListener(v -> openNotificationAccess());
         page.addView(access, buttonParams());
         LinearLayout permissionPage = page;
         page = setupGroup(sections, "Bluetooth & headset", "Pair devices and check your audio connection", false);
+        setupAction(page, "Music player", () -> chooseMusicPlayer());
         deviceStatus = text("Checking headset...", 14, RideStyle.TEXT, false);
         addCockpitCard(page, "CONNECTIONS", deviceStatus);
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
@@ -385,48 +393,35 @@ public class MainActivity extends android.app.Activity {
         page.addView(text("Install updates while parked. Android may show an installation confirmation and a Google Play Protect scan. These screens are controlled by Android.", 14, RideStyle.MUTED, false));
         Button about = button("ABOUT"); about.setOnClickListener(v -> showAbout()); page.addView(about, buttonParams());
         styleSetupActions(sections);
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.addView(sections);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
-            androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
-            view.setPadding(bars.left + dp(16), bars.top + dp(12), bars.right + dp(16), bars.bottom + dp(12)); return insets;
-        });
-        setContentView(root); ScreenChrome.apply(getWindow(), false);
-        androidx.core.view.ViewCompat.requestApplyInsets(root);
+        setContentView(setupMenu.view()); ScreenChrome.apply(getWindow(), false); setupMenu.show();
+    }
+
+    @Override public void onBackPressed() {
+        if (setupVisible && setupMenu != null && setupMenu.back()) return;
+        super.onBackPressed();
+    }
+
+    private void setupAction(LinearLayout page, String label, Runnable action) {
+        Button button = button(label); button.setOnClickListener(v -> action.run()); page.addView(button, buttonParams());
     }
 
     private LinearLayout setupGroup(LinearLayout parent, String title, String summary, boolean expanded) {
-        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setColor(RideStyle.PANEL); background.setCornerRadius(dp(8)); background.setStroke(dp(1), RideStyle.LINE);
-        card.setBackground(background); card.setPadding(dp(16), dp(10), dp(16), dp(12));
-        LinearLayout.LayoutParams spacing = new LinearLayout.LayoutParams(-1, -2);
-        spacing.bottomMargin = dp(8); parent.addView(card, spacing);
-        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL); heading.setMinimumHeight(dp(72));
-        String category = title.equals("Navigation") ? "Map" : title.equals("Cockpit appearance") ? "Palette"
-            : title.equals("Keep running") ? "Battery" : title.startsWith("Permissions") ? "Shield"
-            : title.startsWith("Bluetooth") ? "Bluetooth" : title.startsWith("RideDeck Dash") ? "Camera"
-            : title.startsWith("Help") ? "Help" : "Update";
-        ControlIconButton glyph = new ControlIconButton(this, category, false);
-        glyph.setBackground(null); glyph.setClickable(false); glyph.setFocusable(false);
-        glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        LinearLayout.LayoutParams glyphParams = new LinearLayout.LayoutParams(dp(40), dp(40)); glyphParams.rightMargin = dp(12);
-        heading.addView(glyph, glyphParams);
-        LinearLayout labels = new LinearLayout(this); labels.setOrientation(LinearLayout.VERTICAL);
-        labels.addView(text(title, 20, RideStyle.TEXT, true));
-        TextView detail = text(summary, 14, RideStyle.MUTED, false); detail.setPadding(0, dp(4), dp(8), 0); labels.addView(detail);
-        heading.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView toggle = text(expanded ? "⌃" : "⌄", 22, RideTheme.accent(this), true);
-        toggle.setGravity(Gravity.CENTER); heading.addView(toggle, new LinearLayout.LayoutParams(dp(40), dp(48)));
-        card.addView(heading);
-        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        content.setVisibility(expanded ? View.VISIBLE : View.GONE); card.addView(content);
-        heading.setFocusable(true); heading.setContentDescription(title + ". " + summary + (expanded ? ". Expanded" : ". Collapsed"));
-        heading.setOnClickListener(v -> {
-            boolean open = content.getVisibility() != View.VISIBLE;
-            content.setVisibility(open ? View.VISIBLE : View.GONE); toggle.setText(open ? "⌃" : "⌄");
-            heading.setContentDescription(title + ". " + summary + (open ? ". Expanded" : ". Collapsed"));
-        });
+        String id;
+        switch (title) {
+            case "Cockpit appearance": id="screen"; break;
+            case "Bluetooth & headset": id="audio"; break;
+            case "Keep running": id="power"; break;
+            case "Permissions & quiet mode": id="calls"; break;
+            case "Navigation": id="navigation"; break;
+            case "Yamaha bike display": id="bike"; break;
+            case "Bike data & ride book": id="data"; break;
+            case "Help & diagnostics": id="help"; break;
+            case "RideDeck Dash": id="dash"; break;
+            default: id="help";
+        }
+        String section = id.equals("navigation") ? "Ride" : id.equals("bike") || id.equals("data") || id.equals("tests") ? "Yamaha" : id.equals("calls") || id.equals("dash") ? "Ride" : "General";
+        LinearLayout content=setupMenu.add(id,section,title,summary);
+        if (content.getParent() == null) parent.addView(content);
         return content;
     }
 
@@ -454,6 +449,7 @@ public class MainActivity extends android.app.Activity {
     @Override public Object onRetainNonConfigurationInstance() { return voiceReplyTarget; }
 
     @Override protected void onSaveInstanceState(Bundle state) {
+        if (setupMenu != null) setupMenu.save(state);
         state.putBoolean("setup_visible", setupVisible);
         state.putBoolean("dash_recording_requested", dashRecordingRequestedAt > 0L);
         super.onSaveInstanceState(state);
@@ -954,12 +950,11 @@ public class MainActivity extends android.app.Activity {
             } choices.addView(row);
         } dialog.show();
     }
-    private void showPersonalization() {
-        showCustomizationMenu(new String[]{"Phone mount: Left / Centre / Right", "Messages and email (choose several)", "Navigation / rider app", "Reply method", "Controls / map placement", "Color theme", "Music player", "Appearance"}, (dialog, which) -> {
+    private void choosePersonalization(int which) {
             if (which == 7 || which == 5) RideAppearance.show(this);
             else if (which == 0) new android.app.AlertDialog.Builder(this).setTitle("Phone mount position")
                 .setSingleChoiceItems(new String[]{"Left: music controls on left", "Centre: controls on left", "Right: music controls on right"}, RidePreferences.prefs(this).getInt("mount", 1), (d, selected) -> {
-                    RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen(); showPersonalization();
+                    RidePreferences.prefs(this).edit().putInt("mount", selected).apply(); d.dismiss(); buildSetupScreen();
                 }).setNegativeButton("Cancel", null).show();
             else if (which == 1) chooseMessageApps();
             else if (which == 2) chooseMapApp();
@@ -968,51 +963,10 @@ public class MainActivity extends android.app.Activity {
                     RidePreferences.prefs(this).edit().putInt("reply_mode", choice).apply(); d.dismiss();
                 }).setNegativeButton("Close", null).show();
             else if (which == 4) showLayoutChoice();
-            else if (which == 5) new android.app.AlertDialog.Builder(this).setTitle("Color theme")
-                .setSingleChoiceItems(RideTheme.NAMES, RidePreferences.prefs(this).getInt("color_theme", 0), (d, selected) -> {
-                    RidePreferences.prefs(this).edit().putInt("color_theme", selected).apply(); d.dismiss(); AppearanceSync.send(this); RideAppearance.refresh();
-                }).setNegativeButton("Close", null).show();
             else if (which == 6) chooseMusicPlayer();
-        });
     }
 
 
-    private void showCustomizationMenu(String[] labels, android.content.DialogInterface.OnClickListener choose) {
-        android.app.Dialog menu = new android.app.Dialog(this);
-        menu.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
-        LinearLayout page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(16), dp(16), dp(16), dp(16)); page.setBackgroundColor(RideStyle.BACKGROUND);
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page, (view, insets) -> {
-            androidx.core.graphics.Insets edges = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
-            view.setPadding(edges.left + dp(16), edges.top + dp(16), edges.right + dp(16), edges.bottom + dp(16)); return insets;
-        });
-        LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
-        heading.addView(text("Customization", 26, RideTheme.accent(this), true), new LinearLayout.LayoutParams(0, -2, 1));
-        Button back = rideAction("Done", false); back.setOnClickListener(v -> menu.dismiss());
-        heading.addView(back, new LinearLayout.LayoutParams(dp(88), dp(56))); page.addView(heading);
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout items = new LinearLayout(this); items.setOrientation(LinearLayout.VERTICAL);
-        for (int i = 0; i < labels.length; i++) {
-            final int choice = i;
-            LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(16), dp(12), dp(12), dp(12));
-            row.setBackground(RideStyle.row(this));
-            LinearLayout words = new LinearLayout(this); words.setOrientation(LinearLayout.VERTICAL);
-            words.addView(text(labels[i], 18, RideStyle.TEXT, true));
-            String detail = labels[i].equals("Appearance") ? RideAppearance.description(this) : i == 5 ? RideTheme.NAMES[Math.max(0, Math.min(RideTheme.NAMES.length - 1, RidePreferences.prefs(this).getInt("color_theme", 0)))]
-                : i == 6 ? RidePreferences.musicName(this) : i == 2 ? RidePreferences.MAP_NAMES[Math.max(0, java.util.Arrays.asList(RidePreferences.MAP_PACKAGES).indexOf(RidePreferences.selectedMap(this)))]
-                : i == 0 ? new String[]{"Left", "Centre", "Right"}[Math.max(0, Math.min(2, RidePreferences.prefs(this).getInt("mount", 1)))]
-                : i == 1 ? "Choose which apps appear in Messages" : i == 3 ? (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1 ? "Voice message in original app" : "Voice to text with send confirmation") : (RidePreferences.prefs(this).getInt("controls_side", 0) == 1 ? "Music left, messages right" : RidePreferences.prefs(this).getInt("controls_side", 0) == 2 ? "Messages left, music right" : "Automatic based on phone mount");
-            TextView detailText = text(detail, 14, RideStyle.MUTED, false); detailText.setPadding(0, dp(4), dp(8), 0);
-            words.addView(detailText); row.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
-            TextView chevron = text("›", 26, RideStyle.MUTED, false);
-            row.addView(chevron, new LinearLayout.LayoutParams(dp(24), -2));
-            row.setMinimumHeight(dp(80)); row.setOnClickListener(v -> { menu.dismiss(); choose.onClick(menu, choice); });
-            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2); rowParams.topMargin = dp(6); items.addView(row, rowParams);
-        }
-        scroll.addView(items); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        menu.setContentView(page); menu.show(); menu.getWindow().setLayout(-1, -1);
-    }
     private void chooseMusicPlayer() {
         java.util.LinkedHashMap<String, String> choices = new java.util.LinkedHashMap<>();
         for (int i = 0; i < RidePreferences.MUSIC_PACKAGES.length; i++) {
@@ -1028,7 +982,7 @@ public class MainActivity extends android.app.Activity {
         new android.app.AlertDialog.Builder(this).setTitle("Music player")
             .setSingleChoiceItems(choices.values().toArray(new String[0]), packages.indexOf(RidePreferences.selectedMusic(this)), (dialog, which) -> {
                 RidePreferences.prefs(this).edit().putString("music_app", packages.get(which)).apply();
-                mediaController = null; dialog.dismiss(); buildSetupScreen(); showPersonalization();
+                mediaController = null; dialog.dismiss(); buildSetupScreen();
             }).setNegativeButton("Cancel", null).show();
     }
     private void openPreferredMusic() {
@@ -1039,7 +993,7 @@ public class MainActivity extends android.app.Activity {
             return;
         }
         Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMusic(this));
-        if (launch == null) { showRideMessage("Your selected music player is not installed. Choose a player in Setup > Customization."); return; }
+        if (launch == null) { showRideMessage("Your selected music player is not installed. Choose a player in Setup > General > Headset & sound."); return; }
         try {
             android.content.pm.ActivityInfo info = getPackageManager().resolveActivity(launch, 0).activityInfo;
             if (info.launchMode == android.content.pm.ActivityInfo.LAUNCH_SINGLE_TASK || info.launchMode == android.content.pm.ActivityInfo.LAUNCH_SINGLE_INSTANCE) {
