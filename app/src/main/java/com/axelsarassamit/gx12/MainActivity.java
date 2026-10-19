@@ -509,30 +509,14 @@ public class MainActivity extends android.app.Activity {
         });
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         VelocityBrandView logo = new VelocityBrandView(this);
-        android.widget.FrameLayout logoSlot = new android.widget.FrameLayout(this);
         logo.setContentDescription("RideDeck");
-        logoSlot.addView(logo, new android.widget.FrameLayout.LayoutParams(dp(104), dp(64), Gravity.CENTER));
-        header.addView(logoSlot, new LinearLayout.LayoutParams(dp(112), dp(64)));
-        TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
-        ((android.widget.TextClock) clock).setFormat12Hour("h:mm");
-        clock.setTextColor(RideStyle.TEXT); clock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        clock.setOnClickListener(v -> RideAppearance.showOptions(this));
-        clock.setContentDescription("Clock; tap for design appearance");
-        clock.setGravity(Gravity.CENTER); clock.setIncludeFontPadding(false); clock.setSingleLine(true);
-        clock.setAutoSizeTextTypeUniformWithConfiguration(18, 36, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
-        header.addView(clock, new LinearLayout.LayoutParams(0, dp(64), 1));
-        if (!compact) root.addView(header, new LinearLayout.LayoutParams(-1, dp(64)));
-        if (portrait && !compact) {
-            VelocityRideSummary summary = new VelocityRideSummary(this, "Open map app", () -> rideMapAction());
-            LinearLayout.LayoutParams summarySize = new LinearLayout.LayoutParams(-1, dp(108));
-            summarySize.topMargin=dp(8); root.addView(summary, summarySize);
-        }
-
-
+        header.addView(logo,new LinearLayout.LayoutParams(dp(88),dp(48)));
+        android.widget.TextClock clock=new android.widget.TextClock(this);clock.setFormat24Hour("HH:mm");clock.setFormat12Hour("h:mm");clock.setTextSize(16);clock.setTextColor(RideStyle.TEXT);clock.setGravity(Gravity.CENTER);clock.setOnClickListener(v->RideAppearance.showOptions(this));clock.setContentDescription("Clock; appearance options");header.addView(clock,new LinearLayout.LayoutParams(0,dp(48),1));
+        if (!compact) root.addView(header,new LinearLayout.LayoutParams(-1,dp(52)));
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout controls = new LinearLayout(this); controls.setOrientation(stacked ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-        LinearLayout music = rideCard("NOW PLAYING");
+        LinearLayout music = rideCard("MUSIC");
         if (compact) {
             music.removeAllViews(); music.setOrientation(LinearLayout.HORIZONTAL);
             music.setGravity(Gravity.CENTER_VERTICAL); music.setPadding(dp(8), dp(4), dp(8), dp(4));
@@ -544,7 +528,7 @@ public class MainActivity extends android.app.Activity {
             albumArt.setContentDescription("Album artwork");
             albumArt.setBackground(RideStyle.surface(this, RideStyle.RAISED, 8, false));
             albumArt.setClipToOutline(true);
-            LinearLayout.LayoutParams art = new LinearLayout.LayoutParams(dp(portrait ? 88 : 64), dp(portrait ? 88 : 64)); art.rightMargin = dp(16);
+            LinearLayout.LayoutParams art = new LinearLayout.LayoutParams(dp(portrait ? 88 : 64), dp(portrait ? 88 : 64)); art.rightMargin = dp(12);
             details.addView(albumArt, art);
         }
         LinearLayout metadataColumn = new LinearLayout(this); metadataColumn.setOrientation(LinearLayout.VERTICAL);
@@ -589,6 +573,7 @@ public class MainActivity extends android.app.Activity {
         transport.addView(playPauseButton, playParams);
         LinearLayout.LayoutParams nextParams = rideWeight(compact ? 56 : 64); nextParams.topMargin = 0;
         transport.addView(nextButton, nextParams); music.addView(transport, compact ? new LinearLayout.LayoutParams(dp(186), -2) : new LinearLayout.LayoutParams(-1, -2));
+        if (!compact) RoadlineUi.transport(transport,previousButton,playPauseButton,nextButton);
         LinearLayout.LayoutParams musicParams = compact
             ? new LinearLayout.LayoutParams(-1, dp(72))
             : portrait ? new LinearLayout.LayoutParams(-1, 0, 0.9f)
@@ -609,8 +594,9 @@ public class MainActivity extends android.app.Activity {
 
         LinearLayout messages = rideCard("MESSAGES");
         messages.setTag("ride_message_box");
-        messages.setBackground(RideStyle.surface(this, RideStyle.PANEL, 18, true));
-        messageSource = text("LATEST MESSAGE", compact ? 13 : 20, RideTheme.accent(this), true);
+        messages.setBackground(RideStyle.surface(this, RideStyle.PANEL, 10, false));
+        messages.getChildAt(0).setVisibility(View.GONE);
+        messageSource = text("LATEST MESSAGE", compact ? 13 : 14, RideTheme.accent(this), true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, RideStyle.MUTED, false);
@@ -628,6 +614,7 @@ public class MainActivity extends android.app.Activity {
         Button seenNext = rideAction("Seen / next", false);
         seenNext.setOnClickListener(v -> acknowledgeMessage(displayedMessage()));
         messageActions.addView(seenNext, rideWeight(56));
+        RoadlineUi.messageAction(listen); RoadlineUi.messageAction(seenNext);
         messages.addView(messageActions);
         messagePanel = messages;
         android.widget.FrameLayout messageSlot = new android.widget.FrameLayout(this);
@@ -643,11 +630,19 @@ public class MainActivity extends android.app.Activity {
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, 0, 1); wp.topMargin = dp(8);
         root.addView(workspace, wp);
 
+        if (!compact) {
+            Button maps=RoadlineUi.mapButton(this);
+
+            maps.setTextColor(RideTheme.accent(this));maps.setBackground(RideStyle.surface(this,RideStyle.PANEL,10,false));
+            maps.setContentDescription("Maps: open chosen external navigation app");maps.setOnClickListener(v->rideMapAction());
+            LinearLayout.LayoutParams mapSize=new LinearLayout.LayoutParams(-1,dp(56));mapSize.topMargin=dp(8);root.addView(maps,mapSize);
+        }
         LinearLayout dock = new LinearLayout(this);
         Button settings = rideAction("Setup", false);
         settings.setOnClickListener(v -> buildSetupScreen());
-        if (!compact) header.addView(settings, new LinearLayout.LayoutParams(dp(80), dp(56)));
-        String[] labels = portrait && !compact ? new String[]{"Camera", "Voice"} : new String[]{"Map", "Camera", "Voice"};
+        RoadlineUi.setup(settings);
+        if (!compact) header.addView(settings, new LinearLayout.LayoutParams(dp(72), dp(48)));
+        String[] labels = !compact ? new String[]{"Camera", "Voice"} : new String[]{"Map", "Camera", "Voice"};
         for (String label : labels) {
             Button action = rideAction(label, false);
             if (label.equals("Map")) {
@@ -669,6 +664,7 @@ public class MainActivity extends android.app.Activity {
             gear.setMargins(dp(3), dp(4), dp(3), 0);
             dock.addView(settings, gear);
         }
+        RoadlineUi.dock(dock);
         RideStyle.mirrorActions(dock,controlsRight);
         LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(-1, -2); dp.topMargin = dp(8);
         root.addView(dock, dp);
@@ -683,7 +679,7 @@ public class MainActivity extends android.app.Activity {
 
     private LinearLayout rideCard(String label) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(12), dp(16), dp(12)); card.setBackground(RideStyle.surface(this, RideStyle.PANEL, 8, true));
+        card.setPadding(dp(14), dp(10), dp(14), dp(10)); card.setBackground(RideStyle.surface(this, RideStyle.PANEL, 10, false));
         TextView title = text(label, 11, RideStyle.MUTED, true); title.setLetterSpacing(0.12f);
         card.addView(title, new LinearLayout.LayoutParams(-1, dp(18))); return card;
     }
