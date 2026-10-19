@@ -508,20 +508,26 @@ public class MainActivity extends android.app.Activity {
             return insets;
         });
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
-        android.widget.ImageView logo = new android.widget.ImageView(this);
-        logo.setImageResource(R.drawable.ridedeck_brand);
-        logo.setColorFilter(RideTheme.accent(this));
+        VelocityBrandView logo = new VelocityBrandView(this);
         android.widget.FrameLayout logoSlot = new android.widget.FrameLayout(this);
         logo.setContentDescription("RideDeck");
-        logoSlot.addView(logo, new android.widget.FrameLayout.LayoutParams(dp(56), dp(52), Gravity.CENTER));
-        header.addView(logoSlot, new LinearLayout.LayoutParams(dp(80), dp(64)));
+        logoSlot.addView(logo, new android.widget.FrameLayout.LayoutParams(dp(104), dp(64), Gravity.CENTER));
+        header.addView(logoSlot, new LinearLayout.LayoutParams(dp(112), dp(64)));
         TextView clock = new android.widget.TextClock(this); ((android.widget.TextClock) clock).setFormat24Hour("HH:mm");
         ((android.widget.TextClock) clock).setFormat12Hour("h:mm");
         clock.setTextColor(RideStyle.TEXT); clock.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        clock.setOnClickListener(v -> RideAppearance.showOptions(this));
+        clock.setContentDescription("Clock; tap for design appearance");
         clock.setGravity(Gravity.CENTER); clock.setIncludeFontPadding(false); clock.setSingleLine(true);
         clock.setAutoSizeTextTypeUniformWithConfiguration(18, 36, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
         header.addView(clock, new LinearLayout.LayoutParams(0, dp(64), 1));
         if (!compact) root.addView(header, new LinearLayout.LayoutParams(-1, dp(64)));
+        if (portrait && !compact) {
+            VelocityRideSummary summary = new VelocityRideSummary(this, "Open map app", () -> rideMapAction());
+            LinearLayout.LayoutParams summarySize = new LinearLayout.LayoutParams(-1, dp(108));
+            summarySize.topMargin=dp(8); root.addView(summary, summarySize);
+        }
+
 
         LinearLayout workspace = new LinearLayout(this);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
@@ -602,11 +608,15 @@ public class MainActivity extends android.app.Activity {
         controls.addView(mediaSlot, musicParams);
 
         LinearLayout messages = rideCard("MESSAGES");
+        messages.setTag("ride_message_box");
+        messages.setBackground(RideStyle.surface(this, RideStyle.PANEL, 18, true));
         messageSource = text("LATEST MESSAGE", compact ? 13 : 20, RideTheme.accent(this), true);
         messageSource.setMaxLines(1); messageSource.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messages.addView(messageSource);
         messagePreview = text("No new messages", compact ? 14 : 16, RideStyle.MUTED, false);
         messagePreview.setTextSize(compact ? 16 : portrait ? 20 : 18);
+        messagePreview.setLineSpacing(dp(3), 1f);
+        messagePreview.setPadding(0, dp(8), 0, dp(8));
         messagePreview.setMaxLines(portrait ? 7 : 4); messagePreview.setEllipsize(android.text.TextUtils.TruncateAt.END);
         messagePreview.setOnClickListener(v -> showFullMessage());
         messageSource.setOnClickListener(v -> showFullMessage());
@@ -637,7 +647,7 @@ public class MainActivity extends android.app.Activity {
         Button settings = rideAction("Setup", false);
         settings.setOnClickListener(v -> buildSetupScreen());
         if (!compact) header.addView(settings, new LinearLayout.LayoutParams(dp(80), dp(56)));
-        String[] labels = new String[]{"Map", "Camera", "Voice"};
+        String[] labels = portrait && !compact ? new String[]{"Camera", "Voice"} : new String[]{"Map", "Camera", "Voice"};
         for (String label : labels) {
             Button action = rideAction(label, false);
             if (label.equals("Map")) {
@@ -1243,8 +1253,8 @@ public class MainActivity extends android.app.Activity {
         refreshCallPanel();
         if (messagePreview == null && dockMessage == null) return;
         if (!hasNotificationAccess(new ComponentName(this, GX12NotificationListener.class))) {
-            if (messageSource != null) messageSource.setText("ACCESS IS OFF");
-            if (messagePreview != null) messagePreview.setText("Enable message access while parked");
+            if (messageSource != null) messageSource.setText("Messages paused");
+            if (messagePreview != null) messagePreview.setText("Allow message access in Setup");
             if (dockMessage != null) dockMessage.setText("Messages\nChoose apps and enable access in Setup.");
             return;
         }

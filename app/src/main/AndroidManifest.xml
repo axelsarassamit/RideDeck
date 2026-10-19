@@ -78,7 +78,7 @@
         android:name=".RideDeckApplication"
         android:allowBackup="false"
         android:label="${appLabel}"
-        android:icon="@drawable/ridedeck_icon"
+        android:icon="@mipmap/velocity_launcher"
         android:theme="@style/RideDeckTheme"
         android:usesCleartextTraffic="false">
         <activity android:name=".AppearanceActivity" android:exported="false" />

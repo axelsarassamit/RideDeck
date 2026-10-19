@@ -32,7 +32,7 @@ public final class RideStyle {
     public static GradientDrawable surface(Context c, int color, int radius, boolean border) {
         float density = c.getResources().getDisplayMetrics().density;
         GradientDrawable shape = new GradientDrawable();
-        shape.setColor(color); shape.setCornerRadius(radius * density);
+        shape.setColor(color); shape.setCornerRadius((radius == 8 ? 14 : radius) * density);
         if (border) shape.setStroke(Math.max(1, (int) density), LINE);
         return shape;
     }

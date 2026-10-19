@@ -1,7 +1,0 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="84dp" android:height="76dp" android:viewportWidth="84" android:viewportHeight="76">
-    <!-- Original road-shaped R, with open space and rounded strokes for small-screen legibility. -->
-    <group android:translateX="-14" android:translateY="-18">
-        <path android:fillColor="@android:color/transparent" android:strokeColor="#90C8FF" android:strokeWidth="8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M23,28H64C90,28 90,60 64,60H54L35,85M23,40H62C76,40 76,49 62,49H49L22,85M61,60L85,85" />
-        <path android:fillColor="@android:color/transparent" android:strokeColor="#F4F6FA" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M45,66L42,71M37,77L34,82" />
-    </group>
-</vector>
