@@ -302,6 +302,9 @@ public class MainActivity extends android.app.Activity {
         Button navigation = button("CHOOSE MAP APP");
         navigation.setOnClickListener(v -> chooseMapApp());
         page.addView(navigation, buttonParams());
+        Button funRide = button("GO FOR A FUN RIDE");
+        funRide.setOnClickListener(v -> startActivity(new Intent(this, FunRideActivity.class)));
+        page.addView(funRide, buttonParams());
         if (dashInstalled) {
             page = setupGroup(sections, "RideDeck Dash", "Start recording after Start or Resume", false);
             CheckBox autoOpenDash = new CheckBox(this);
