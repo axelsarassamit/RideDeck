@@ -163,7 +163,7 @@ class FunRideActivity : Activity() {
         fun update(){val r=routes[selected];info.text="${r.stops.size} stops · ${r.uTurns} U-turns · no live traffic";view.show(routes,selected)}
         picker.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onNothingSelected(p:AdapterView<*>?){};override fun onItemSelected(p:AdapterView<*>?,v:View?,i:Int,id:Long){selected=i;update()}}
         val tools=LinearLayout(this);listOf("−" to {view.step(-1)},"Fit" to {view.fit()},"+" to {view.step(1)},"Expand" to {expandedMap()}).forEach{(label,action)->tools.addView(button(label,action),LinearLayout.LayoutParams(0,dp(56),1f))};page.addView(tools)
-        page.addView(button("Check Google Maps compatibility · pending test"){handoff()}.apply{isEnabled=mapsAvailable()})
+        page.addView(button("Open in Google Maps · recalculates"){handoff()}.apply{isEnabled=mapsAvailable()})
         if(!mapsAvailable())page.addView(text("No supported navigation app installed. Install Google Maps to carry all stops. Other apps are not offered."))
         page.addView(button("Change plan"){routes=emptyList();cancel();form()});setContentView(page);update()
     }
@@ -180,8 +180,8 @@ class FunRideActivity : Activity() {
     private fun mapsAvailable()=runCatching{mapsIntent().resolveActivity(packageManager)!=null}.getOrDefault(false)
     private fun handoff() {
         val r=routes[selected]
-        AlertDialog.Builder(this).setTitle("Compatibility check · not yet verified")
-            .setMessage("This Google Maps version still needs the on-phone stop-retention check. Do not start riding from this test.\n\n"+FunRideHandoff.DESCRIPTION+"\n\n"+r.stops.mapIndexed{i,p->"Stop ${i+1}: ${coordinate(p)}"}.joinToString("\n")+"\nFinish: ${coordinate(r.finish)}\n\nUnpaved-road exclusion cannot be passed to Google Maps. Motorcycle mode depends on coverage. No other app or browser fallback will be used.")
+        AlertDialog.Builder(this).setTitle("Review every stop before riding")
+            .setMessage(FunRideHandoff.DESCRIPTION+"\n\n"+r.stops.mapIndexed{i,p->"Stop ${i+1}: ${coordinate(p)}"}.joinToString("\n")+"\nFinish: ${coordinate(r.finish)}\n\nUnpaved-road exclusion cannot be passed to Google Maps. Motorcycle mode depends on coverage. No other app or browser fallback will be used.")
             .setNegativeButton("Cancel",null).setPositiveButton("Open route preview"){_,_->runCatching{startActivity(mapsIntent())}.onFailure{Toast.makeText(this,"Google Maps could not open this ride. No fallback used.",Toast.LENGTH_LONG).show()}}.show()
     }
     private fun snapshot()=JSONObject().put("start",start?.let(FunRoute::pair)).put("finish",finishPoint?.let(FunRoute::pair))
