@@ -64,7 +64,10 @@ class FunRideActivity : Activity() {
         page.addView(button("Finish: ${finishPoint?.let(::coordinate) ?: "return to start"}") {
             AlertDialog.Builder(this).setTitle("Finish ride").setItems(arrayOf("Return to start","Enter a place or coordinates")){_,i->if(i==0){finishPoint=null;save();form()}else place("Finish"){finishPoint=it;save();form()}}.show()
         })
-        page.addView(text("Style: relaxed exploration. Winding-road scoring and live traffic are unavailable with this free provider."))
+        page.addView(button(if(fewer) "Ride style: fewer U-turns" else "Ride style: relaxed exploration") {
+            AlertDialog.Builder(this).setTitle("Ride style").setSingleChoiceItems(arrayOf("Relaxed exploration", "Fewer U-turns · rank route choices"),if(fewer)1 else 0){dialog,i->fewer=i==1;save();dialog.dismiss();form()}.setNegativeButton("Cancel",null).show()
+        }.apply{tag="fun_ride_style"})
+        page.addView(text("Fewer U-turns ranks the returned roads; it cannot guarantee no U-turns. Winding-road routing and live traffic are unavailable with this provider."))
         page.addView(text("Explore towards"))
         page.addView(Spinner(this).apply{minimumHeight=dp(64);adapter=ArrayAdapter(this@FunRideActivity,android.R.layout.simple_spinner_dropdown_item,listOf("North","East","South","West"));setSelection(bearing/90);onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onNothingSelected(p:AdapterView<*>?){};override fun onItemSelected(p:AdapterView<*>?,v:View?,i:Int,id:Long){bearing=i*90;save()}}})
         page.addView(button("Stops: ${stops.size} of 2") {
@@ -73,7 +76,7 @@ class FunRideActivity : Activity() {
         })
         page.addView(text("With no chosen stops, we try exploration points. They are not verified attractions, parking or safe stopping places."))
         fun check(label:String,value:Boolean,changed:(Boolean)->Unit){page.addView(CheckBox(this).apply{text=label;textSize=18f;setTextColor(RideStyle.TEXT);minHeight=dp(64);isChecked=value;setOnCheckedChangeListener{_,v->changed(v);save()}})}
-        check("Prefer avoiding motorways",motorway){motorway=it};check("Prefer avoiding tolls",toll){toll=it};check("Prefer avoiding ferries",ferry){ferry=it};check("Exclude mapped unpaved roads",dirt){dirt=it};check("Rank fewer U-turns higher",fewer){fewer=it}
+        check("Prefer avoiding motorways",motorway){motorway=it};check("Prefer avoiding tolls",toll){toll=it};check("Prefer avoiding ferries",ferry){ferry=it};check("Exclude mapped unpaved roads",dirt){dirt=it}
         page.addView(text("Road preferences can be incomplete. Google Maps recalculates between stops and may choose different roads. No live traffic or closure check in this preview."))
         status=text(if(busy)"Finding rides…"else"Duration is a target, not a promise.");page.addView(status)
         if(!busy && draft.getString("route_draft",null)==snapshot().toString() && routeFile.isFile && System.currentTimeMillis()-routeFile.lastModified() in 0..86400000L)
@@ -146,7 +149,7 @@ class FunRideActivity : Activity() {
                 lastStart=SystemClock.elapsedRealtime()
                 val waypoints=if(explicit.isNotEmpty())explicit else runCatching{FunRidePlan.seeds(origin,target,heading+offset)}.getOrNull()?:continue
                 val route=runCatching{FunRideRouting.route(origin,destination,waypoints,avoidMotorway,avoidToll,avoidFerry,avoidDirt)}.getOrNull()
-                if(route!=null && route.km>=1 && route.seconds/60 in target*.4..target*2.0 && rows.none{FunRidePlan.sameRoads(it.points,route.points)})rows.add(route)
+                if(route!=null && route.km>=1 && route.seconds/60 in 1.0..720.0 && rows.none{FunRidePlan.sameRoads(it.points,route.points)})rows.add(route)
             }
             runOnUiThread{if(isFinishing || isDestroyed || token!=generation)return@runOnUiThread;busy=false
                 routes=rows.sortedBy{FunRidePlan.score(it.seconds/60,target,if(rankUTurn)it.uTurns else 0)}

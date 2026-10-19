@@ -26,6 +26,29 @@ class FunRideTest {
             }
         } finally {if(before==null)prefs.edit().remove("draft").commit()else prefs.edit().putString("draft",before).commit()}
     }
+    @Test fun rideStyleCanBeChangedAndSurvivesRecreation() {
+        val c=InstrumentationRegistry.getInstrumentation().targetContext
+        check(c.packageName.endsWith(".preview"))
+        val prefs=c.getSharedPreferences("fun_ride",Context.MODE_PRIVATE);val before=prefs.getString("draft",null)
+        try {
+            prefs.edit().putString("draft","{}").commit()
+            ActivityScenario.launch(FunRideActivity::class.java).use { scenario ->
+                scenario.onActivity { a ->
+                    SharedSetupTest.click(a,"Ride style: relaxed exploration")
+                    val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap{SharedSetupTest.views(it)}.filterIsInstance<android.widget.ListView>().last()
+                    list.performItemClick(list.getChildAt(1),1,list.adapter.getItemId(1))
+                }
+                scenario.recreate()
+                scenario.onActivity { a ->
+                    assertTrue(SharedSetupTest.has(a,"Ride style: fewer U-turns"))
+                    SharedSetupTest.click(a,"Ride style: fewer U-turns")
+                    val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap{SharedSetupTest.views(it)}.filterIsInstance<android.widget.ListView>().last()
+                    list.performItemClick(list.getChildAt(0),0,list.adapter.getItemId(0))
+                    assertTrue(SharedSetupTest.has(a,"Ride style: relaxed exploration"))
+                }
+            }
+        }finally{if(before==null)prefs.edit().remove("draft").commit()else prefs.edit().putString("draft",before).commit()}
+    }
     @Test fun routeSnapshotKeepsFullGeometryAndOrderedWaypoints() {
         val p=app.pillion.core.FunPoint(13.5,100.5);val a=app.pillion.core.FunPoint(13.6,100.6);val b=app.pillion.core.FunPoint(13.7,100.7)
         val route=FunRoute(p,p,listOf(a,b),listOf(p,a,b,p),3600.0,30.0,2)

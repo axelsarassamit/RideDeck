@@ -17,3 +17,7 @@ References:
 - https://developers.google.com/maps/documentation/urls/get-started
 - https://valhalla.github.io/valhalla/api/route/api-reference/
 - https://operations.osmfoundation.org/policies/tiles/
+
+## Selectable styles
+
+Ride style now opens an explicit selector: Relaxed exploration or Fewer U-turns (ranking the returned choices). The selection survives recreation and is included in saved draft/cache identity. This free provider does not offer winding-road routing or live traffic. Actual road times remain visible even when they differ from the requested duration. Google Maps still recalculates between stops.
