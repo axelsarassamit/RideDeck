@@ -19,7 +19,7 @@ final class RoadlineUi {
                 float x=getWidth()-22*d;android.graphics.Path arrow=new android.graphics.Path();arrow.moveTo(x-3*d,y-5*d);arrow.lineTo(x+2*d,y);arrow.lineTo(x-3*d,y+5*d);canvas.drawPath(arrow,ink);
             }
         };
-        b.setText("Maps");b.setAllCaps(false);b.setTextSize(17);b.setGravity(android.view.Gravity.CENTER_VERTICAL|android.view.Gravity.START);b.setPadding(dp(c,48),0,dp(c,40),0);return b;
+        RideStyle.action(b,true);b.setText("Maps");b.setGravity(android.view.Gravity.CENTER_VERTICAL|android.view.Gravity.START);b.setPadding(dp(c,48),0,dp(c,40),0);return b;
     }
     static int dp(Context c,int n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
     static void setup(Button b){

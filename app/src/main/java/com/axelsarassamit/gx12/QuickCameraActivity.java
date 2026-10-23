@@ -57,7 +57,7 @@ public final class QuickCameraActivity extends ComponentActivity {
     }
     @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (focused) ScreenChrome.apply(getWindow(), true); }
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
-    private Button action(String label) { Button b = new Button(this); b.setText(label); b.setTextSize(16); b.setAllCaps(false); return b; }
+    private Button action(String label) { Button b = new Button(this); b.setText(label); RideStyle.action(b,false); return b; }
     private LinearLayout.LayoutParams weight() { return new LinearLayout.LayoutParams(0, dp(72), 1); }
     private void setBusy(boolean value) { busy = value; capture.setEnabled(!value); flip.setEnabled(!value); mode.setEnabled(!value); }
     private void permissions() {

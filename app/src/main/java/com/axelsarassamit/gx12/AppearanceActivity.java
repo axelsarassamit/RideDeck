@@ -11,7 +11,7 @@ public final class AppearanceActivity extends Activity {
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private LinearLayout column(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);return p;}
     private TextView text(LinearLayout p,String value,int size,int colour){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(colour);t.setPadding(0,dp(4),0,dp(8));p.addView(t);return t;}
-    private void action(LinearLayout p,String label,Runnable run){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextSize(17);b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);b.setTextColor(RideStyle.TEXT);b.setBackground(RideStyle.row(this));b.setPadding(dp(16),dp(12),dp(16),dp(12));b.setMinHeight(dp(64));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(8);p.addView(b,lp);b.setOnClickListener(v->run.run());}
+    private void action(LinearLayout p,String label,Runnable run){Button b=new Button(this);b.setText(label);RideStyle.action(b,true);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(8);p.addView(b,lp);b.setOnClickListener(v->run.run());}
     private String accentName(){String[] names=RideTheme.NAMES;return names[Math.max(0,Math.min(4,RideAppearance.accentIndex(this)))];}
     @Override public void onCreate(Bundle saved){
         RideAppearance.prepare(this);super.onCreate(saved);

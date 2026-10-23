@@ -203,15 +203,11 @@ final class DashRideControls {
     private Button button(String label, boolean primary) {
         Button view = new Button(activity);
         view.setText(label);
-        view.setAllCaps(false);
-        view.setTextSize(22);
-        view.setMinHeight(dp(80));
-        view.setTextColor(primary ? AppearancePalette.onAccent(RideAppearance.isDark(activity)) : RideStyle.TEXT);
-        GradientDrawable background = new GradientDrawable();
-        background.setColor(primary ? RideTheme.accent(activity) : RideStyle.RAISED);
-        background.setCornerRadius(dp(8));
-        view.setBackground(background);
-        view.setPadding(dp(12), dp(8), dp(12), dp(8));
+        RideStyle.action(view,false);
+        if (primary) {
+            view.setTextColor(AppearancePalette.onAccent(RideAppearance.isDark(activity)));
+            view.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x28ffffff),RideStyle.surface(activity,RideTheme.accent(activity),14,false),null));
+        }
         return view;
     }
 
