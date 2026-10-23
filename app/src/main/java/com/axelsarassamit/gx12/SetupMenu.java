@@ -41,14 +41,14 @@ final class SetupMenu {
         root.setPadding(dp(16),dp(12),dp(16),dp(12));
         TextView brandView=label(brand,16,accent); brandView.setPadding(dp(4),dp(10),0,dp(12)); root.addView(brandView);
         LinearLayout header=new LinearLayout(activity); header.setGravity(Gravity.CENTER_VERTICAL);
-        back=action("Back",()->back()); header.addView(back,new LinearLayout.LayoutParams(dp(76),dp(52)));
+        back=action("Back",()->back()); header.addView(back,new LinearLayout.LayoutParams(dp(76),dp(56)));
         title=label("Setup",28,RideStyle.TEXT); androidx.core.view.ViewCompat.setAccessibilityHeading(title,true);
         header.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        Button done=action("Done",close); header.addView(done,new LinearLayout.LayoutParams(dp(76),dp(52)));
+        Button done=action("Done",close); header.addView(done,new LinearLayout.LayoutParams(dp(76),dp(56)));
         root.addView(header); tabs=new LinearLayout(activity); tabs.setPadding(0,dp(12),0,dp(16)); root.addView(tabs);
         for(String tab:yamaha?new String[]{"General","Ride","Yamaha"}:new String[]{"General","Ride"}) {
             Button button=action(tab,()->{section=tab;selected="";restoredScroll=0;render();}); button.setTag(tab);
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(52),1);lp.setMargins(dp(3),0,dp(3),0);tabs.addView(button,lp);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(56),1);lp.setMargins(dp(3),0,dp(3),0);tabs.addView(button,lp);
         }
         scroll=new ScrollView(activity);scroll.setFillViewport(true);body=column();scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -94,7 +94,7 @@ final class SetupMenu {
     private LinearLayout column(){LinearLayout p=new LinearLayout(activity);p.setOrientation(LinearLayout.VERTICAL);return p;}
     private TextView label(String value,int size,int color){TextView t=new TextView(activity);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));return t;}
     private GradientDrawable surface(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(14));return d;}
-    private Button action(String value,Runnable run){Button b=new Button(activity);b.setText(value);b.setAllCaps(false);b.setTextSize(16);b.setTextColor(accent);b.setMinHeight(dp(48));b.setPadding(dp(8),dp(6),dp(8),dp(6));b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x286c94ff),surface(RideStyle.BACKGROUND),null));b.setOnClickListener(v->run.run());return b;}
+    private Button action(String value,Runnable run){Button b=new Button(activity);b.setText(value);RideStyle.action(b,false);b.setTextSize(16);b.setTextColor(accent);b.setOnClickListener(v->run.run());return b;}
     private int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
     private final class MenuIcon extends android.graphics.drawable.Drawable {
         private final String id; private final android.graphics.Paint ink=new android.graphics.Paint(3);

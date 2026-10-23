@@ -29,6 +29,21 @@ public final class RideStyle {
         rail.removeAllViews(); java.util.Collections.reverse(views);
         for(android.view.View view:views) rail.addView(view);
     }
+    /** Family action style. Rows and tiles share metrics; callers own their layout and action. */
+    public static void action(android.widget.Button button, boolean row) {
+        Context c = button.getContext();
+        float density = c.getResources().getDisplayMetrics().density;
+        button.setAllCaps(false);
+        button.setTextSize(18);
+        button.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        button.setMinWidth(0); button.setMinimumWidth(0);
+        button.setMinHeight(Math.round(56 * density)); button.setMinimumHeight(Math.round(56 * density));
+        button.setGravity(android.view.Gravity.CENTER_VERTICAL | (row ? android.view.Gravity.START : android.view.Gravity.CENTER_HORIZONTAL));
+        button.setPadding(Math.round((row ? 16 : 8) * density), Math.round(10 * density), Math.round((row ? 16 : 8) * density), Math.round(10 * density));
+        button.setBackgroundTintList(null); button.setStateListAnimator(null); button.setElevation(0);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x286c94ff), surface(c, RAISED, 14, true), null));
+        button.setTextColor(new ColorStateList(new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}}, new int[] {MUTED, TEXT}));
+    }
     public static GradientDrawable surface(Context c, int color, int radius, boolean border) {
         float density = c.getResources().getDisplayMetrics().density;
         GradientDrawable shape = new GradientDrawable();
