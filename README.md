@@ -14,6 +14,12 @@ Signed builds use the existing release service to preserve the original certific
 
 The phone map launch and split-screen behavior require physical-device verification. Provider keys are never committed. See THIRD_PARTY_NOTICES.md for licensing.
 
+## Report a bug
+
+Open **Setup > Help & app > Review bug report**. The app keeps up to 32 recent failure categories locally. The preview shows the shorter GitHub draft; **Copy full report** includes the complete history. Reports include the RideDeck version, Android API level, and fixed failure categories only.
+
+**Report on GitHub** opens a draft in this repository. Issues are public. Review the draft, add reproduction steps without private information, and submit it yourself after signing in. RideDeck does not post issues. Workshop tests start in Yamaha Bluetooth Lab.
+
 ## Licensing
 
 Original source code and original project materials are protected under

@@ -99,6 +99,7 @@ public final class HeadsetMicRoute {
         }
     }
     private void fail(String message) {
+        RideDeckDiagnostics.failure(context, BugReport.Failure.HEADSET_MIC);
         RideDeckDiagnostics.record(context, "Headset microphone failed: " + message);
         Consumer<String> callback = failed; release(); if (callback != null) callback.accept(message);
     }

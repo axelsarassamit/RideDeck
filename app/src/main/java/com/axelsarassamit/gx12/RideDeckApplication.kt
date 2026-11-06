@@ -9,6 +9,7 @@ class RideDeckApplication : Application() {
         clearLegacyNavigationSettings()
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            RideDeckDiagnostics.failure(this, BugReport.Failure.APP_CRASH)
             // Exception messages can contain addresses or message text. Store types and code frames only.
             RideDeckDiagnostics.record(this, "App crash thread=${thread.name} exception=${error.javaClass.simpleName} cause=${error.cause?.javaClass?.simpleName}")
             error.stackTrace.take(16).forEach { frame -> RideDeckDiagnostics.record(this, "Crash frame $frame") }

@@ -97,7 +97,7 @@ public final class QuickCameraActivity extends ComponentActivity {
             }
             status.setText((front ? "Front" : "Rear") + (video ? " video - tap picture to record" : " photo - tap picture to capture"));
             capture.setText(video ? "Record" : "Take photo"); setBusy(false);
-        } catch (Exception e) { status.setText("Selected camera mode unavailable. Try the other camera or mode."); flip.setEnabled(true); mode.setEnabled(true); }
+        } catch (Exception e) { RideDeckDiagnostics.failure(this, BugReport.Failure.CAMERA); status.setText("Selected camera mode unavailable. Try the other camera or mode."); flip.setEnabled(true); mode.setEnabled(true); }
     }
     private ContentValues values(boolean movie) {
         ContentValues values = new ContentValues(); values.put(MediaStore.MediaColumns.DISPLAY_NAME, "RideDeck_" + System.currentTimeMillis());
@@ -121,18 +121,19 @@ public final class QuickCameraActivity extends ComponentActivity {
                     if (event instanceof VideoRecordEvent.Status) status.setText("Recording " + (((VideoRecordEvent.Status)event).getRecordingStats().getRecordedDurationNanos() / 1000000000L) + "s - tap picture to stop");
                     if (event instanceof VideoRecordEvent.Finalize) {
                         RideDeckDiagnostics.record(QuickCameraActivity.this, "Camera recording finished error=" + ((VideoRecordEvent.Finalize)event).getError());
+                        if (((VideoRecordEvent.Finalize)event).hasError()) RideDeckDiagnostics.failure(QuickCameraActivity.this, BugReport.Failure.CAMERA);
                         recording = null; capture.setText("Record"); setBusy(false);
                         status.setText(((VideoRecordEvent.Finalize)event).hasError() ? "Recording ended with an error. Check your gallery." : "Video saved - tap picture to record again");
                     }
                 });
                 flip.setEnabled(false); mode.setEnabled(false); capture.setText("Stop recording"); status.setText(audio ? "Recording with sound" : "Recording without sound");
-            } catch (Exception e) { RideDeckDiagnostics.record(this, "Camera recording failed exception=" + e.getClass().getSimpleName()); status.setText("Cannot record. Check permissions and free storage."); }
+            } catch (Exception e) { RideDeckDiagnostics.failure(this, BugReport.Failure.CAMERA); RideDeckDiagnostics.record(this, "Camera recording failed exception=" + e.getClass().getSimpleName()); status.setText("Cannot record. Check permissions and free storage."); }
         } else if (photo != null) {
             setBusy(true);
             ImageCapture.OutputFileOptions options = new ImageCapture.OutputFileOptions.Builder(getContentResolver(), MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values(false)).build();
             photo.takePicture(options, ContextCompat.getMainExecutor(this), new ImageCapture.OnImageSavedCallback() {
                 @Override public void onImageSaved(ImageCapture.OutputFileResults result) { RideDeckDiagnostics.record(QuickCameraActivity.this, "Camera photo saved"); status.setText("Photo saved - tap picture to take another"); setBusy(false); }
-                @Override public void onError(ImageCaptureException error) { RideDeckDiagnostics.record(QuickCameraActivity.this, "Camera photo failed error=" + error.getImageCaptureError()); status.setText("Photo could not be saved. Check free storage."); setBusy(false); }
+                @Override public void onError(ImageCaptureException error) { RideDeckDiagnostics.failure(QuickCameraActivity.this, BugReport.Failure.CAMERA); RideDeckDiagnostics.record(QuickCameraActivity.this, "Camera photo failed error=" + error.getImageCaptureError()); status.setText("Photo could not be saved. Check free storage."); setBusy(false); }
             });
         }
     }

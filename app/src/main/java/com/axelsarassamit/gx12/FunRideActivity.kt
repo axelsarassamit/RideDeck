@@ -155,7 +155,7 @@ class FunRideActivity : Activity() {
             }
             runOnUiThread{if(isFinishing || isDestroyed || token!=generation)return@runOnUiThread;busy=false
                 routes=rows.sortedBy{FunRidePlan.score(it.seconds/60,target,if(rankUTurn)it.uTurns else 0)-TwistyRide.bonus(curvePreference,it.points)}
-                if(routes.isEmpty()){form();status?.text="No suitable route found. Try another direction, shorter duration or different stops."}
+                if(routes.isEmpty()){RideDeckDiagnostics.failure(this,BugReport.Failure.ROUTE_SEARCH);form();status?.text="No suitable route found. Try another direction, shorter duration or different stops."}
                 else{selected=0;runCatching{routeFile.writeText(JSONArray(routes.map{it.json()}).toString());draft.edit().putString("route_draft",snapshot().toString()).apply()};overview()}}
         }
     }

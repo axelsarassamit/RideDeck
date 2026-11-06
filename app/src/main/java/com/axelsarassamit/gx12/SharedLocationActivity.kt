@@ -25,7 +25,7 @@ class SharedLocationActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 progress.dismiss()
-                result.onSuccess { RideDeckDiagnostics.record(this, "Shared destination resolved"); confirm(it) }.onFailure { RideDeckDiagnostics.record(this, "Shared destination resolution failed exception=${it.javaClass.simpleName}"); fail("This shared link could not be read. Share the place again, or enter its full address in RideDeck.") }
+                result.onSuccess { RideDeckDiagnostics.record(this, "Shared destination resolved"); confirm(it) }.onFailure { RideDeckDiagnostics.failure(this, BugReport.Failure.SHARED_DESTINATION); RideDeckDiagnostics.record(this, "Shared destination resolution failed exception=${it.javaClass.simpleName}"); fail("This shared link could not be read. Share the place again, or enter its full address in RideDeck.") }
             }
         }
     }

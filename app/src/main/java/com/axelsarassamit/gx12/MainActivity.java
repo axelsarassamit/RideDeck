@@ -363,31 +363,8 @@ public class MainActivity extends android.app.Activity {
         }
         Button bluetooth = button("BLUETOOTH SETTINGS"); bluetooth.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         page.addView(bluetooth, buttonParams());
-        page = setupGroup(sections, "Help & diagnostics", "View connection details and share a log file", false);
-        Button diagnostics = button("View and share diagnostic log");
-        diagnostics.setOnClickListener(v -> {
-            String report = RideDeckDiagnostics.report(this);
-            final String copy = report;
-            new android.app.AlertDialog.Builder(this).setTitle("RideDeck diagnostics").setMessage(report.length() > 12000 ? "Showing recent entries. Share log file includes the full report.\n" + report.substring(report.length() - 12000) : report)
-                .setPositiveButton("Share log file", (d, w) -> {
-                    try {
-                        File folder = new File(getCacheDir(), "diagnostics"); folder.mkdirs();
-                        File[] prior = folder.listFiles();
-                        if (prior != null) for (File old : prior) if (old.getName().startsWith("RideDeck-diagnostics-") && old.getName().endsWith(".txt")) old.delete();
-                        File log = new File(folder, "RideDeck-diagnostics-" + System.currentTimeMillis() + ".txt");
-                        java.nio.file.Files.write(log.toPath(), copy.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                        Uri file = FileProvider.getUriForFile(this, getPackageName() + ".apkprovider", log);
-                        Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_STREAM, file).putExtra(Intent.EXTRA_SUBJECT, "RideDeck diagnostic report")
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        share.setClipData(android.content.ClipData.newRawUri("RideDeck diagnostics", file));
-                        startActivity(Intent.createChooser(share, "Share log or save it to attach in this chat"));
-                    } catch (Exception error) { displayError("Could not export log. " + safeMessage(error)); }
-                }).setNegativeButton("Close", null).setNeutralButton("Copy", (d, w) -> {
-                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("RideDeck diagnostics", copy));
-                }).show();
-        }); page.addView(diagnostics, buttonParams());
+        page = setupGroup(sections, "Help & diagnostics", "Review a sanitized report before sharing", false);
+        setupAction(page, "Review bug report", this::showBugReport);
         Button notifications = button("Allow app notifications"); notifications.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 24);
             else android.widget.Toast.makeText(this, "App notifications are available on this Android version.", android.widget.Toast.LENGTH_SHORT).show();
@@ -930,6 +907,7 @@ public class MainActivity extends android.app.Activity {
                 dialog.dismiss(); android.widget.Toast.makeText(this, "Reply handed to " + target.appName, android.widget.Toast.LENGTH_SHORT).show();
             } catch (android.app.PendingIntent.CanceledException | RuntimeException error) {
                 if (target.reply == action) target.reply = null;
+                RideDeckDiagnostics.failure(this, BugReport.Failure.REPLY);
                 RideDeckDiagnostics.record(this, "Text reply rejected app=" + target.packageName + " reason=" + error.getClass().getSimpleName());
                 updateAvailability.run();
                 status.setText("The reply control expired or was rejected. Your draft is still here. Copy your words, then open the conversation to paste and send.");
@@ -1547,6 +1525,7 @@ public class MainActivity extends android.app.Activity {
                 prefs.edit().putBoolean(RideSessionState.PREF_RUNNING, false)
                     .remove(RideSessionState.PREF_BASE_ELAPSED)
                     .remove(RideSessionState.PREF_STARTED_ELAPSED).apply();
+                RideDeckDiagnostics.failure(this, BugReport.Failure.DASH_START);
                 showDashMessage("Ride session could not start. Check RideDeck notifications and try again.");
                 restoreRide();
                 return;
@@ -1683,13 +1662,13 @@ public class MainActivity extends android.app.Activity {
 
     private void openMapsAdjacent() {
         Intent launch = getPackageManager().getLaunchIntentForPackage(RidePreferences.selectedMap(this));
-        if (launch == null) { displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
+        if (launch == null) { RideDeckDiagnostics.failure(this, BugReport.Failure.MAP_OPEN); displayError("Install " + RidePreferences.mapName(this) + " first."); return; }
         // Ask Android to place the selected map beside RideDeck when split screen is available.
         try { startAdjacent(launch); }
         catch (RuntimeException adjacentError) {
             launch.removeFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
             try { startActivity(launch); }
-            catch (RuntimeException launchError) { displayError("Could not open " + RidePreferences.mapName(this) + "."); }
+            catch (RuntimeException launchError) { RideDeckDiagnostics.failure(this, BugReport.Failure.MAP_OPEN); displayError("Could not open " + RidePreferences.mapName(this) + "."); }
         }
     }
 
@@ -1804,6 +1783,33 @@ public class MainActivity extends android.app.Activity {
         if (requestCode == REQUEST_BLUETOOTH) refreshDeviceStatus();
     }
 
+    private void showBugReport() {
+        java.util.List<BugReport.Failure> history = RideDeckDiagnostics.failureHistory(this);
+        String draft = BugReport.body(BuildConfig.VERSION_NAME, Build.VERSION.SDK_INT, history, true);
+        String full = BugReport.body(BuildConfig.VERSION_NAME, Build.VERSION.SDK_INT, history, false);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Review bug report")
+            .setMessage("GitHub issues are public. Review this draft before opening GitHub. "
+                + "Sign in there, add steps to reproduce, and submit it yourself. "
+                + "Leave out private information. Nothing is posted from RideDeck.\n\n" + draft)
+            .setPositiveButton("Report on GitHub", (dialog, which) -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(BugReport.issueUrl(draft)))); }
+                catch (RuntimeException unavailable) {
+                    copyBugReport(full);
+                    showDashMessage("Could not open GitHub. The full report was copied.");
+                }
+            })
+            .setNeutralButton("Copy full report", (dialog, which) -> copyBugReport(full))
+            .setNegativeButton("Close", null)
+            .show();
+    }
+
+    private void copyBugReport(String report) {
+        android.content.ClipboardManager clipboard = getSystemService(android.content.ClipboardManager.class);
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("RideDeck bug report", report));
+        showDashMessage("Bug report copied.");
+    }
+
     private void checkForUpdate() {
         updateStatus.setText("Checking the latest public GitHub release…");
         worker.execute(() -> {
@@ -1821,7 +1827,7 @@ public class MainActivity extends android.app.Activity {
 
                 downloadedApk = apk; showUpdateMessage("Version " + tag + " is ready. Android will ask you to approve installation.");
                 runOnUiThread(() -> { if (canInstallPackages()) openInstaller(apk); else startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))); });
-            } catch (Exception error) { showUpdateMessage("Update check failed: " + safeMessage(error)); }
+            } catch (Exception error) { RideDeckDiagnostics.failure(this, BugReport.Failure.UPDATE); showUpdateMessage("Update check failed: " + safeMessage(error)); }
         });
     }
 

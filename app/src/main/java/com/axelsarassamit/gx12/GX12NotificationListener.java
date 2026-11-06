@@ -252,6 +252,7 @@ public final class GX12NotificationListener extends NotificationListenerService 
         }
     }
     @Override public void onListenerDisconnected() {
+        RideDeckDiagnostics.failure(this, BugReport.Failure.NOTIFICATION_ACCESS);
         RideDeckDiagnostics.record(this, "Notification listener disconnected");
         if (connected == this) connected = null;
         synchronized(GX12NotificationListener.class){calls.clear();activeCall=null;} CallerAnnouncement.close(); RideQuietMode.refresh(this); clearPreviews(); super.onListenerDisconnected(); recover(this);

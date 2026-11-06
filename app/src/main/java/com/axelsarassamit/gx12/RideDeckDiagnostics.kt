@@ -6,6 +6,23 @@ import java.io.File
 
 /** Bounded local metadata log. No destination, message, image, pairing code or device address. */
 object RideDeckDiagnostics {
+    private const val FAILURE_HISTORY = "bug_report_history"
+
+    @JvmStatic @Synchronized fun failure(context: Context, failure: BugReport.Failure) {
+        runCatching {
+            val prefs = context.getSharedPreferences(FAILURE_HISTORY, Context.MODE_PRIVATE)
+            val updated = BugReport.append(prefs.getString("events", null), failure)
+            val edit = prefs.edit().putString("events", updated)
+            // Persist the final event before the default crash handler terminates the process.
+            if (failure == BugReport.Failure.APP_CRASH) edit.commit() else edit.apply()
+        }
+    }
+
+    @JvmStatic @Synchronized fun failureHistory(context: Context): List<BugReport.Failure> =
+        runCatching {
+            BugReport.read(context.getSharedPreferences(FAILURE_HISTORY, Context.MODE_PRIVATE).getString("events", null))
+        }.getOrDefault(emptyList())
+
     private fun clean(value: String): String = value
         .replace(Regex("(?i)([0-9a-f]{2}:){5}[0-9a-f]{2}"), "[address]")
         .replace(Regex("[0-9a-fA-F]{64}"), "[token]")
