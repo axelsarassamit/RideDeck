@@ -305,6 +305,9 @@ public class MainActivity extends android.app.Activity {
         Button funRide = button("GO FOR A FUN RIDE");
         funRide.setOnClickListener(v -> startActivity(new Intent(this, FunRideActivity.class)));
         page.addView(funRide, buttonParams());
+        Button rideFiles = button("GPX & ride recap");
+        rideFiles.setOnClickListener(v -> RideFilesActivity.open(this));
+        page.addView(rideFiles, buttonParams());
         if (dashInstalled) {
             page = setupGroup(sections, "RideDeck Dash", "Start recording after Start or Resume", false);
             CheckBox autoOpenDash = new CheckBox(this);
@@ -400,6 +403,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     @Override public void onBackPressed() {
+        if (RainLock.active(this)) return;
         if (setupVisible && setupMenu != null && setupMenu.back()) return;
         super.onBackPressed();
     }
@@ -447,7 +451,12 @@ public class MainActivity extends android.app.Activity {
 
     @Override public Object onRetainNonConfigurationInstance() { return voiceReplyTarget; }
 
+    @Override protected void onRestoreInstanceState(Bundle state) {
+        super.onRestoreInstanceState(state);
+        if (state.getBoolean("rain_lock")) RainLock.engage(this);
+    }
     @Override protected void onSaveInstanceState(Bundle state) {
+        state.putBoolean("rain_lock", RainLock.active(this));
         if (setupMenu != null) setupMenu.save(state);
         state.putBoolean("setup_visible", setupVisible);
         state.putBoolean("dash_recording_requested", dashRecordingRequestedAt > 0L);
@@ -654,6 +663,10 @@ public class MainActivity extends android.app.Activity {
             }); dock.addView(action, rideWeight(compact ? 56 : 64));
         }
         addRideAndDashControls(dock, compact);
+        Button rainLock = rideAction(compact ? "Lock" : "Rain lock", false);
+        rainLock.setContentDescription("Rain lock: prevent accidental touches");
+        rainLock.setOnClickListener(v -> RainLock.engage(this));
+        dock.addView(rainLock, rideWeight(compact ? 56 : 64));
         if (compact) {
             settings.setContentDescription("Setup - use while parked");
             LinearLayout.LayoutParams gear = new LinearLayout.LayoutParams(dp(56), dp(56));

@@ -25,7 +25,7 @@ class FunRideActivity : Activity() {
     private var finishPoint:FunPoint?=null
     private val stops=mutableListOf<FunPoint>()
     private val placeLabels=mutableMapOf<String,String>()
-    private var minutes=60;private var bearing=0;private var fewer=false
+    private var minutes=60;private var bearing=0;private var fewer=false;private var curves=0
     private var motorway=true;private var toll=true;private var ferry=false;private var dirt=true
     private var routes=emptyList<FunRoute>();private var selected=0
     private var map:FunRideMap?=null
@@ -64,10 +64,12 @@ class FunRideActivity : Activity() {
         page.addView(button("Finish: ${finishPoint?.let(::coordinate) ?: "return to start"}") {
             AlertDialog.Builder(this).setTitle("Finish ride").setItems(arrayOf("Return to start","Enter a place or coordinates")){_,i->if(i==0){finishPoint=null;save();form()}else place("Finish"){finishPoint=it;save();form()}}.show()
         })
-        page.addView(button(if(fewer) "Ride style: fewer U-turns" else "Ride style: relaxed exploration") {
-            AlertDialog.Builder(this).setTitle("Ride style").setSingleChoiceItems(arrayOf("Relaxed exploration", "Fewer U-turns · rank route choices"),if(fewer)1 else 0){dialog,i->fewer=i==1;save();dialog.dismiss();form()}.setNegativeButton("Cancel",null).show()
+        page.addView(button("Ride style: ${TwistyRide.names[curves]}") {
+            AlertDialog.Builder(this).setTitle("Ride style").setSingleChoiceItems(TwistyRide.names.toTypedArray(),curves){dialog,i->curves=i;save();dialog.dismiss();form()}.setNegativeButton("Cancel",null).show()
         }.apply{tag="fun_ride_style"})
-        page.addView(text("Fewer U-turns ranks the returned roads; it cannot guarantee no U-turns. Winding-road routing and live traffic are unavailable with this provider."))
+        page.addView(text("Curvy styles rank the bends in returned routes. They do not guarantee winding roads or live traffic."))
+        page.addView(CheckBox(this).apply{text="Prefer fewer U-turns";setTextColor(RideStyle.TEXT);minHeight=dp(56);isChecked=fewer;setOnCheckedChangeListener{_,v->fewer=v;save()}})
+        page.addView(button("GPX & ride recap"){RideFilesActivity.open(this)})
         page.addView(text("Explore towards"))
         page.addView(Spinner(this).apply{minimumHeight=dp(64);adapter=ArrayAdapter(this@FunRideActivity,android.R.layout.simple_spinner_dropdown_item,listOf("North","East","South","West"));setSelection(bearing/90);onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onNothingSelected(p:AdapterView<*>?){};override fun onItemSelected(p:AdapterView<*>?,v:View?,i:Int,id:Long){bearing=i*90;save()}}})
         page.addView(button("Stops: ${stops.size} of 2") {
@@ -139,7 +141,7 @@ class FunRideActivity : Activity() {
         busy=true;val token=++generation;save();form()
         // Snapshot every control before work begins; editing invalidates the whole result.
         val target=minutes;val heading=bearing;val destination=finishPoint?:origin;val explicit=stops.toList()
-        val avoidMotorway=motorway;val avoidToll=toll;val avoidFerry=ferry;val avoidDirt=dirt;val rankUTurn=fewer
+        val avoidMotorway=motorway;val avoidToll=toll;val avoidFerry=ferry;val avoidDirt=dirt;val rankUTurn=fewer;val curvePreference=curves
         worker.execute {
             val rows=mutableListOf<FunRoute>();var lastStart=0L
             for(offset in if(explicit.isEmpty())listOf(0.0,65.0,-65.0)else listOf(0.0)) {
@@ -152,7 +154,7 @@ class FunRideActivity : Activity() {
                 if(route!=null && route.km>=1 && route.seconds/60 in 1.0..720.0 && rows.none{FunRidePlan.sameRoads(it.points,route.points)})rows.add(route)
             }
             runOnUiThread{if(isFinishing || isDestroyed || token!=generation)return@runOnUiThread;busy=false
-                routes=rows.sortedBy{FunRidePlan.score(it.seconds/60,target,if(rankUTurn)it.uTurns else 0)}
+                routes=rows.sortedBy{FunRidePlan.score(it.seconds/60,target,if(rankUTurn)it.uTurns else 0)-TwistyRide.bonus(curvePreference,it.points)}
                 if(routes.isEmpty()){form();status?.text="No suitable route found. Try another direction, shorter duration or different stops."}
                 else{selected=0;runCatching{routeFile.writeText(JSONArray(routes.map{it.json()}).toString());draft.edit().putString("route_draft",snapshot().toString()).apply()};overview()}}
         }
@@ -163,11 +165,12 @@ class FunRideActivity : Activity() {
         val info=text("");page.addView(info)
         val picker=Spinner(this).apply{minimumHeight=dp(56);adapter=ArrayAdapter(this@FunRideActivity,android.R.layout.simple_spinner_dropdown_item,routes.mapIndexed{i,r->"Route ${i+1} · ${r.seconds.toInt()/60} min · ${String.format(Locale.US,"%.1f",r.km)} km"});setSelection(selected)};page.addView(picker)
         val view=FunRideMap(this);map=view;page.addView(view,LinearLayout.LayoutParams(-1,0,1f))
-        fun update(){val r=routes[selected];info.text="${r.stops.size} stops · ${r.uTurns} U-turns · no live traffic";view.show(routes,selected)}
+        fun update(){val r=routes[selected];val extra=((r.seconds-routes.minOf{it.seconds})/60).toInt();val timing=if(extra>0)"+$extra min vs quickest option" else "Near quickest option";info.text="$timing · ${r.stops.size} stops · ${r.uTurns} U-turns · no live traffic";view.show(routes,selected)}
         picker.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onNothingSelected(p:AdapterView<*>?){};override fun onItemSelected(p:AdapterView<*>?,v:View?,i:Int,id:Long){selected=i;update()}}
         val tools=LinearLayout(this);listOf("−" to {view.step(-1)},"Fit" to {view.fit()},"+" to {view.step(1)},"Expand" to {expandedMap()}).forEach{(label,action)->tools.addView(button(label,action),LinearLayout.LayoutParams(0,dp(56),1f))};page.addView(tools)
         page.addView(button("Open in Google Maps · recalculates"){handoff()}.apply{isEnabled=mapsAvailable()})
         if(!mapsAvailable())page.addView(text("No supported navigation app installed. Install Google Maps to carry all stops. Other apps are not offered."))
+        page.addView(button("GPX & route summary"){val r=routes[selected];RideFilesActivity.openPlan(this,r.points,r.seconds,r.km)})
         page.addView(button("Change plan"){routes=emptyList();cancel();form()});setContentView(page);update()
     }
     private fun expandedMap() {
@@ -189,12 +192,12 @@ class FunRideActivity : Activity() {
     }
     private fun snapshot()=JSONObject().put("start",start?.let(FunRoute::pair)).put("finish",finishPoint?.let(FunRoute::pair))
         .put("stops",JSONArray(stops.map(FunRoute::pair))).put("minutes",minutes).put("bearing",bearing)
-        .put("motorway",motorway).put("toll",toll).put("ferry",ferry).put("dirt",dirt).put("fewer",fewer).put("labels",JSONObject(placeLabels.toMap()))
+        .put("motorway",motorway).put("toll",toll).put("ferry",ferry).put("dirt",dirt).put("fewer",fewer).put("curves",curves).put("labels",JSONObject(placeLabels.toMap()))
     private fun save(){draft.edit().putString("draft",snapshot().toString()).apply()}
     private fun restore(j:JSONObject){start=j.optJSONArray("start")?.let(FunRoute::point);finishPoint=j.optJSONArray("finish")?.let(FunRoute::point)
         j.optJSONArray("stops")?.let{a->for(i in 0 until minOf(2,a.length()))stops.add(FunRoute.point(a.getJSONArray(i)))}
         minutes=j.optInt("minutes",60).takeIf{it in listOf(30,60,90,120,180,240,360)}?:60;bearing=j.optInt("bearing",0).takeIf{it in listOf(0,90,180,270)}?:0
-        motorway=j.optBoolean("motorway",true);toll=j.optBoolean("toll",true);ferry=j.optBoolean("ferry",false);dirt=j.optBoolean("dirt",true);fewer=j.optBoolean("fewer",false)
+        motorway=j.optBoolean("motorway",true);toll=j.optBoolean("toll",true);ferry=j.optBoolean("ferry",false);dirt=j.optBoolean("dirt",true);fewer=j.optBoolean("fewer",false);curves=j.optInt("curves",0).coerceIn(0,2)
         j.optJSONObject("labels")?.let{labels->labels.keys().forEach{key->placeLabels[key]=labels.optString(key).take(100)}}}
     private fun stopLocation(){listener?.let{runCatching{getSystemService(LocationManager::class.java).removeUpdates(it)}};listener=null}
     private fun cancel(){generation++;busy=false;stopLocation()}

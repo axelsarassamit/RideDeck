@@ -34,17 +34,17 @@ class FunRideTest {
             prefs.edit().putString("draft","{}").commit()
             ActivityScenario.launch(FunRideActivity::class.java).use { scenario ->
                 scenario.onActivity { a ->
-                    SharedSetupTest.click(a,"Ride style: relaxed exploration")
+                    SharedSetupTest.click(a,"Ride style: Relaxed exploration")
                     val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap{SharedSetupTest.views(it)}.filterIsInstance<android.widget.ListView>().last()
                     list.performItemClick(list.getChildAt(1),1,list.adapter.getItemId(1))
                 }
                 scenario.recreate()
                 scenario.onActivity { a ->
-                    assertTrue(SharedSetupTest.has(a,"Ride style: fewer U-turns"))
-                    SharedSetupTest.click(a,"Ride style: fewer U-turns")
+                    assertTrue(SharedSetupTest.has(a,"Ride style: Curvy"))
+                    SharedSetupTest.click(a,"Ride style: Curvy")
                     val list=android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap{SharedSetupTest.views(it)}.filterIsInstance<android.widget.ListView>().last()
-                    list.performItemClick(list.getChildAt(0),0,list.adapter.getItemId(0))
-                    assertTrue(SharedSetupTest.has(a,"Ride style: relaxed exploration"))
+                    list.performItemClick(list.getChildAt(2),2,list.adapter.getItemId(2))
+                    assertTrue(SharedSetupTest.has(a,"Ride style: Very curvy"))
                 }
             }
         }finally{if(before==null)prefs.edit().remove("draft").commit()else prefs.edit().putString("draft",before).commit()}
