@@ -52,7 +52,7 @@ class RideFilesActivity:Activity() {
         }
     }
     private fun showPage(message:String="") {
-        val page=LinearLayout(this).apply { orientation=1;setPadding(dp(16),dp(12),dp(16),dp(16));setBackgroundColor(RideStyle.BACKGROUND) }
+        val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(12),dp(16),dp(16));setBackgroundColor(RideStyle.BACKGROUND) }
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(page) { v,insets ->
             val b=insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout());v.setPadding(dp(16)+b.left,dp(12)+b.top,dp(16)+b.right,dp(16)+b.bottom);insets
         }
