@@ -10,7 +10,8 @@ import android.os.Build;
 import java.security.MessageDigest;
 
 public final class DashPackageVerifier {
-    public static final String PACKAGE_NAME = "com.axelsarassamit.ridedeck.dash";
+    public static final String PACKAGE_NAME = BuildConfig.DEBUG
+        ? "com.axelsarassamit.ridedeck.dash.debug" : "com.axelsarassamit.ridedeck.dash";
     public static final Uri PROVIDER_URI = Uri.parse("content://" + PACKAGE_NAME + ".bridge");
     private static final String CERT_SHA256_HEX = "cef073342e133ad4c6650da1a276ae4ad03e3396cecac67143154aeb6e6c731b";
     private static final byte[] CERT_SHA256 = decodeHex(CERT_SHA256_HEX);
@@ -32,6 +33,14 @@ public final class DashPackageVerifier {
             }
             if (signers == null || signers.length != 1) return false;
             byte[] actual = MessageDigest.getInstance("SHA-256").digest(signers[0].toByteArray());
+            if (BuildConfig.DEBUG) {
+                PackageInfo own = manager.getPackageInfo(context.getPackageName(), Build.VERSION.SDK_INT >= 28
+                    ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES);
+                Signature[] ownSigners = Build.VERSION.SDK_INT >= 28
+                    ? own.signingInfo == null ? null : own.signingInfo.getApkContentsSigners() : own.signatures;
+                return ownSigners != null && ownSigners.length == 1 && MessageDigest.isEqual(actual,
+                    MessageDigest.getInstance("SHA-256").digest(ownSigners[0].toByteArray()));
+            }
             return MessageDigest.isEqual(CERT_SHA256, actual);
         } catch (Exception unavailableOrUntrusted) {
             return false;
@@ -43,7 +52,7 @@ public final class DashPackageVerifier {
         try {
             String version = context.getPackageManager().getPackageInfo(PACKAGE_NAME, 0).versionName;
             if (version == null) return false;
-            String[] current = version.replaceFirst("^[vV]", "").split("\\.");
+            String[] current = version.replaceFirst("^[vV]", "").replaceFirst("-.*$", "").split("\\.");
             int[] required = {0, 5, 3};
             for (int i = 0; i < required.length; i++) {
                 int value = i < current.length ? Integer.parseInt(current[i]) : 0;

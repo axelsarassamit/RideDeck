@@ -17,7 +17,7 @@ internal class FunRideMap(context: Context) : View(context) {
     private val worker = Executors.newSingleThreadExecutor()
     private val tiles = object : android.util.LruCache<String, Bitmap>(48) {}
     private val pending = mutableSetOf<String>()
-    private val failed = mutableSetOf<String>()
+    private val failed = linkedMapOf<String,Long>()
     @Volatile private var visibleKeys=emptySet<String>()
     private var routes = emptyList<FunRoute>()
     private var selected = 0
@@ -66,7 +66,8 @@ internal class FunRideMap(context: Context) : View(context) {
         paint.color=Color.BLACK;paint.textAlign=Paint.Align.LEFT;paint.textSize=12f*density;canvas.drawText("© OpenStreetMap contributors · Valhalla",5*density,height-6*density,paint)
     }
     private fun fetch(key:String) {
-        if(!alive || pending.size>=12 || key in pending || key in failed)return
+        if(!alive || pending.size>=12 || key in pending || (failed[key]?:0)>android.os.SystemClock.elapsedRealtime())return
+        failed.remove(key)
         pending.add(key)
         worker.execute {
             if(!alive || key !in visibleKeys){post{pending.remove(key);if(alive)invalidate()};return@execute}
@@ -87,7 +88,16 @@ internal class FunRideMap(context: Context) : View(context) {
                     };bitmap
                 } finally { c.disconnect() }
             }.getOrNull()
-            post { pending.remove(key);if(bitmap!=null)tiles.put(key,bitmap)else failed.add(key);if(alive)invalidate() }
+            post {
+                pending.remove(key)
+                if(!alive)return@post
+                if(bitmap!=null)tiles.put(key,bitmap)else{
+                    if(failed.size>=128)failed.remove(failed.keys.first())
+                    failed[key]=android.os.SystemClock.elapsedRealtime()+5000
+                    postDelayed({if(alive)invalidate()},5000)
+                }
+                invalidate()
+            }
         }
     }
     override fun onTouchEvent(event:MotionEvent):Boolean {

@@ -22,7 +22,8 @@ import androidx.core.app.ServiceCompat;
 public final class RideDashLeaseService extends Service {
     public static final String ACTION_START = "com.axelsarassamit.gx12.action.START_RIDE";
     public static final String ACTION_PAUSE = "com.axelsarassamit.gx12.action.PAUSE_RIDE";
-    private static final String EXTRA_STOP_WHEN_DONE = "stop_when_done";
+    private static final String EXTRA_GENERATION = "ride_command_generation";
+    private static final java.util.concurrent.atomic.AtomicLong commandGeneration = new java.util.concurrent.atomic.AtomicLong();
     private static final Uri DASH_PROVIDER_URI = DashPackageVerifier.PROVIDER_URI;
     private static final int PROTOCOL_VERSION = 1;
     private static final long RENEW_INTERVAL_MS = 5_000L;
@@ -31,8 +32,9 @@ public final class RideDashLeaseService extends Service {
     private static volatile boolean serviceRequested;
     private HandlerThread workerThread;
     private Handler worker;
-    private boolean stopping;
-    private boolean stopSent;
+    private volatile boolean stopping;
+    private volatile boolean stopSent;
+    private volatile int latestStartId;
     private String lastNotificationText;
 
     private final Runnable renewTask = new Runnable() {
@@ -51,7 +53,8 @@ public final class RideDashLeaseService extends Service {
     };
 
     public static void start(Context context) {
-        Intent intent = new Intent(context, RideDashLeaseService.class).setAction(ACTION_START);
+        Intent intent = new Intent(context, RideDashLeaseService.class).setAction(ACTION_START)
+            .putExtra(EXTRA_GENERATION, commandGeneration.incrementAndGet());
         context.getSharedPreferences(RideSessionState.PREFERENCES_NAME, Context.MODE_PRIVATE).edit()
             .putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         serviceRequested = true;
@@ -61,12 +64,11 @@ public final class RideDashLeaseService extends Service {
 
     public static void stop(Context context) {
         DashRecordingClient.end(context);
-        boolean wasRunning = serviceRequested;
         serviceRequested = false;
         context.getSharedPreferences(RideSessionState.PREFERENCES_NAME, Context.MODE_PRIVATE).edit()
             .putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         Intent intent = new Intent(context, RideDashLeaseService.class).setAction(ACTION_PAUSE)
-            .putExtra(EXTRA_STOP_WHEN_DONE, !wasRunning);
+            .putExtra(EXTRA_GENERATION, commandGeneration.incrementAndGet());
         try { context.startService(intent); }
         catch (RuntimeException error) { context.stopService(intent); }
     }
@@ -82,22 +84,27 @@ public final class RideDashLeaseService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        latestStartId = startId;
         String action = intent == null ? null : intent.getAction();
+        long generation = intent == null ? 0L : intent.getLongExtra(EXTRA_GENERATION, 0L);
+        if (generation != 0L && generation != commandGeneration.get()) {
+            if (!serviceRequested) stopSelfResult(startId);
+            return START_NOT_STICKY;
+        }
         if (ACTION_PAUSE.equals(action)) {
+            if (generation == 0L) commandGeneration.incrementAndGet(); // Notification Pause.
             DashRecordingClient.end(this);
             serviceRequested = false;
             pausePersistedRide();
-            boolean stopWhenDone = intent.getBooleanExtra(EXTRA_STOP_WHEN_DONE, false);
             if (worker != null) {
                 worker.removeCallbacks(renewTask);
                 worker.post(() -> {
+                    if (latestStartId != startId && serviceRequested) return;
                     sendStop();
-                    if (stopWhenDone && !ridePreferences().getBoolean(RideSessionState.PREF_RUNNING, false)) {
-                        stopSelf(startId);
-                        if (workerThread != null) workerThread.quitSafely();
-                    }
+                    // A later explicit Start must not be stopped by this older Pause.
+                    stopSelfResult(startId);
                 });
-            }
+            } else stopSelfResult(startId);
             stopForeground(Service.STOP_FOREGROUND_REMOVE);
             return START_NOT_STICKY;
         }
@@ -162,22 +169,17 @@ public final class RideDashLeaseService extends Service {
         ridePreferences().edit().putBoolean(RideSessionState.PREF_DASH_LEASE_ACCEPTED, false).apply();
         if (stopping) return;
         stopping = true;
+        final int stopId = latestStartId;
         if (worker == null) { stopSelf(); return; }
         worker.removeCallbacks(renewTask);
         worker.post(() -> {
+            if (latestStartId != stopId) return;
             sendStop();
-            if (ridePreferences().getBoolean(RideSessionState.PREF_RUNNING, false)) {
-                // A new explicit ride start arrived while the previous stop was queued.
-                stopping = false;
-                stopSent = false;
-                serviceRequested = true;
-                worker.removeCallbacks(renewTask);
-                worker.post(renewTask);
-                return;
-            }
-            stopForeground(Service.STOP_FOREGROUND_REMOVE);
-            stopSelf();
-            if (workerThread != null) workerThread.quitSafely();
+            new Handler(android.os.Looper.getMainLooper()).post(() -> {
+                if (latestStartId != stopId) return;
+                stopForeground(Service.STOP_FOREGROUND_REMOVE);
+                stopSelfResult(stopId);
+            });
         });
     }
 
@@ -254,6 +256,7 @@ public final class RideDashLeaseService extends Service {
     }
 
     private void updateNotification(String text) {
+        if (!serviceRequested || stopping) return;
         if (text.equals(lastNotificationText)) return;
         lastNotificationText = text;
         NotificationManager manager = getSystemService(NotificationManager.class);

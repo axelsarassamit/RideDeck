@@ -16,7 +16,7 @@ android {
         targetSdk = 35
         val releaseVersion = (System.getenv("GX12_VERSION_NAME") ?: "0.12.32").removePrefix("v")
         val parts = releaseVersion.split(".")
-        require(parts.size >= 2 && parts.take(3).all { it.all(Char::isDigit) }) {
+        require(Regex("[0-9]{1,3}\\.[0-9]{1,2}\\.[0-9]{1,2}").matches(releaseVersion)) {
             "GX12_VERSION_NAME must use numeric semver such as 0.1.0"
         }
         val major = parts[0].toInt()

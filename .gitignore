@@ -6,6 +6,7 @@ local.properties
 *.iml
 .idea/
 signing/
+.private/
 *.jks
 *.keystore
 *.apk

@@ -71,6 +71,12 @@ class FunRideTest {
                     FunRideActivity::class.java.getDeclaredMethod("overview").apply{isAccessible=true}.invoke(activity)
                 }
                 scenario.recreate()
+                for(i in 0 until 100){
+                    var ready=false
+                    scenario.onActivity { a -> ready=(FunRideActivity::class.java.getDeclaredField("routes").apply{isAccessible=true}.get(a) as List<*>).isNotEmpty() }
+                    if(ready)break
+                    Thread.sleep(50)
+                }
                 scenario.onActivity { activity ->
                     val restored=FunRideActivity::class.java.getDeclaredField("routes").apply{isAccessible=true}.get(activity) as List<*>
                     assertEquals(listOf(route),restored)

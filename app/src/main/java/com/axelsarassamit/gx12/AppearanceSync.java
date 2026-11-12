@@ -18,7 +18,7 @@ public final class AppearanceSync {
                 Bundle extras=new Bundle();extras.putInt("protocolVersion",1);
                 extras.putInt("appearanceMode",RideAppearance.mode(app));
                 extras.putInt("appearanceAccent",RideAppearance.accentIndex(app));
-                app.getContentResolver().call(Uri.parse("content://com.axelsarassamit.ridedeck.dash.bridge"),"appearance",null,extras);
+                app.getContentResolver().call(DashPackageVerifier.PROVIDER_URI,"appearance",null,extras);
             } catch(RuntimeException ignored) { /* Older or absent Dash keeps working without appearance sync. */ }
         });
     }

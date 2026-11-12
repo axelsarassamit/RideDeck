@@ -1,6 +1,6 @@
 # Shared buttons and menus
 
-The family action style is defined by RideStyle.action: 56 dp minimum touch height, 18 sp sentence-case medium text, 14 dp corners, themed raised surface, visible border, pressed ripple and themed disabled text. Menu rows are start aligned; action tiles and horizontal controls are centred. Text can wrap and row height can grow. Setup headers and tabs use 16 sp text to fit their fixed navigation rail.
+The family action style is defined by RideStyle.action: 64 dp minimum touch height, 18 sp sentence-case medium text, 14 dp corners, themed raised surface, visible border, pressed ripple and themed disabled text. Menu rows are start aligned; action tiles and horizontal controls are centred. Text can wrap and row height can grow. Setup headers and tabs use 16 sp text to fit their fixed navigation rail.
 
 Setup keeps the same Back, title, Done and section layout across editions. Recording transport, editor tools, the riding cockpit and route confirmation retain purpose-specific layouts rather than copying a settings row.
 

@@ -71,6 +71,14 @@ public class MainActivity extends android.app.Activity {
     private boolean externalVoiceDeparted;
     private HeadsetMicRoute headsetMic;
     private Runnable pendingHeadsetVoice;
+    private int pendingVoiceOperation;
+    private GX12NotificationListener.NotificationPreview reviewTarget;
+    private EditText reviewDraft;
+    private static final class RetainedUi {
+        GX12NotificationListener.NotificationPreview voiceTarget, reviewTarget;
+        String draft;
+        int voiceOperation;
+    }
     private android.speech.tts.TextToSpeech speech;
     private boolean speechReady;
     private String messageApp;
@@ -95,6 +103,9 @@ public class MainActivity extends android.app.Activity {
     private int dashAutoOpenPollCount;
     private final Runnable dashAutoOpenPoll = () -> pollDashAutoOpen();
     private File downloadedApk;
+    private volatile HttpURLConnection activeUpdateConnection;
+    private volatile long updateDeadline;
+    private boolean checkingUpdate;
     private MediaController mediaController;
     private BluetoothProfile a2dpProfile;
     private BluetoothProfile headsetProfile;
@@ -130,6 +141,11 @@ public class MainActivity extends android.app.Activity {
             dashRecordingRequestedAt = android.os.SystemClock.elapsedRealtime();
         Object retained = getLastNonConfigurationInstance();
         if (retained instanceof GX12NotificationListener.NotificationPreview) voiceReplyTarget = (GX12NotificationListener.NotificationPreview) retained;
+        if (retained instanceof RetainedUi) {
+            RetainedUi ui = (RetainedUi) retained;
+            voiceReplyTarget = ui.voiceTarget;
+            pendingVoiceOperation = ui.voiceOperation;
+        }
         headsetMic = new HeadsetMicRoute(this);
         dashInstalled = DashPackageVerifier.isInstalledAndSigned(this);
         if (this instanceof SetupActivity) buildSetupScreen();
@@ -137,6 +153,12 @@ public class MainActivity extends android.app.Activity {
         else if ("android.app.action.AUTOMATIC_ZEN_RULE".equals(getIntent().getAction())) buildSetupScreen();
         else buildScreen();
         refreshDeviceStatus();
+        if (retained instanceof RetainedUi) {
+            RetainedUi ui = (RetainedUi) retained;
+            if (ui.reviewTarget != null) handler.post(() -> {
+                if (!isFinishing() && !isDestroyed()) confirmVoiceReply(ui.reviewTarget, ui.draft);
+            });
+        }
         if (!(this instanceof SetupActivity)) StartupReveal.show(this,state,"Standard",RideStyle.BACKGROUND,RideTheme.accent(this),RideStyle.TEXT,()->GX12NotificationListener.activeCall!=null || getSystemService(android.media.AudioManager.class).getMode()!=android.media.AudioManager.MODE_NORMAL);
     }
 
@@ -260,6 +282,9 @@ public class MainActivity extends android.app.Activity {
         handler.removeCallbacksAndMessages(null);
         if (headsetMic != null) headsetMic.release();
         pendingHeadsetVoice = null;
+        if (voiceReplyReview != null) voiceReplyReview.dismiss();
+        HttpURLConnection update = activeUpdateConnection;
+        if (update != null) update.disconnect();
         if (speech != null) { speech.stop(); speech.shutdown(); }
         worker.shutdownNow();
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
@@ -426,7 +451,14 @@ public class MainActivity extends android.app.Activity {
     }
 
 
-    @Override public Object onRetainNonConfigurationInstance() { return voiceReplyTarget; }
+    @Override public Object onRetainNonConfigurationInstance() {
+        RetainedUi ui = new RetainedUi();
+        ui.voiceTarget = voiceReplyTarget;
+        ui.voiceOperation = pendingVoiceOperation;
+        ui.reviewTarget = reviewTarget;
+        ui.draft = reviewDraft == null ? "" : reviewDraft.getText().toString();
+        return ui;
+    }
 
     @Override protected void onRestoreInstanceState(Bundle state) {
         super.onRestoreInstanceState(state);
@@ -792,6 +824,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void replyByVoice(GX12NotificationListener.NotificationPreview target) {
+        pendingVoiceOperation = 2;
         if (target == null || RidePreferences.readOnlyEmail(target.packageName)) return;
         GX12NotificationListener.reloadSelected();
         if (RidePreferences.prefs(this).getInt("reply_mode", 0) == 1) {
@@ -838,6 +871,7 @@ public class MainActivity extends android.app.Activity {
         TextView caption = text("YOUR REPLY", 16, RideTheme.accent(this), true);
         caption.setPadding(0, 0, 0, dp(8)); page.addView(caption);
         EditText draft = new EditText(this); draft.setHint("Your reply"); draft.setText(words);
+        reviewTarget = target; reviewDraft = draft;
         draft.setTextSize(28); draft.setTextColor(RideStyle.TEXT); draft.setHintTextColor(RideStyle.MUTED);
         draft.setMinLines(3); draft.setMaxLines(10); draft.setGravity(Gravity.TOP);
         draft.setPadding(dp(20), dp(16), dp(20), dp(16)); draft.setBackground(RideStyle.surface(this, RideStyle.PANEL, 12, true));
@@ -919,7 +953,11 @@ public class MainActivity extends android.app.Activity {
             view.setPadding(edges.left + dp(20), edges.top + dp(20), edges.right + dp(20), Math.max(edges.bottom, keyboard) + dp(20)); return insets;
         });
         dialog.setContentView(root); voiceReplyReview = dialog;
-        dialog.setOnDismissListener(d -> { if (voiceReplyReview == dialog) voiceReplyReview = null; });
+        dialog.setOnDismissListener(d -> {
+            if (voiceReplyReview == dialog) {
+                voiceReplyReview = null; reviewTarget = null; reviewDraft = null;
+            }
+        });
         dialog.show();
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(RideStyle.BACKGROUND));
@@ -1688,6 +1726,7 @@ public class MainActivity extends android.app.Activity {
         if (!permissions.isEmpty()) {
             pendingHeadsetVoice = listen; requestPermissions(permissions.toArray(new String[0]), 84); return;
         }
+        pendingVoiceOperation = 0;
         android.widget.Toast.makeText(this, "Starting voice input...", android.widget.Toast.LENGTH_SHORT).show();
         headsetMic.start(listen, message -> {
             finishActivity(82); finishActivity(83); voiceReplyTarget = null; showRideMessage(message);
@@ -1695,6 +1734,7 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void startGoogleVoice() {
+        pendingVoiceOperation = 1;
         withHeadsetMicrophone(() -> {
             Intent voice = new Intent(android.speech.RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE);
             voice.putExtra(android.speech.RecognizerIntent.EXTRA_SECURE, getSystemService(android.app.KeyguardManager.class).isKeyguardLocked());
@@ -1775,9 +1815,12 @@ public class MainActivity extends android.app.Activity {
         if (DashRecordingClient.onRequestPermissionsResult(this, requestCode, results)) return;
         if (requestCode == 84) {
             Runnable next = pendingHeadsetVoice; pendingHeadsetVoice = null;
+            int operation = pendingVoiceOperation; pendingVoiceOperation = 0;
             boolean granted = results.length > 0;
             for (int value : results) granted &= value == PackageManager.PERMISSION_GRANTED;
             if (granted && next != null) withHeadsetMicrophone(next);
+            else if (granted && operation == 1) startGoogleVoice();
+            else if (granted && operation == 2 && voiceReplyTarget != null) replyByVoice(voiceReplyTarget);
             else { voiceReplyTarget = null; showRideMessage("Microphone permission is needed for voice input."); }
         }
         if (requestCode == REQUEST_BLUETOOTH) refreshDeviceStatus();
@@ -1811,8 +1854,12 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void checkForUpdate() {
+        if (checkingUpdate) return;
+        checkingUpdate = true;
+        updateDeadline = android.os.SystemClock.elapsedRealtime() + 120000L;
         updateStatus.setText("Checking the latest public GitHub release…");
         worker.execute(() -> {
+            File partial = null;
             try {
                 JSONObject release = getJson("https://api.github.com/repos/" + REPOSITORY + "/releases/latest");
                 String tag = release.getString("tag_name"); int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; int releaseCode = parseVersionCode(tag);
@@ -1822,30 +1869,59 @@ public class MainActivity extends android.app.Activity {
                 if (apkUrl == null || sumsUrl == null) throw new IllegalStateException("The latest release is missing its APK or checksum file.");
                 String expectedHash = findHash(downloadText(sumsUrl), BuildConfig.UPDATE_ASSET);
                 File updateDir = new File(getCacheDir(), "updates"); if (!updateDir.exists() && !updateDir.mkdirs()) throw new IllegalStateException("Could not prepare the update folder.");
-                File apk = new File(updateDir, BuildConfig.UPDATE_ASSET); downloadFile(apkUrl, apk);
-                String actualHash = sha256(apk); if (!actualHash.equalsIgnoreCase(expectedHash)) { apk.delete(); throw new SecurityException("The downloaded APK failed its SHA-256 check."); }
+                if (updateDir.getUsableSpace() < UpdatePolicy.MAX_APK_BYTES + 32L * 1024 * 1024) throw new IllegalStateException("Not enough free space for an update.");
+                partial = File.createTempFile("update-", ".part", updateDir);
+                downloadFile(apkUrl, partial);
+                String actualHash = sha256(partial); if (!actualHash.equalsIgnoreCase(expectedHash)) throw new SecurityException("The downloaded APK failed its SHA-256 check.");
+                verifyUpdateArchive(partial, localCode, releaseCode);
+                File apk = new File(updateDir, BuildConfig.UPDATE_ASSET);
+                java.nio.file.Files.move(partial.toPath(), apk.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                partial = null;
 
                 downloadedApk = apk; showUpdateMessage("Version " + tag + " is ready. Android will ask you to approve installation.");
-                runOnUiThread(() -> { if (canInstallPackages()) openInstaller(apk); else startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))); });
+                runOnUiThread(() -> { if (isFinishing() || isDestroyed()) return; if (canInstallPackages()) openInstaller(apk); else startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))); });
             } catch (Exception error) { RideDeckDiagnostics.failure(this, BugReport.Failure.UPDATE); showUpdateMessage("Update check failed: " + safeMessage(error)); }
+            finally { if (partial != null) partial.delete(); runOnUiThread(() -> checkingUpdate = false); }
         });
     }
 
     private int parseVersionCode(String tag) {
-        try { String numeric = tag.startsWith("v") ? tag.substring(1) : tag; String[] pieces = numeric.split("\\."); int major = Integer.parseInt(pieces[0]); int minor = pieces.length > 1 ? Integer.parseInt(pieces[1]) : 0; int patch = pieces.length > 2 ? Integer.parseInt(pieces[2].replaceAll("[^0-9].*$", "")) : 0; return major * 10000 + minor * 100 + patch; }
-        catch (Exception ignored) { throw new IllegalArgumentException("Release tag must use a numeric version such as v0.1.1."); }
+        return UpdatePolicy.versionCode(tag);
+    }
+
+    private java.util.Set<String> updateSigners(PackageInfo info) throws Exception {
+        android.content.pm.Signature[] signatures = Build.VERSION.SDK_INT >= 28
+            ? info.signingInfo == null ? null : info.signingInfo.getApkContentsSigners() : info.signatures;
+        java.util.Set<String> result = new java.util.HashSet<>();
+        if (signatures != null) for (android.content.pm.Signature signature : signatures)
+            result.add(android.util.Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()), android.util.Base64.NO_WRAP));
+        return result;
+    }
+
+    private void verifyUpdateArchive(File archive, int localVersion, int advertisedVersion) throws Exception {
+        int flags = Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+        PackageInfo candidate = getPackageManager().getPackageArchiveInfo(archive.getPath(), flags);
+        PackageInfo installed = getPackageManager().getPackageInfo(getPackageName(), flags);
+        if (candidate == null || !UpdatePolicy.candidate(getPackageName(), candidate.packageName, localVersion,
+                candidate.versionCode, advertisedVersion, updateSigners(installed), updateSigners(candidate)))
+            throw new SecurityException("Update package, version or signing identity does not match RideDeck.");
+    }
+
+    private void checkUpdateTransfer() throws java.io.IOException {
+        if (Thread.currentThread().isInterrupted() || android.os.SystemClock.elapsedRealtime() > updateDeadline)
+            throw new java.io.IOException("Update cancelled or timed out.");
     }
 
     private JSONObject getJson(String address) throws Exception { HttpURLConnection c = openConnection(address); c.setRequestProperty("Accept", "application/vnd.github+json"); try (InputStream in = c.getInputStream()) { return new JSONObject(readText(in)); } finally { c.disconnect(); } }
     private String downloadText(String address) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream()) { return readText(in); } finally { c.disconnect(); } }
-    private HttpURLConnection openConnection(String address) throws Exception { HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection(); c.setConnectTimeout(15000); c.setReadTimeout(30000); c.setInstanceFollowRedirects(true); c.setRequestProperty("User-Agent", "RideDeck-Android"); return c; }
-    private String readText(InputStream input) throws Exception { StringBuilder b = new StringBuilder(); try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8))) { String line; while ((line = reader.readLine()) != null) b.append(line).append('\n'); } return b.toString(); }
+    private HttpURLConnection openConnection(String address) throws Exception { checkUpdateTransfer(); URL url = new URL(address); if (!"https".equals(url.getProtocol())) throw new SecurityException("Updates require HTTPS."); HttpURLConnection c = (HttpURLConnection) url.openConnection(); activeUpdateConnection = c; c.setConnectTimeout(15000); c.setReadTimeout(15000); c.setInstanceFollowRedirects(true); c.setRequestProperty("User-Agent", "RideDeck-Android"); return c; }
+    private String readText(InputStream input) throws Exception { java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(); byte[] buffer = new byte[4096]; int n; while ((n = input.read(buffer)) != -1) { checkUpdateTransfer(); if (out.size() + n > UpdatePolicy.MAX_TEXT_BYTES) throw new java.io.IOException("Update response is too large."); out.write(buffer, 0, n); } return out.toString("UTF-8"); }
     private String findHash(String checksums, String filename) { for (String line : checksums.split("\\r?\\n")) { String[] f = line.trim().split("\\s+"); if (f.length >= 2 && f[1].replaceFirst("^\\*", "").equals(filename)) return f[0]; } throw new IllegalStateException("No SHA-256 checksum was published for the APK."); }
-    private void downloadFile(String address, File target) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) { byte[] buffer = new byte[8192]; int count; while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count); } finally { c.disconnect(); } }
+    private void downloadFile(String address, File target) throws Exception { HttpURLConnection c = openConnection(address); try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(target)) { byte[] buffer = new byte[8192]; int count; long total = 0; while ((count = in.read(buffer)) != -1) { checkUpdateTransfer(); total += count; if (total > UpdatePolicy.MAX_APK_BYTES) throw new java.io.IOException("Update APK is too large."); out.write(buffer, 0, count); } } finally { c.disconnect(); } }
     private String sha256(File file) throws Exception { MessageDigest d = MessageDigest.getInstance("SHA-256"); try (InputStream in = new java.io.FileInputStream(file)) { byte[] b = new byte[8192]; int n; while ((n = in.read(b)) != -1) d.update(b, 0, n); } StringBuilder s = new StringBuilder(); for (byte v : d.digest()) s.append(String.format(Locale.ROOT, "%02x", v & 0xff)); return s.toString(); }
     private boolean canInstallPackages() { return Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls(); }
     private void openInstaller(File apk) { try { Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".apkprovider", apk); Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE); i.setDataAndType(uri, "application/vnd.android.package-archive"); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); if (downloadedApk != null && downloadedApk.equals(apk)) downloadedApk = null; startActivity(i); } catch (Exception e) { showUpdateMessage("Could not open Android’s installer: " + safeMessage(e)); } }
-    private void showUpdateMessage(String message) { runOnUiThread(() -> { if (updateStatus != null) updateStatus.setText(message); }); }
+    private void showUpdateMessage(String message) { runOnUiThread(() -> { if (!isFinishing() && !isDestroyed() && updateStatus != null) updateStatus.setText(message); }); }
     private String safeMessage(Exception error) { String m = error.getMessage(); return m == null || m.isBlank() ? error.getClass().getSimpleName() : m; }
     private String appVersion() { try { PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0); return info.versionName + " (" + info.versionCode + ")"; } catch (Exception ignored) { return "unknown"; } }
     private TextView text(String value, int size, int color, boolean bold) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); v.setTypeface(Typeface.create(bold ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL)); return v; }

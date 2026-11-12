@@ -23,7 +23,7 @@ import java.lang.ref.WeakReference;
 /** Capability-bound host client for Dash recording and the embedded camera preview. */
 public final class DashRecordingClient {
     private static final String DASH_PACKAGE = DashPackageVerifier.PACKAGE_NAME;
-    private static final String DASH_SERVICE = DASH_PACKAGE + ".CompanionRecordingService";
+    private static final String DASH_SERVICE = "com.axelsarassamit.ridedeck.dash.CompanionRecordingService";
     private static final int MSG_START = 1;
     private static final int MSG_PREVIEW = 2;
     private static final int MSG_STATUS = 3;
@@ -165,7 +165,7 @@ public final class DashRecordingClient {
     }
 
     private static boolean isTrustedDashStartIntent(PendingIntent startIntent) {
-        if (startIntent == null || app == null || !startIntent.isImmutable()
+        if (startIntent == null || app == null || (Build.VERSION.SDK_INT >= 31 && !startIntent.isImmutable())
                 || !DASH_PACKAGE.equals(startIntent.getCreatorPackage())
                 || !DashPackageVerifier.isInstalledAndSigned(app)) return false;
         try {

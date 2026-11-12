@@ -29,7 +29,7 @@ public final class PlaybackTimelineView extends View {
         ink.setColor(RideStyle.LINE); c.drawLine(2*d, 4*d, getWidth()-2*d, 4*d, ink);
         ink.setColor(RideTheme.accent(getContext()));
         c.drawLine(2*d, 4*d, 2*d+(getWidth()-4*d)*position/duration, 4*d, ink);
-        ink.setStyle(Paint.Style.FILL); ink.setTypeface(android.graphics.Typeface.create("sans-serif",0));
+        ink.setStyle(Paint.Style.FILL); ink.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.NORMAL));
         ink.setTextSize(12*getResources().getDisplayMetrics().scaledDensity); ink.setColor(RideStyle.MUTED);
         ink.setTextAlign(Paint.Align.LEFT); c.drawText(time(position), 0, getHeight()-3*d, ink);
         ink.setTextAlign(Paint.Align.RIGHT); c.drawText(time(duration), getWidth(), getHeight()-3*d, ink);

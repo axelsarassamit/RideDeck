@@ -41,14 +41,14 @@ final class SetupMenu {
         root.setPadding(dp(16),dp(12),dp(16),dp(12));
         TextView brandView=label(brand,16,accent); brandView.setPadding(dp(4),dp(10),0,dp(12)); root.addView(brandView);
         LinearLayout header=new LinearLayout(activity); header.setGravity(Gravity.CENTER_VERTICAL);
-        back=action("Back",()->back()); header.addView(back,new LinearLayout.LayoutParams(dp(76),dp(56)));
+        back=action("Back",()->back()); header.addView(back,new LinearLayout.LayoutParams(dp(76),dp(64)));
         title=label("Setup",28,RideStyle.TEXT); androidx.core.view.ViewCompat.setAccessibilityHeading(title,true);
         header.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        Button done=action("Done",close); header.addView(done,new LinearLayout.LayoutParams(dp(76),dp(56)));
+        Button done=action("Done",close); header.addView(done,new LinearLayout.LayoutParams(dp(76),dp(64)));
         root.addView(header); tabs=new LinearLayout(activity); tabs.setPadding(0,dp(12),0,dp(16)); root.addView(tabs);
         for(String tab:yamaha?new String[]{"General","Ride","Yamaha"}:new String[]{"General","Ride"}) {
             Button button=action(tab,()->{section=tab;selected="";restoredScroll=0;render();}); button.setTag(tab);
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(56),1);lp.setMargins(dp(3),0,dp(3),0);tabs.addView(button,lp);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(64),1);lp.setMargins(dp(3),0,dp(3),0);tabs.addView(button,lp);
         }
         scroll=new ScrollView(activity);scroll.setFillViewport(true);body=column();scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));

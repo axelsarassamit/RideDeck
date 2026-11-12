@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RiderFeaturesTest {
+    @Test fun invalidReversedTimestampCannotWrapIntoMovingTime() {
+        val a=RideTrackPoint(13.0,100.0,Long.MAX_VALUE-500)
+        val b=RideTrackPoint(13.00001,100.0,Long.MIN_VALUE+500)
+        val recap=RideTrack(listOf(listOf(a,b))).recap()
+        assertNull(recap.movingMs);assertEquals(0L,recap.timedMs)
+    }
     @Test fun curvyRankingRewardsBendsButNotSharpJunctions() {
         val straight=listOf(FunPoint(13.0,100.0),FunPoint(13.001,100.0),FunPoint(13.002,100.0))
         val bend=straight.take(2)+FunPoint(13.002,100.001)

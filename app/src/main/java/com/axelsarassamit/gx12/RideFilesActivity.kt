@@ -28,18 +28,37 @@ class RideFilesActivity:Activity() {
         fun openRecorded(a:Activity,title:String,segments:List<List<RideTrackPoint>>,km:Double,seconds:Long,lean:Double?) =
             launch(a,Summary(title,RideTrack(segments),distanceKm=km,recordedSeconds=seconds,peakLean=lean))
     }
-    private var summary:Summary?=null
-    private val io=Executors.newSingleThreadExecutor()
-    private var working=false
+    private class Work(var summary:Summary?=null) {
+        val io=Executors.newSingleThreadExecutor()
+        var working=false
+        var message=""
+        var owner=java.lang.ref.WeakReference<RideFilesActivity>(null)
+        fun finish(result:Summary?,text:String) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if(result!=null)summary=result
+                working=false;message=text
+                owner.get()?.takeUnless{it.isFinishing || it.isDestroyed}?.showPage(text)
+            }
+        }
+    }
+    private lateinit var work:Work
+    private var summary:Summary?
+        get()=work.summary
+        set(value){work.summary=value}
+    private val io get()=work.io
+    private var working:Boolean
+        get()=work.working
+        set(value){work.working=value}
     private lateinit var status:TextView
     private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
     override fun onCreate(saved:Bundle?) {
         RideAppearance.prepare(this);super.onCreate(saved)
-        summary=lastNonConfigurationInstance as? Summary ?: handoff?.takeIf{it.first==intent.getStringExtra("handoff")}?.let{ handoff=null;it.second }
-        showPage()
+        work=lastNonConfigurationInstance as? Work ?: Work(handoff?.takeIf{it.first==intent.getStringExtra("handoff")}?.let{ handoff=null;it.second })
+        work.owner=java.lang.ref.WeakReference(this)
+        showPage(work.message)
     }
-    override fun onRetainNonConfigurationInstance():Any?=summary
-    override fun onDestroy(){io.shutdownNow();super.onDestroy()}
+    override fun onRetainNonConfigurationInstance():Any?=work
+    override fun onDestroy(){if(work.owner.get()===this)work.owner.clear();if(!isChangingConfigurations)io.shutdownNow();super.onDestroy()}
     private fun recap(s:Summary):String {
         val r=s.track.recap();val km=s.distanceKm?:r.meters/1000
         return buildString {
@@ -78,24 +97,27 @@ class RideFilesActivity:Activity() {
     }
     private fun shareTrack(track:RideTrack) {
         working=true;showPage("Preparing GPX…")
+        val state=work;val cache=cacheDir
         io.execute {
             val file=runCatching {
-                val dir=java.io.File(cacheDir,"ride-share");check(dir.isDirectory || dir.mkdirs())
+                val dir=java.io.File(cache,"ride-share");check(dir.isDirectory || dir.mkdirs())
                 dir.listFiles()?.filter { it.isFile && it.name.startsWith("RideDeck-") && it.extension=="gpx" &&
                     System.currentTimeMillis()-it.lastModified()>86_400_000 }?.forEach { it.delete() }
                 java.io.File.createTempFile("RideDeck-", ".gpx", dir).also { f->f.outputStream().use{RideGpx.write(track,it)} }
             }
             runOnUiThread {
-                if(isFinishing || isDestroyed)return@runOnUiThread
-                working=false
+                val owner=state.owner.get()?.takeUnless{it.isFinishing || it.isDestroyed}
+                state.working=false
                 val shared=file.mapCatching { f ->
-                    val uri=androidx.core.content.FileProvider.getUriForFile(this, "$packageName.apkprovider",f)
+                    if(owner==null)return@mapCatching
+                    val uri=androidx.core.content.FileProvider.getUriForFile(owner, "${owner.packageName}.apkprovider",f)
                     val send=Intent(Intent.ACTION_SEND).setType("application/gpx+xml").putExtra(Intent.EXTRA_STREAM,uri)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    send.clipData=android.content.ClipData.newUri(contentResolver,"RideDeck GPX",uri)
-                    startActivity(Intent.createChooser(send,"Share GPX track"))
+                    send.clipData=android.content.ClipData.newUri(owner.contentResolver,"RideDeck GPX",uri)
+                    owner.startActivity(Intent.createChooser(send,"Share GPX track"))
                 }
-                showPage(if(shared.isFailure)"Could not share this GPX track." else "")
+                state.message=if(shared.isFailure)"Could not share this GPX track." else ""
+                owner?.showPage(state.message)
             }
         }
     }
@@ -105,17 +127,14 @@ class RideFilesActivity:Activity() {
         val uri=data?.data ?: return
         val track=summary?.track
         working=true;showPage(if(request==1)"Reading track…" else "Saving track…")
+        val state=work;val resolver=applicationContext.contentResolver
         io.execute {
             val resultData=runCatching {
-                if(request==1) contentResolver.openInputStream(uri)?.use { RideGpx.read(it) } ?: error("No file")
-                else { requireNotNull(track);requireNotNull(contentResolver.openOutputStream(uri,"wt")).use { RideGpx.write(track,it) };null }
+                if(request==1) resolver.openInputStream(uri)?.use { RideGpx.read(it) } ?: error("No file")
+                else { requireNotNull(track);requireNotNull(resolver.openOutputStream(uri,"wt")).use { RideGpx.write(track,it) };null }
             }
-            runOnUiThread {
-                if(isFinishing || isDestroyed)return@runOnUiThread
-                working=false
-                resultData.getOrNull()?.let { summary=Summary("Imported GPX ride",it) }
-                showPage(if(resultData.isFailure)"Could not ${if(request==1)"read this GPX track" else "save the track"}." else if(request==1)"Track loaded." else "GPX saved.")
-            }
+            state.finish(resultData.getOrNull()?.let{Summary("Imported GPX ride",it)},
+                if(resultData.isFailure)"Could not ${if(request==1)"read this GPX track" else "save the track"}." else if(request==1)"Track loaded." else "GPX saved.")
         }
     }
     private fun trackPreview(track:RideTrack):View = object:View(this) {

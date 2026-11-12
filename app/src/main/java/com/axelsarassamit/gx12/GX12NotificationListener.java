@@ -123,7 +123,13 @@ public final class GX12NotificationListener extends NotificationListenerService 
                 .setLabel(input.getLabel()).setChoices(input.getChoices()).setAllowFreeFormInput(input.getAllowFreeFormInput())
                 .addExtras(input.getExtras());
             if (input.getAllowedDataTypes() != null) for (String type : input.getAllowedDataTypes()) builder.setAllowDataType(type, true);
-            if (android.os.Build.VERSION.SDK_INT >= 29) builder.setEditChoicesBeforeSending(input.getEditChoicesBeforeSending());
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                switch (input.getEditChoicesBeforeSending()) {
+                    case android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_DISABLED: builder.setEditChoicesBeforeSending(android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_DISABLED); break;
+                    case android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_ENABLED: builder.setEditChoicesBeforeSending(android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_ENABLED); break;
+                    default: builder.setEditChoicesBeforeSending(android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_AUTO);
+                }
+            }
             inputs[i] = builder.build();
         }
         for (android.app.RemoteInput input : inputs) {
@@ -220,8 +226,12 @@ public final class GX12NotificationListener extends NotificationListenerService 
                     if(label.matches(".*(answer|accept|svara|annehmen|รับสาย|ตอบรับ).*")) answer=true;
                 }
                 preview.incoming=IncomingCallPolicy.incoming(preview.callType,answer,notification.fullScreenIntent!=null,extras!=null && extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER,false));
-                android.app.Person person=android.os.Build.VERSION.SDK_INT>=28 && extras!=null?extras.getParcelable("android.callPerson"):null;
-                preview.callerName=IncomingCallPolicy.callerName(person!=null && person.getName()!=null?person.getName().toString():preview.title,preview.appName);
+                String suppliedName=preview.title;
+                if(android.os.Build.VERSION.SDK_INT>=28 && extras!=null) {
+                    android.app.Person person=extras.getParcelable("android.callPerson");
+                    if(person!=null && person.getName()!=null)suppliedName=person.getName().toString();
+                }
+                preview.callerName=IncomingCallPolicy.callerName(suppliedName,preview.appName);
                 synchronized(GX12NotificationListener.class){calls.remove(preview.key);calls.put(preview.key,preview);}
                 updateCallState(context);
                 return;

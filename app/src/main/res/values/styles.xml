@@ -2,28 +2,28 @@
     <style name="RideDeckTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorAccent">#6284FF</item>
-        <item name="android:windowBackground">#061A2B</item>
-        <item name="android:colorBackground">#061A2B</item>
-        <item name="android:textColorPrimary">#F5F8FC</item>
-        <item name="android:textColorSecondary">#A3B2C9</item>
+        <item name="android:windowBackground">#081422</item>
+        <item name="android:colorBackground">#081422</item>
+        <item name="android:textColorPrimary">#F6F8FC</item>
+        <item name="android:textColorSecondary">#A0B0C8</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:alertDialogTheme">@style/RideDeckDialog</item>
     </style>
     <style name="RideDeckDialog" parent="android:style/Theme.Material.Dialog.Alert">
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorAccent">#6284FF</item>
-        <item name="android:colorBackground">#09243A</item>
-        <item name="android:textColorPrimary">#F5F8FC</item>
-        <item name="android:textColorSecondary">#A3B2C9</item>
+        <item name="android:colorBackground">#101C2E</item>
+        <item name="android:textColorPrimary">#F6F8FC</item>
+        <item name="android:textColorSecondary">#A0B0C8</item>
         <item name="android:windowBackground">@drawable/dialog_surface</item>
     </style>
     <style name="RideDeckLightTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorAccent">#0865D8</item>
-        <item name="android:windowBackground">#F5F8FC</item>
-        <item name="android:colorBackground">#F5F8FC</item>
-        <item name="android:textColorPrimary">#0B1018</item>
-        <item name="android:textColorSecondary">#53637A</item>
+        <item name="android:windowBackground">#F4F7FB</item>
+        <item name="android:colorBackground">#F4F7FB</item>
+        <item name="android:textColorPrimary">#0A1018</item>
+        <item name="android:textColorSecondary">#506278</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:alertDialogTheme">@style/RideDeckLightDialog</item>
     </style>
@@ -31,8 +31,8 @@
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorAccent">#0865D8</item>
         <item name="android:colorBackground">#FFFFFF</item>
-        <item name="android:textColorPrimary">#0B1018</item>
-        <item name="android:textColorSecondary">#53637A</item>
+        <item name="android:textColorPrimary">#0A1018</item>
+        <item name="android:textColorSecondary">#506278</item>
         <item name="android:windowBackground">@drawable/dialog_surface_light</item>
     </style>
 </resources>

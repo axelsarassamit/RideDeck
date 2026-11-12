@@ -27,7 +27,9 @@
         <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="smsto" /></intent>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.axelsarassamit.ridedeck.dash" />
+        <package android:name="com.axelsarassamit.ridedeck.dash.debug" />
         <provider android:authorities="com.axelsarassamit.ridedeck.dash.bridge" />
+        <provider android:authorities="com.axelsarassamit.ridedeck.dash.debug.bridge" />
         <package android:name="com.spotify.music" />
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />

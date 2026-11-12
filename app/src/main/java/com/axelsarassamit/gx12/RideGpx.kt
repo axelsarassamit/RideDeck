@@ -11,7 +11,7 @@ internal object RideGpx {
     private const val MAX_BYTES=8_000_000
     fun read(input:InputStream):RideTrack {
         val bytes=ByteArrayOutputStream();val buffer=ByteArray(8192)
-        while(true) { val n=input.read(buffer);if(n<0)break;require(bytes.size()+n<=MAX_BYTES);bytes.write(buffer,0,n) }
+        while(true) { check(!Thread.currentThread().isInterrupted);val n=input.read(buffer);if(n<0)break;require(bytes.size()+n<=MAX_BYTES);bytes.write(buffer,0,n) }
         val parser=Xml.newPullParser().apply {
             setFeature(X.FEATURE_PROCESS_NAMESPACES,true)
             setFeature(X.FEATURE_PROCESS_DOCDECL,false)
@@ -20,17 +20,19 @@ internal object RideGpx {
         val segments=mutableListOf<MutableList<RideTrackPoint>>()
         var count=0;var container=0;var pointDepth=0;var field="";var value=""
         var lat=0.0;var lon=0.0;var time:Long?=null;var elevation:Double?=null
-        var foundRoot=false
+        var foundRoot=false;var trackDepth=0;var containerName=""
         while(true) {
+            check(!Thread.currentThread().isInterrupted)
             when(parser.nextToken()) {
                 X.END_DOCUMENT -> break
                 X.DOCDECL -> error("Unsupported GPX XML")
                 X.START_TAG -> {
                     require(parser.depth<=32)
                     if(parser.depth==1) { require(parser.name=="gpx");foundRoot=true }
-                    if(pointDepth==0 && ((parser.depth==3 && parser.name=="trkseg")||(parser.depth==2 && parser.name=="rte"))) {
-                        require(segments.size<10000);segments.add(mutableListOf());container=parser.depth
-                    } else if(container>0 && parser.depth==container+1 && parser.name in setOf("trkpt","rtept")) {
+                    if(parser.depth==2 && parser.name=="trk")trackDepth=parser.depth
+                    if(pointDepth==0 && ((trackDepth==2 && parser.depth==3 && parser.name=="trkseg")||(parser.depth==2 && parser.name=="rte"))) {
+                        require(segments.size<10000);segments.add(mutableListOf());container=parser.depth;containerName=parser.name
+                    } else if(container>0 && parser.depth==container+1 && parser.name==if(containerName=="rte")"rtept" else "trkpt") {
                         require(++count<=100000);pointDepth=parser.depth
                         lat=parser.getAttributeValue(null,"lat").toDouble();lon=parser.getAttributeValue(null,"lon").toDouble();time=null;elevation=null
                     } else if(pointDepth>0 && parser.depth==pointDepth+1 && parser.name in setOf("time","ele")) { field=parser.name;value="" }
@@ -45,7 +47,8 @@ internal object RideGpx {
                     if(pointDepth>0 && parser.depth==pointDepth) {
                         segments.last().add(RideTrackPoint(lat,lon,time,elevation));pointDepth=0
                     }
-                    if(parser.depth==container)container=0
+                    if(parser.depth==container){container=0;containerName=""}
+                    if(parser.depth==trackDepth)trackDepth=0
                 }
             }
         }
@@ -60,6 +63,7 @@ internal object RideGpx {
         for(s in track.segments) {
             xml.startTag(ns,"trkseg")
             for(p in s) {
+                check(!Thread.currentThread().isInterrupted)
                 xml.startTag(ns,"trkpt").attribute(null,"lat",p.lat.toString()).attribute(null,"lon",p.lon.toString())
                 p.elevation?.takeIf { it.isFinite() }?.let { xml.startTag(ns,"ele").text(it.toString()).endTag(ns,"ele") }
                 p.time?.let { xml.startTag(ns,"time").text(Instant.ofEpochMilli(it).toString()).endTag(ns,"time") }

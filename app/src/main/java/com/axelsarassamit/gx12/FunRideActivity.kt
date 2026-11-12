@@ -38,15 +38,12 @@ class FunRideActivity : Activity() {
     override fun onCreate(state:Bundle?) {
         RideAppearance.prepare(this);super.onCreate(state)
         runCatching { restore(JSONObject(draft.getString("draft","{}")!!)) }
-        if(state?.getBoolean("overview")==true) runCatching {
-            routes=loadCached();selected=state.getInt("selected").coerceIn(0,(routes.size-1).coerceAtLeast(0))
-        }
-        if(routes.isNotEmpty())overview()else form()
+        if(state?.getBoolean("overview")==true) restoreCached(state.getInt("selected")) else form()
     }
     private fun text(value:String,size:Float=17f)=TextView(this).apply{text=value;textSize=size;setTextColor(RideStyle.TEXT);setPadding(0,dp(5),0,dp(5))}
     private fun button(value:String,action:()->Unit)=Button(this).apply{text=value;textSize=18f;minHeight=dp(64);setOnClickListener{action()}}
     private fun page():LinearLayout=LinearLayout(this).apply {
-        orientation=1;setBackgroundColor(RideStyle.BACKGROUND);setPadding(dp(12),dp(8),dp(12),dp(8))
+        orientation=LinearLayout.VERTICAL;setBackgroundColor(RideStyle.BACKGROUND);setPadding(dp(12),dp(8),dp(12),dp(8))
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(this){v,insets->
             val b=insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout());v.setPadding(dp(12)+b.left,dp(8)+b.top,dp(12)+b.right,dp(8)+b.bottom);insets}
     }
@@ -83,8 +80,7 @@ class FunRideActivity : Activity() {
         status=text(if(busy)"Finding rides…"else"Duration is a target, not a promise.");page.addView(status)
         if(!busy && draft.getString("route_draft",null)==snapshot().toString() && routeFile.isFile && System.currentTimeMillis()-routeFile.lastModified() in 0..86400000L)
             page.addView(button("Review last generated rides"){
-                val cached=runCatching{loadCached()}.getOrDefault(emptyList())
-                if(cached.isEmpty())status?.text="Saved choices could not be read. Find rides again."else{routes=cached;selected=0;overview()}
+                restoreCached(0)
             })
         page.addView(button(if(busy)"Cancel search"else"Find rides"){if(busy){cancel();form()}else plan()})
         page.addView(button("Back"){finish()});setContentView(ScrollView(this).apply{addView(page)})
@@ -94,6 +90,18 @@ class FunRideActivity : Activity() {
         require(routeFile.length() in 1..16_000_000)
         val rows=JSONArray(routeFile.readText());require(rows.length() in 1..3)
         return (0 until rows.length()).map{FunRoute.read(rows.getJSONObject(it))}
+    }
+    private fun restoreCached(index:Int) {
+        busy=true;val token=++generation;form()
+        worker.execute {
+            val cached=runCatching{loadCached()}.getOrDefault(emptyList())
+            runOnUiThread {
+                if(isFinishing || isDestroyed || token!=generation)return@runOnUiThread
+                busy=false;routes=cached
+                if(cached.isEmpty()){form();status?.text="Saved choices could not be read. Find rides again."}
+                else{selected=index.coerceIn(0,cached.lastIndex);overview()}
+            }
+        }
     }
     private fun coordinate(p:FunPoint):String {
         val key=String.format(Locale.US,"%.5f, %.5f",p.latitude,p.longitude)
@@ -142,6 +150,7 @@ class FunRideActivity : Activity() {
         // Snapshot every control before work begins; editing invalidates the whole result.
         val target=minutes;val heading=bearing;val destination=finishPoint?:origin;val explicit=stops.toList()
         val avoidMotorway=motorway;val avoidToll=toll;val avoidFerry=ferry;val avoidDirt=dirt;val rankUTurn=fewer;val curvePreference=curves
+        val requestedDraft=snapshot().toString()
         worker.execute {
             val rows=mutableListOf<FunRoute>();var lastStart=0L
             for(offset in if(explicit.isEmpty())listOf(0.0,65.0,-65.0)else listOf(0.0)) {
@@ -153,10 +162,20 @@ class FunRideActivity : Activity() {
                 val route=runCatching{FunRideRouting.route(origin,destination,waypoints,avoidMotorway,avoidToll,avoidFerry,avoidDirt)}.getOrNull()
                 if(route!=null && route.km>=1 && route.seconds/60 in 1.0..720.0 && rows.none{FunRidePlan.sameRoads(it.points,route.points)})rows.add(route)
             }
+            val ranked=rows.sortedBy{FunRidePlan.score(it.seconds/60,target,if(rankUTurn)it.uTurns else 0)-TwistyRide.bonus(curvePreference,it.points)}
+            if(token!=generation || Thread.currentThread().isInterrupted)return@execute
+            if(ranked.isNotEmpty())runCatching {
+                val cache=android.util.AtomicFile(routeFile);val stream=cache.startWrite()
+                try {
+                    stream.write(JSONArray(ranked.map{it.json()}).toString().toByteArray(Charsets.UTF_8))
+                    if(token!=generation || Thread.currentThread().isInterrupted)throw InterruptedException()
+                    cache.finishWrite(stream);draft.edit().putString("route_draft",requestedDraft).apply()
+                }catch(error:Exception){cache.failWrite(stream);throw error}
+            }
             runOnUiThread{if(isFinishing || isDestroyed || token!=generation)return@runOnUiThread;busy=false
-                routes=rows.sortedBy{FunRidePlan.score(it.seconds/60,target,if(rankUTurn)it.uTurns else 0)-TwistyRide.bonus(curvePreference,it.points)}
+                routes=ranked
                 if(routes.isEmpty()){RideDeckDiagnostics.failure(this,BugReport.Failure.ROUTE_SEARCH);form();status?.text="No suitable route found. Try another direction, shorter duration or different stops."}
-                else{selected=0;runCatching{routeFile.writeText(JSONArray(routes.map{it.json()}).toString());draft.edit().putString("route_draft",snapshot().toString()).apply()};overview()}}
+                else{selected=0;overview()}}
         }
     }
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grants:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grants);if(requestCode==41){if(grants.any{it==PackageManager.PERMISSION_GRANTED})plan()else status?.text="Location permission declined. Choose a starting place instead."}}

@@ -18,7 +18,7 @@ data class RideTrack(val segments:List<List<RideTrackPoint>>) {
             val distance=12_742_000*asin(sqrt(h));meters+=distance
             if(a.time!=null && b.time!=null) {
                 val dt=b.time-a.time
-                if(dt in 1..30_000 && distance*1000/dt<=80) { covered+=dt;if(distance*1000/dt>=1.4)moving+=dt }
+                if(b.time>a.time && dt in 1..30_000 && distance*1000/dt<=80) { covered+=dt;if(distance*1000/dt>=1.4)moving+=dt }
             }
             if(a.elevation?.isFinite()==true && b.elevation?.isFinite()==true) {
                 hasElevation=true; elevation+=max(0.0,b.elevation-a.elevation)

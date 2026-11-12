@@ -45,7 +45,7 @@ public final class HeadsetMicRoute {
                 if (!audio.setCommunicationDevice(headset)) { usePhoneMicrophone(); return; }
             } else {
                 boolean connectedHeadset = false;
-                for (AudioDeviceInfo device : audio.getDevices(AudioManager.GET_DEVICES_ALL)) {
+                for (AudioDeviceInfo device : audio.getDevices(AudioManager.GET_DEVICES_INPUTS | AudioManager.GET_DEVICES_OUTPUTS)) {
                     if (bluetooth(device.getType(), Build.VERSION.SDK_INT)) { connectedHeadset = true; break; }
                 }
                 if (!connectedHeadset || !audio.isBluetoothScoAvailableOffCall()) { usePhoneMicrophone(); return; }
